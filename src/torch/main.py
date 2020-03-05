@@ -13,6 +13,7 @@ sys.path.append(os.getcwd())
 from src.datasets.data import ComposeTransformations, PositionalEncoding, \
     to_observation_tuples, Physionet2019Dataset
 from src.torch.models.attention_model import AttentionModel
+from src.torch import models
 from src.torch.torch_utils import variable_length_collate
 
 
@@ -74,6 +75,8 @@ def test(args, model, device, test_loader):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='AttentionModel', metavar='M',
+                        help='Model class to be used (default: AttentionModel)')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=100, metavar='N',
@@ -90,6 +93,8 @@ def main():
                         help='random seed (default: 42)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--hypersearch', action='store_true', default=False,
+                        help='perform hypersearch, generate parameters from random grid')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -122,10 +127,13 @@ def main():
         batch_size=args.test_batch_size, shuffle=True, **kwargs
     )
 
-    model = AttentionModel(
-        train_dataset[0]['ts'].shape[-1],
-        64, 1, 8, 32
-    ).to(device)
+    model_cls = args.model
+    #TODO: instanciate model_class with classmethod decorator to set hyperparameters
+    params = {  'd_in': train_dataset[0]['ts'].shape[-1], 
+                'hypersearch': args.hypersearch}
+    
+    model = getattr(models, model_cls).set_hyperparams(params).to(device)
+    
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
