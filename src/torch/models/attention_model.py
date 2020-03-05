@@ -229,3 +229,22 @@ class AttentionModel(nn.Module):
         for layer in self.layers:
             out = layer(out)
         return F.log_softmax(out, dim=-1)
+
+    @classmethod
+    def set_hyperparams(cls, kwargs={}):
+        if kwargs['hypersearch']:
+            raise NotImplementedError('Hyperparameter search not yet implemented!')
+        else:
+            defaults = {
+                'd_model': 64,
+                'n_layers': 1,
+                'n_heads': 8,
+                'qkv_dim': 32
+            }
+            kwargs.update(defaults)
+            kwargs.pop('hypersearch')
+            return cls(**kwargs) 
+       
+
+
+
