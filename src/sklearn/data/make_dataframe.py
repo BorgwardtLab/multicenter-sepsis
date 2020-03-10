@@ -28,6 +28,9 @@ if __name__ == '__main__':
     # Run full pipe
     data_pipeline = Pipeline([
         ('create_dataframe', CreateDataframe(save=True, data_dir=out_dir))
+        #('input_count', AddRecordingCount()),
+        #('imputation', CarryForwardImputation()),
+        #('derive_features', DerivedFeatures())
     ])
     df = data_pipeline.fit_transform(data_dir)
     
