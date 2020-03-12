@@ -1,5 +1,5 @@
 """
-Various data transformers 
+Various data transformers, TODO: add copyright notice here! 
 """
 from copy import deepcopy
 import numpy as np
@@ -9,7 +9,7 @@ from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer
-from extracted import columns_with_nans
+from extracted import columns_with_nans, ts_columns
 
 from IPython import embed
 
@@ -20,7 +20,7 @@ class CreateDataframe(TransformerMixin, BaseEstimator):
     available splits:
         - train, validation, test
     """
-    def __init__(self, save=False, data_dir=None, split='train', split_file='../../datasets/physionet2019/data/split_info.pkl'):
+    def __init__(self, save=False, data_dir=None, split='train', split_file='../../../datasets/physionet2019/data/split_info.pkl'):
         self.save = save
         self.data_dir = data_dir
         self.split = split
@@ -92,8 +92,9 @@ class CreateDataframe(TransformerMixin, BaseEstimator):
 
         # Save if specified
         if self.save is not False:
-            save_pickle(labels, self.data_dir + '/labels/original.pickle')
-            save_pickle(df_values, self.data_dir + '/from_raw/df.pickle')
+            os.makedirs(data_dir, exist_ok=True)
+            save_pickle(labels, os.path.join(data_dir, f'y_{split}.pkl'))
+            save_pickle(df_values, os.path.join(data_dir, f'raw_data_{split}.pkl')) 
 
         return df_values
 
@@ -168,10 +169,19 @@ class CarryForwardImputation(BaseIDTransformer):
     def transform_id(self, df):
         return df.fillna(method='ffill')
 
+class IndicatorImputation(BaseIDTransformer):
+    """
+    Adds indicator dimension for every channel to indicate if there was a nan
+    """
+    def transform_id(self, df):
+        cols = ts_columns #we consider all time-series columns (for consistency with pytorch approach)
+        valid_indicators = (~df[cols].isnull()).astype(int).add_suffix('_indicator') 
+        df = pd.concat([df, valid_indicators], axis=1)
+        return df
 
 class FillMissing(TransformerMixin, BaseEstimator):
-    """ Method to fill nan columns with the overall means """
-    def __init__(self, method='mean', col_vals=None):
+    """ Method to fill nan columns, either with zeros, column mean oder median (last two leak from the future if done offline) """
+    def __init__(self, method='zero', col_vals=None):
         self.method = method
         self.col_vals = col_vals
 
@@ -180,6 +190,8 @@ class FillMissing(TransformerMixin, BaseEstimator):
             self.col_vals = df.mean().to_dict()
         elif self.method == 'median':
             self.col_vals = df.median().to_dict()
+        elif self.method == 'zero':
+            self.col_vals = 0
         return self
 
     def transform(self, df):
