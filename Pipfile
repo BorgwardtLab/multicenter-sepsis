@@ -15,6 +15,7 @@ ipdb = "*"
 sklearn = "*"
 numpy = "*"
 torch = "*"
+pytorch-lightning = "*"
 
 [requires]
 python_version = "3.7"
