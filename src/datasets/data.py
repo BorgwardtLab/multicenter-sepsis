@@ -3,6 +3,7 @@ import abc
 import glob
 import math
 import os
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -44,7 +45,9 @@ class Physionet2019Dataset(Dataset):
     ]
     LABEL_COLUMN = 'SepsisLabel'
 
-    def __init__(self, root_dir='datasets/physionet2019/data/extracted', transform=None):
+    def __init__(self, root_dir='datasets/physionet2019/data/extracted',
+                 split_file='datasets/physionet2019/data/split_info.pkl',
+                 split='train', split_repetition=0, transform=None):
         """Physionet 2019 Dataset.
 
         Args:
@@ -53,9 +56,17 @@ class Physionet2019Dataset(Dataset):
         """
         self.root_dir = root_dir
 
-        self.files = sorted(glob.glob(os.path.join(
-            self.root_dir, f'p*.psv'
-        )))
+        split_repetition_name = f'split_{split_repetition}'
+
+        with open(split_file, 'rb') as f:
+            d = pickle.load(f)
+        patients = d[split_repetition_name][split]
+
+        self.files = [
+            # Patient ids are int but files contain leading zeros
+            os.path.join(root_dir, f'p{patient_id:06d}.psv')
+            for patient_id in patients
+        ]
         self.transform = transform
 
     def __len__(self):
