@@ -8,11 +8,13 @@ verify_ssl = true
 [packages]
 pandas = "*"
 ipykernel = "*"
+ipython = "*"
 tqdm = "*"
 matplotlib = "*"
 ipdb = "*"
 sklearn = "*"
 numpy = "*"
+torch = "*"
 
 [requires]
 python_version = "3.7"
