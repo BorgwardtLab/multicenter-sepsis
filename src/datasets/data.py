@@ -104,6 +104,26 @@ class Physionet2019Dataset(Dataset):
         return instance_dict
 
 
+class MIMIC3Dataset(Physionet2019Dataset):
+    STATIC_COLUMNS = []
+    TIME_COLUMN = 'charttime'
+    TS_COLUMNS = [
+        'O2Sat', 'FiO2', 'Temp', 'SBP', 'DBP', 'MAP',
+        'Resp', 'HR', 'Glucose', 'Alkalinephos', 'AST', 'HCO3',
+        'Bilirubin_total', 'Chloride', 'Creatinine', 'Potassium', 'BUN', 'Hct',
+        'Hgb', 'Platelets', 'WBC', 'Lactate', 'PTT', 'Calcium', 'Magnesium',
+        'Phosphate', 'BaseExcess', 'PaCO2', 'pH', 'Bilirubin_direct',
+        'Fibrinogen'
+    ]
+    def __init__(self, root_dir='datasets/mimic3/data/extracted',
+                 split_file='datasets/mimic3/data/split_info.pkl',
+                 split='train', split_repetition=0, transform=None):
+        super().__init__(
+            root_dir=root_dir, split_file=split_file, split=split,
+            split_repetition=split_repetition, transform=transform
+        )
+
+
 # pylint: disable=R0903
 class PositionalEncoding():
     """Apply positional encoding to instances."""
