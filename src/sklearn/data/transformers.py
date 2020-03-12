@@ -92,9 +92,9 @@ class CreateDataframe(TransformerMixin, BaseEstimator):
 
         # Save if specified
         if self.save is not False:
-            os.makedirs(data_dir, exist_ok=True)
-            save_pickle(labels, os.path.join(data_dir, f'y_{split}.pkl'))
-            save_pickle(df_values, os.path.join(data_dir, f'raw_data_{split}.pkl')) 
+            os.makedirs(self.data_dir, exist_ok=True)
+            save_pickle(labels, os.path.join(self.data_dir, f'y_{split}.pkl'))
+            save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{split}.pkl')) 
 
         return df_values
 
