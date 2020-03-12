@@ -3,12 +3,13 @@ import os
 import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.pipeline import Pipeline
+
 from transformers import *
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--data_dir', 
-        default='../../datasets/physionet2019/data',
+        default='../../../datasets/physionet2019/data',
         help='path pointing to /data directory')
     parser.add_argument('--out_dir',
         default='sklearn',
@@ -21,19 +22,24 @@ if __name__ == '__main__':
     if 'physionet2019' in base_dir:
         data_dir = os.path.join(base_dir, 'extracted')
     else:
-        data_dir = base_dir 
-    out_dir = os.path.join(base_dir, args.out_dir)
+        data_dir = base_dir
+ 
+    out_dir = os.path.join(base_dir, args.out_dir, 'processed')
     
-
-    # Run full pipe
-    data_pipeline = Pipeline([
-        ('create_dataframe', CreateDataframe(save=True, data_dir=out_dir))
-        #('input_count', AddRecordingCount()),
-        #('imputation', CarryForwardImputation()),
-        #('derive_features', DerivedFeatures())
-    ])
-    df = data_pipeline.fit_transform(data_dir)
+    splits = ['train', 'validation'] # save 'test' for later
     
-    # Save
-    save_pickle(df, out_dir + '/df.pickle')
+    for split in splits:
+        # Run full pipe
+        data_pipeline = Pipeline([
+            ('create_dataframe', CreateDataframe(save=True, data_dir=out_dir, split=split )),
+            #('input_count', AddRecordingCount()),
+            ('imputation', IndicatorImputation()),
+            #('imputation', CarryForwardImputation()),
+            #('derive_features', DerivedFeatures()),
+            ('remove_nans', FillMissing())
+        ])
+        df = data_pipeline.fit_transform(data_dir)
+        
+        # Save
+        save_pickle(df, os.path.join(out_dir, f'X_{split}.pkl'))
 
