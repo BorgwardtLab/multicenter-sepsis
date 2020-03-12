@@ -201,6 +201,7 @@ def main(hparams):
     # most basic trainer, uses good defaults
     trainer = pl.Trainer.from_argparse_args(hparams)
     trainer.fit(model)
+    trainer.logger.save()
 
 
 if __name__ == '__main__':
