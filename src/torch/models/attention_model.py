@@ -16,7 +16,8 @@ def get_subsequent_mask(seq):
 class MaskedLayerNorm(nn.LayerNorm):
     def forward(self, x):
         # Compute cummulative summary statics along time axis
-        N = torch.arange(start=1., end=x.shape[1]+1)[None, :, None]
+        N = torch.arange(
+            start=1., end=x.shape[1]+1, device=x.device)[None, :, None]
         mean_x = torch.cumsum(x, 1) / N
         std_x = torch.sqrt(torch.cumsum((x - mean_x) ** 2, 1) / N + self.eps)
 

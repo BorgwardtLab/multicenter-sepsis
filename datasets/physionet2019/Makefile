@@ -1,10 +1,10 @@
-all: data/combined.pck data/split_info.pkl 
+all: data/split_info.pkl
 
 .DELETE_ON_ERROR:
 .PHONY: all tests
 
 data/combined.pck: data/extracted
-	python scripts/convert_data_to_binary.py --folders $^ --output $@
+	pipenv run python scripts/convert_data_to_binary.py --folders $^ --output $@
 
 data/extracted: data/downloads/training_setA.zip data/downloads/training_setB.zip
 	mkdir -p data/extracted
@@ -21,8 +21,8 @@ data/downloads:
 data/downloads/training_setA.zip: data/downloads
 data/downloads/training_setB.zip: data/downloads
 
-data/split_info.pkl:
-	python scripts/create_splits.py
+data/split_info.pkl: data/extracted
+	pipenv run python scripts/create_splits.py
 
 clean:
 	rm -r data/*
