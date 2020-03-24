@@ -9,9 +9,16 @@ from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer
-from extracted import columns_with_nans, ts_columns
+from extracted import columns_with_nans, ts_columns, columns_not_to_normalize
 
 from IPython import embed
+
+class CreateDataframeFromDataloader():
+    """
+    Transform method that takes dataset name, loads corresponding iterable dataloader and 
+    returns the dataset in one large sklearn-ready pd dataframe format.
+    """
+    pass
 
 class CreateDataframe(TransformerMixin, BaseEstimator):
     """
@@ -199,6 +206,57 @@ class FillMissing(TransformerMixin, BaseEstimator):
             df = df.fillna(self.col_vals)
         return df
 
+
+class Normalizer(TransformerMixin, BaseEstimator):
+    """
+    Performs normalization (z-scoring) of columns which are not explicitly excluded.
+    Caches stats of the train split for the remaining splits to use.
+    """
+    def __init__(self, data_dir, split):
+        self.split = split
+        self.data_dir = data_dir
+        self.drop_cols = columns_not_to_normalize 
+        self.normalizer_dir = os.path.join(data_dir, 'normalizer')
+        self.normalizer_file = os.path.join(self.normalizer_dir, f'normalizer_stats.pkl')
+ 
+    def _drop_columns(self, df, cols_to_drop):
+        """ Utiliy function, to select available columns to 
+            drop (the list can reach over different feature sets)
+        """
+        drop_cols = [col for col in cols_to_drop if col in df.columns]
+        df = df.drop(columns=drop_cols)
+        return df, drop_cols         
+    
+    def _compute_stats(self, df):
+        return {
+            'means': df.mean(),
+            'stds': df.std(),
+            'used_cols': df.mean().index.to_list()
+        }
+    def _apply_normalizer(self, df, stats):
+        means = stats['means']
+        stds = stats['stds']
+        return (df - means) / stds 
+  
+    def fit(self, df, labels=None):
+        if self.split == 'train':
+            df, _ = self._drop_columns(df, self.drop_cols)
+            self.stats = self._compute_stats(df)
+            os.makedirs(self.normalizer_dir, exist_ok=True)
+            save_pickle(self.stats, self.normalizer_file)
+        else:
+            try:
+                self.stats = load_pickle(self.normalizer_file) 
+            except:
+                raise ValueError('Normalization file not found. Compute normalization for train split first!') 
+            #TODO: assert that cols in loaded stats are the same as all_cols \ drop_cols
+        return self
+    
+    def transform(self, df):
+        df_to_normalize, remaining_cols = self._drop_columns(df, self.drop_cols)
+        df_normalized = self._apply_normalizer(df_to_normalize, self.stats)
+        df_out = pd.concat([df_normalized, df[remaining_cols]], axis=1) 
+        return df_out
 
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """

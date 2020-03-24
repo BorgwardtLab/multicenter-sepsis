@@ -8,18 +8,22 @@ from transformers import *
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--dataset', 
+        default='physionet2019',
+        help='dataset to use: [physionet2019, ]')
     parser.add_argument('--data_dir', 
-        default='../../../datasets/physionet2019/data',
-        help='path pointing to /data directory')
+        default='../../../datasets',
+        help='path pointing to the dataset directory')
     parser.add_argument('--out_dir',
         default='sklearn',
-        help='relative path from /data dir, where processed dump will be written to') 
+        help='relative path from <dataset>/data dir, where processed dump will be written to') 
     args = parser.parse_args()
-
-    base_dir = args.data_dir
+    
+    dataset = args.dataset
+    base_dir = os.path.join(args.data_dir, dataset, 'data')
 
     #for Physionet2019, we use extracted folder:
-    if 'physionet2019' in base_dir:
+    if dataset == 'physionet2019':
         data_dir = os.path.join(base_dir, 'extracted')
     else:
         data_dir = base_dir
@@ -33,6 +37,7 @@ if __name__ == '__main__':
         data_pipeline = Pipeline([
             ('create_dataframe', CreateDataframe(save=True, data_dir=out_dir, split=split )),
             #('input_count', AddRecordingCount()),
+            ('normalization', Normalizer(data_dir=out_dir, split=split )),
             ('imputation', IndicatorImputation()),
             #('imputation', CarryForwardImputation()),
             #('derive_features', DerivedFeatures()),
