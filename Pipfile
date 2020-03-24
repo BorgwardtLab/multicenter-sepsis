@@ -16,6 +16,7 @@ sklearn = "*"
 numpy = "*"
 torch = "*"
 pytorch-lightning = "*"
+lightgbm = "*"
 
 [requires]
 python_version = "3.7"
