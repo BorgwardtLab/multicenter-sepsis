@@ -47,7 +47,8 @@ class Physionet2019Dataset(Dataset):
 
     def __init__(self, root_dir='datasets/physionet2019/data/extracted',
                  split_file='datasets/physionet2019/data/split_info.pkl',
-                 split='train', split_repetition=0, transform=None):
+                 split='train', split_repetition=0, as_dict=True,
+                 transform=None):
         """Physionet 2019 Dataset.
 
         Args:
@@ -55,6 +56,7 @@ class Physionet2019Dataset(Dataset):
             transform: Tranformation that should be applied to each instance
         """
         self.root_dir = root_dir
+        self.as_dict = as_dict
 
         split_repetition_name = f'split_{split_repetition}'
 
@@ -96,12 +98,13 @@ class Physionet2019Dataset(Dataset):
         """Get instance from dataset."""
         filename = self.files[idx]
         instance_data = pd.read_csv(filename, sep='|')
-        instance_dict = self._split_instance_data_into_dict(instance_data)
+        if self.as_dict:
+            instance_data = self._split_instance_data_into_dict(instance_data)
 
         if self.transform:
-            instance_dict = self.transform(instance_dict)
+            instance_data = self.transform(instance_data)
 
-        return instance_dict
+        return instance_data
 
 
 class MIMIC3Dataset(Physionet2019Dataset):
