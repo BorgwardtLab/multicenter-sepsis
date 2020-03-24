@@ -33,7 +33,6 @@ class PlAttentionModel(pl.LightningModule):
         super().__init__()
         self.dataset_cls = getattr(src.datasets, hparams.dataset)
         self.hparams = hparams
-        ts_dim = self.val_dataloader()
         self.model = AttentionModel(
             d_in=self._get_input_dim(),
             d_model=hparams.d_model,
@@ -74,20 +73,11 @@ class PlAttentionModel(pl.LightningModule):
         labels_flat = labels.reshape(-1)
         n_val = labels.shape[0]
 
-        labels = labels.numpy()
-        y_hat = y_hat.numpy()
-        labels_list = []
-        y_hat_list = []
-        for label, pred in zip(labels, y_hat):
-            selection = label != -100
-            labels_list.append(label[selection])
-            y_hat_list.append(pred[selection])
-
         return {
             f'{prefix}_loss': F.nll_loss(y_hat_flat, labels_flat),
             f'{prefix}_n': n_val,
-            f'{prefix}_labels': labels_list,
-            f'{prefix}_predictions': y_hat_list
+            f'{prefix}_labels': labels,
+            f'{prefix}_predictions': y_hat
         }
 
     def _shared_end(self, outputs, prefix):
@@ -97,12 +87,17 @@ class PlAttentionModel(pl.LightningModule):
                 x[f'{prefix}_loss'] * x[f'{prefix}_n'] for x in outputs
             ]).sum() / total_samples
         )
+
         labels = []
         predictions = []
         for x in outputs:
-            labels.extend(x[f'{prefix}_labels'])
-            predictions.extend(
-                [np.argmax(el, axis=-1) for el in x[f'{prefix}_predictions']])
+            cur_labels = x[f'{prefix}_labels'].cpu().numpy()
+            cur_preds = x[f'{prefix}_predictions'].cpu().numpy()
+            cur_preds = np.argmax(cur_preds, axis=-1)
+            for label, pred in zip(cur_labels, cur_preds):
+                selection = label != -100
+                labels.append(label[selection])
+                predictions.append(pred[selection])
 
         physionet_score = physionet2019_utility(labels, predictions)
         return {
@@ -136,7 +131,9 @@ class PlAttentionModel(pl.LightningModule):
                 transform=self.transform),
             shuffle=True,
             collate_fn=variable_length_collate,
-            batch_size=self.hparams.batch_size
+            batch_size=self.hparams.batch_size,
+            num_workers=4,
+            pin_memory=True
         )
 
     def val_dataloader(self):
@@ -148,7 +145,9 @@ class PlAttentionModel(pl.LightningModule):
                 transform=self.transform),
             shuffle=False,
             collate_fn=variable_length_collate,
-            batch_size=self.hparams.batch_size
+            batch_size=self.hparams.batch_size,
+            num_workers=4,
+            pin_memory=True
         )
 
     def test_dataloader(self):
