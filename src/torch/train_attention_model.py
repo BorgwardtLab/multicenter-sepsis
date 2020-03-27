@@ -1,5 +1,6 @@
 """Training routines for models."""
 from argparse import ArgumentParser, Namespace
+import os
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -192,24 +193,47 @@ def namespace_without_none(namespace):
     return new_namespace
 
 
-def main(hparams):
+def main(hparams, model_cls):
     """Main function train model."""
     # init module
-    model = PlAttentionModel(namespace_without_none(hparams))
+
+    model = model_cls(namespace_without_none(hparams))
+    logger = pl.loggers.TestTubeLogger(
+        hparams.log_path, name=hparams.exp_name)
+    exp = logger.experiment
+    save_path = os.path.join(
+        exp.get_data_path(exp.name, exp.version),
+        'checkpoints', '{epoch}-{val_physionet2019_score:.2f}'
+    )
+    model_checkpoint_cb = pl.callbacks.model_checkpoint.ModelCheckpoint(
+        save_path, monitor='val_physionet2019_score', mode='max')
+    early_stopping_cb = pl.callbacks.early_stopping.EarlyStopping(
+        monitor='val_physionet2019_score', patience=5, mode='max', strict=True)
 
     # most basic trainer, uses good defaults
-    trainer = pl.Trainer.from_argparse_args(hparams)
+    trainer = pl.Trainer(
+        checkpoint_callback=model_checkpoint_cb,
+        early_stop_callback=early_stopping_cb,
+        max_epochs=hparams.max_epochs
+    )
     trainer.fit(model)
     trainer.logger.save()
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
-    parser = pl.Trainer.add_argparse_args(parser)
-    # give the module a chance to add own params
-    # good practice to define LightningModule speficic params in the module
-    parser = PlAttentionModel.add_model_specific_args(parser)
+    parser.add_argument('--log_path', default='logs')
+    parser.add_argument('--exp_name', default='train_attention_model')
+    parser.add_argument('--model', choices=['AttentionModel'], type=str,
+                        default='AttentionModel')
+    parser.add_argument('--max_epochs', default=100)
+    # figure out which model to use
+    temp_args = parser.parse_known_args()[0]
 
-    # parse params
+    # let the model add what it wants
+    if temp_args.model == 'AttentionModel':
+        model_cls = PlAttentionModel
+
+    parser = model_cls.add_model_specific_args(parser)
     hparams = parser.parse_args()
-    main(hparams)
+    main(hparams, model_cls)
