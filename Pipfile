@@ -17,6 +17,7 @@ numpy = "*"
 torch = "*"
 pytorch-lightning = "*"
 lightgbm = "*"
+test-tube = "*"
 
 [requires]
 python_version = "3.7"
