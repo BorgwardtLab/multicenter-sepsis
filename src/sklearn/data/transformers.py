@@ -11,14 +11,60 @@ from utils import save_pickle, load_pickle
 from base import BaseIDTransformer
 from extracted import columns_with_nans, ts_columns, columns_not_to_normalize
 
-from IPython import embed
+import sys
+sys.path.append(os.getcwd())
+from src import datasets
 
-class CreateDataframeFromDataloader():
+class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     """
-    Transform method that takes dataset name, loads corresponding iterable dataloader and 
-    returns the dataset in one large sklearn-ready pd dataframe format.
+    Transform method that takes dataset class, loads corresponding iterable dataloader and 
+    returns (and saves if requested) the dataset in one large sklearn-ready pd dataframe 
+    format with patient and time multi-indices.
     """
-    pass
+    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train'):
+        self.save = save
+        dataset_class = getattr(datasets, dataset_cls)
+        self.split = split
+        self.dataloader = dataset_class(split=split, as_dict=False)
+        self.data_dir = data_dir #outdir to save raw dataframe
+ 
+    def fit(self, df, labels=None):
+        return self
+    
+    def _add_id(self, df, id):
+        """ df format uses an instance id (as outer index)
+        """
+        df['id'] = id
+        return df
+         
+    def transform(self, df):
+        """
+        Takes dataset_cls (in self), loads iteratable instances and concatenates them to a multi-indexed 
+        pandas dataframe which is returned
+        """
+        # Make the dataframe
+        df = pd.concat(
+            [ self._add_id(instance, i) for i, instance in enumerate(self.dataloader) ]
+        )
+
+        # Idx according to id and time
+        df.index.name = 'time'
+        df_idxed = df.reset_index().set_index(['id', 'time']).sort_index(ascending=True)
+
+        # Get values and labels
+        if 'SepsisLabel' in df_idxed.columns:
+            df_values, labels = df_idxed.drop('SepsisLabel', axis=1), df_idxed['SepsisLabel']
+        else:
+            df_values = df_idxed
+
+        # Save if specified
+        if self.save is not False:
+            os.makedirs(self.data_dir, exist_ok=True)
+            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+            save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
+
+        return df_values
+
 
 class CreateDataframe(TransformerMixin, BaseEstimator):
     """
@@ -27,7 +73,7 @@ class CreateDataframe(TransformerMixin, BaseEstimator):
     available splits:
         - train, validation, test
     """
-    def __init__(self, save=False, data_dir=None, split='train', split_file='../../../datasets/physionet2019/data/split_info.pkl'):
+    def __init__(self, save=False, data_dir=None, split='train', split_file='datasets/physionet2019/data/split_info.pkl'):
         self.save = save
         self.data_dir = data_dir
         self.split = split
@@ -257,6 +303,22 @@ class Normalizer(TransformerMixin, BaseEstimator):
         df_normalized = self._apply_normalizer(df_to_normalize, self.stats)
         df_out = pd.concat([df_normalized, df[remaining_cols]], axis=1) 
         return df_out
+
+class LookbackStats(TransformerMixin, BaseEstimator):
+    """ 
+    Simple statistical features including moments over a tunable look-back window. 
+    """
+    def __init__(self, stats):
+        """ takes list of stats to use:
+            
+        """
+    def fit(self, df, labels=None):
+        pass
+
+    def transform(self, df):
+        pass
+     
+
 
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
