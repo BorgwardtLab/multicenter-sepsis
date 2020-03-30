@@ -66,154 +66,6 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         return df_values
 
 
-class CreateDataframe(TransformerMixin, BaseEstimator):
-    """
-    Transform method takes either a filename or folder and creates a dataframe of the file or all psv files contained
-    in the folder
-    available splits:
-        - train, validation, test
-    """
-    def __init__(self, save=False, data_dir=None, split='train', split_file='datasets/physionet2019/data/split_info.pkl'):
-        self.save = save
-        self.data_dir = data_dir
-        self.split = split
-        split_info = load_pickle(split_file)
-        self.split_ids = split_info['split_0'][split] 
-
-    def _file_to_id(self, string):
-        """ Convert string of psv file to integer id
-        """
-        return int(string.rstrip('.psv').lstrip('p'))
-    
-    def _id_to_file(self, pat_id, pad_until=6):
-        """ Convert patient id (integer) to file string with zeros padded """
-        return 'p' + str(pat_id).zfill(pad_until) + '.psv'
-
-    def _extract_split(self, fnames):
-        """ Return list of fnames (to load) which are contained in predefined split ids
-        """
-        used_files = []
-        for fname in fnames:
-            tail, head = os.path.split(fname)
-            curr_id = self._file_to_id(head)
-            if curr_id in self.split_ids:
-                used_files.append(fname) 
-        return used_files
-
-    def fit(self, df, y=None):
-        return self
-    
-    @staticmethod
-    def psv_to_dataframe(fname):
-        """ Transforms a single psv file into a dataframe with an id column"""
-        df = pd.read_csv(fname, sep='|')
-        df['id'] = int(fname.split('.psv')[0].split('p')[-1])
-
-        return df
-
-    def transform(self, location):
-        """
-        Given either a location of psv files or single psv file, transforms into dataframes indexed with time and id
-
-        :param location: either a folder containing psv files or a single psv file
-        :return: df of all psv files indexed by [id, time]
-        """
-
-        # If location is a directory, make with all files, else make with a single file
-        if isinstance(location, list):
-            fnames = [l + '/' + x for l in location for x in os.listdir(l)]
-        elif not location.endswith('.psv'):
-            fnames = [location + '/' + x for x in os.listdir(location)]
-        else:
-            fnames = [location]
-        
-        fnames_old = fnames
-        fnames = self._extract_split(fnames)
-
-        # Make the dataframe
-        df = pd.concat([self.psv_to_dataframe(fname) for fname in fnames])
-
-        # Idx according to id and time
-        df.index.name = 'time'
-        df_idxed = df.reset_index().set_index(['id', 'time']).sort_index(ascending=True)
-
-        # Get values and labels
-        if 'SepsisLabel' in df_idxed.columns:
-            df_values, labels = df_idxed.drop('SepsisLabel', axis=1), df_idxed['SepsisLabel']
-        else:
-            df_values = df_idxed
-
-        # Save if specified
-        if self.save is not False:
-            os.makedirs(self.data_dir, exist_ok=True)
-            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-            save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
-
-        return df_values
-
-
-class AddRecordingCount(BaseEstimator, TransformerMixin):
-    """ Adds a count of the number of entries up to the given timepoint. """
-    def __init__(self, last_only=False):
-        self.columns = columns_with_nans
-
-    def fit(self, df, labels=None):
-        return self
-
-    def transform_id(self, df):
-        return df.cumsum()
-
-    def transform(self, df):
-        # Make a counts frame
-        counts = deepcopy(df)
-        counts.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
-
-        # Turn any floats into counts
-        for col in self.columns:
-            counts[col][~counts[col].isna()] = 1
-        counts = counts.replace(np.nan, 0)
-
-        # Get the counts for each person
-        counts = counts.groupby('id').apply(self.transform_id)
-
-        # Rename
-        counts.columns = [x + '_count' for x in counts.columns]
-
-        return pd.concat([df, counts], axis=1)
-
-
-class RemoveExtremeValues(BaseEstimator, TransformerMixin):
-    def __init__(self, quantile):
-        self.quantile = quantile
-        self.cols = ['HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
-                     'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'SaO2', 'AST', 'BUN',
-                     'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine', 'Bilirubin_direct',
-                     'Glucose', 'Lactate', 'Magnesium', 'Phosphate', 'Potassium',
-                     'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT', 'WBC',
-                     'Fibrinogen', 'Platelets']
-
-    def fit(self, df, labels=None):
-        self.percentiles_1 = np.nanpercentile(df[self.cols], self.quantile, axis=0)
-        self.percentiles_2 = np.nanpercentile(df[self.cols], 1 - self.quantile, axis=0)
-        return self
-
-    def transform(self, df):
-        # Drop derived cols
-        df.drop(['HepaticSOFA', 'SIRS', 'SIRS_path', 'MEWS', 'qSOFA', 'SOFA', 'SepticShock'], axis=1, inplace=True)
-
-        # Remove extreme vals
-        for i, col in enumerate(self.cols):
-            p1, p2 = self.percentiles_1[i], self.percentiles_2[i]
-            mask = (min(p1, p2) > df[col]) | (max(p1, p2) < df[col])
-            df[mask][col] = np.nan
-
-        # Redo ffill and derived feature calcs
-        df.fillna(method='ffill', inplace=True)
-        df = DerivedFeatures().transform(df)
-
-        return df
-
-
 class CarryForwardImputation(BaseIDTransformer):
     """
     First fills in missing values by carrying forward, then fills backwards. The backwards method takes care of the
@@ -304,21 +156,47 @@ class Normalizer(TransformerMixin, BaseEstimator):
         df_out = pd.concat([df_normalized, df[remaining_cols]], axis=1) 
         return df_out
 
-class LookbackStats(TransformerMixin, BaseEstimator):
+
+class LookbackFeatures(BaseIDTransformer):
     """ 
     Simple statistical features including moments over a tunable look-back window. 
     """
-    def __init__(self, stats):
-        """ takes list of stats to use:
-            
+    def __init__(self, stats=None):
+        """ takes dictionary of stats (keys) and corresponding look-back windows (values) 
+            to compute each stat for each time series variable. 
+            Below a default stats dictionary of look-back 5 hours is implemented.
         """
-    def fit(self, df, labels=None):
-        pass
-
-    def transform(self, df):
-        pass
-     
-
+        self.cols = ts_columns #apply look-back stats to time series columns
+        if stats is None:
+            keys = ['min','max', 'mean', 'median','var']
+            stats = {}
+            for key in keys:
+                stats[key] = 5
+        self.stats = stats 
+ 
+    def _compute_stat(self, df, stat, window):
+        """ Computes 1 statistic over look-back window for all time series variables
+            and returns renamed df
+        """
+        #first get the function to compute the statistic:
+        func = getattr(pd.DataFrame, stat)
+        stats = df[self.cols].rolling(window, min_periods=0).apply(func).fillna(0) #min_periods=0 ensures, that
+        #the first window is  computed in an expanding fashion. Still certain stats (e.g. var) leave nan 
+        #in the start, replace it with 0s here. 
+        
+        #rename the features by the statistic:
+        stats = stats.add_suffix(f'_{stat}') 
+        
+        return stats
+ 
+    def transform_id(self, df):
+        #compute all statistics in stats dictionary:
+        features = [df]
+        for stat, window in self.stats.items():
+            feature = self._compute_stat(df, stat, window)
+            features.append(feature)          
+        df_out = pd.concat(features, axis=1)
+        return df_out
 
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
@@ -521,6 +399,68 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         return df
 
 
+class AddRecordingCount(BaseEstimator, TransformerMixin):
+    """ Adds a count of the number of entries up to the given timepoint. """
+    def __init__(self, last_only=False):
+        self.columns = columns_with_nans
+
+    def fit(self, df, labels=None):
+        return self
+
+    def transform_id(self, df):
+        return df.cumsum()
+
+    def transform(self, df):
+        # Make a counts frame
+        counts = deepcopy(df)
+        counts.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+
+        # Turn any floats into counts
+        for col in self.columns:
+            counts[col][~counts[col].isna()] = 1
+        counts = counts.replace(np.nan, 0)
+
+        # Get the counts for each person
+        counts = counts.groupby('id').apply(self.transform_id)
+
+        # Rename
+        counts.columns = [x + '_count' for x in counts.columns]
+
+        return pd.concat([df, counts], axis=1)
+
+
+class RemoveExtremeValues(BaseEstimator, TransformerMixin):
+    def __init__(self, quantile):
+        self.quantile = quantile
+        self.cols = ['HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
+                     'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'SaO2', 'AST', 'BUN',
+                     'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine', 'Bilirubin_direct',
+                     'Glucose', 'Lactate', 'Magnesium', 'Phosphate', 'Potassium',
+                     'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT', 'WBC',
+                     'Fibrinogen', 'Platelets']
+
+    def fit(self, df, labels=None):
+        self.percentiles_1 = np.nanpercentile(df[self.cols], self.quantile, axis=0)
+        self.percentiles_2 = np.nanpercentile(df[self.cols], 1 - self.quantile, axis=0)
+        return self
+
+    def transform(self, df):
+        # Drop derived cols
+        df.drop(['HepaticSOFA', 'SIRS', 'SIRS_path', 'MEWS', 'qSOFA', 'SOFA', 'SepticShock'], axis=1, inplace=True)
+
+        # Remove extreme vals
+        for i, col in enumerate(self.cols):
+            p1, p2 = self.percentiles_1[i], self.percentiles_2[i]
+            mask = (min(p1, p2) > df[col]) | (max(p1, p2) < df[col])
+            df[mask][col] = np.nan
+
+        # Redo ffill and derived feature calcs
+        df.fillna(method='ffill', inplace=True)
+        df = DerivedFeatures().transform(df)
+
+        return df
+
+
 def make_eventual_labels(labels):
 
     def make_one(s):
@@ -528,6 +468,91 @@ def make_eventual_labels(labels):
 
     return labels.groupby('id').apply(make_one)
 
+
+#Old format: useful for quick testing with a subset of the data
+class CreateDataframe(TransformerMixin, BaseEstimator):
+    """
+    Transform method takes either a filename or folder and creates a dataframe of the file or all psv files contained
+    in the folder
+    available splits:
+        - train, validation, test
+    """
+    def __init__(self, save=False, data_dir=None, split='train', split_file='datasets/physionet2019/data/split_info.pkl'):
+        self.save = save
+        self.data_dir = data_dir
+        self.split = split
+        split_info = load_pickle(split_file)
+        self.split_ids = split_info['split_0'][split] 
+
+    def _file_to_id(self, string):
+        """ Convert string of psv file to integer id
+        """
+        return int(string.rstrip('.psv').lstrip('p'))
+    
+    def _id_to_file(self, pat_id, pad_until=6):
+        """ Convert patient id (integer) to file string with zeros padded """
+        return 'p' + str(pat_id).zfill(pad_until) + '.psv'
+
+    def _extract_split(self, fnames):
+        """ Return list of fnames (to load) which are contained in predefined split ids
+        """
+        used_files = []
+        for fname in fnames:
+            tail, head = os.path.split(fname)
+            curr_id = self._file_to_id(head)
+            if curr_id in self.split_ids:
+                used_files.append(fname) 
+        return used_files
+
+    def fit(self, df, y=None):
+        return self
+    
+    @staticmethod
+    def psv_to_dataframe(fname):
+        """ Transforms a single psv file into a dataframe with an id column"""
+        df = pd.read_csv(fname, sep='|')
+        df['id'] = int(fname.split('.psv')[0].split('p')[-1])
+
+        return df
+
+    def transform(self, location):
+        """
+        Given either a location of psv files or single psv file, transforms into dataframes indexed with time and id
+        :param location: either a folder containing psv files or a single psv file
+        :return: df of all psv files indexed by [id, time]
+        """
+
+        # If location is a directory, make with all files, else make with a single file
+        if isinstance(location, list):
+            fnames = [l + '/' + x for l in location for x in os.listdir(l)]
+        elif not location.endswith('.psv'):
+            fnames = [location + '/' + x for x in os.listdir(location)]
+        else:
+            fnames = [location]
+        
+        fnames_old = fnames
+        fnames = self._extract_split(fnames)
+
+        # Make the dataframe
+        df = pd.concat([self.psv_to_dataframe(fname) for fname in fnames])
+
+        # Idx according to id and time
+        df.index.name = 'time'
+        df_idxed = df.reset_index().set_index(['id', 'time']).sort_index(ascending=True)
+
+        # Get values and labels
+        if 'SepsisLabel' in df_idxed.columns:
+            df_values, labels = df_idxed.drop('SepsisLabel', axis=1), df_idxed['SepsisLabel']
+        else:
+            df_values = df_idxed
+
+        # Save if specified
+        if self.save is not False:
+            os.makedirs(self.data_dir, exist_ok=True)
+            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+            save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
+
+        return df_values
 
 if __name__ == '__main__':
     CreateDataframe()  

@@ -8,7 +8,8 @@ from transformers import *
 
 dataset_class_mapping = {
     'physionet2019': 'Physionet2019Dataset',
-    'mimic3': 'MIMIC3Dataset'
+    'mimic3': 'MIMIC3Dataset',
+    'test': None
 }
 
 if __name__ == '__main__':
@@ -40,6 +41,7 @@ if __name__ == '__main__':
             #('create_dataframe', CreateDataframe(save=True, data_dir=out_dir, split=split )),
             #('input_count', AddRecordingCount()),
             ('normalization', Normalizer(data_dir=out_dir, split=split )),
+            ('lookback_features', LookbackFeatures()),
             #('imputation', IndicatorImputation()),
             ('imputation', CarryForwardImputation()),
             #('derive_features', DerivedFeatures()),
