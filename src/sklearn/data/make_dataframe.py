@@ -24,7 +24,7 @@ def main():
     parser.add_argument('--out_dir',
         default='sklearn',
         help='relative path from <dataset>/data dir, where processed dump will be written to') 
-    parser.add_argument('--n_jobs',
+    parser.add_argument('--n_jobs', type=int,
         default=10,
         help='number of paralllel jobs') 
     args = parser.parse_args()
