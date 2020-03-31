@@ -8,7 +8,7 @@ import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
-from base import BaseIDTransformer
+from base import BaseIDTransformer, ParallelBaseIDTransformer
 from extracted import columns_with_nans, ts_columns, columns_not_to_normalize
 
 import sys
@@ -157,15 +157,16 @@ class Normalizer(TransformerMixin, BaseEstimator):
         return df_out
 
 
-class LookbackFeatures(BaseIDTransformer):
+class LookbackFeatures(ParallelBaseIDTransformer):
     """ 
     Simple statistical features including moments over a tunable look-back window. 
     """
-    def __init__(self, stats=None):
+    def __init__(self, stats=None, n_jobs=4):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values) 
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
+        super().__init__(n_jobs=n_jobs) 
         self.cols = ts_columns #apply look-back stats to time series columns
         if stats is None:
             keys = ['min','max', 'mean', 'median','var']
