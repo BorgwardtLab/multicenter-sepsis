@@ -6,6 +6,7 @@ import numpy as np
 import os
 import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
+from joblib import Parallel, delayed
 
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer, ParallelBaseIDTransformer
@@ -161,18 +162,21 @@ class LookbackFeatures(ParallelBaseIDTransformer):
     """ 
     Simple statistical features including moments over a tunable look-back window. 
     """
-    def __init__(self, stats=None, n_jobs=4):
+    def __init__(self, stats=None, n_outer_jobs=4, n_inner_jobs=1):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values) 
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
-        super().__init__(n_jobs=n_jobs) 
+        super().__init__(n_jobs=n_outer_jobs)
+        self.n_inner_jobs = n_inner_jobs #n_jobs to parallelize the loop over statistics 
         self.cols = ts_columns #apply look-back stats to time series columns
         if stats is None:
             keys = ['min','max', 'mean', 'median','var']
-            stats = {}
+            windows = [4,8,16] #5
+            stats = []
             for key in keys:
-                stats[key] = 5
+                for window in windows:
+                    stats.append( (key, window) )
         self.stats = stats 
  
     def _compute_stat(self, df, stat, window):
@@ -186,16 +190,24 @@ class LookbackFeatures(ParallelBaseIDTransformer):
         #in the start, replace it with 0s here. 
         
         #rename the features by the statistic:
-        stats = stats.add_suffix(f'_{stat}') 
+        stats = stats.add_suffix(f'_{stat}_{window}_hours') 
         
         return stats
  
     def transform_id(self, df):
         #compute all statistics in stats dictionary:
-        features = [df]
-        for stat, window in self.stats.items():
-            feature = self._compute_stat(df, stat, window)
-            features.append(feature)          
+        
+        #features = [df]
+        if self.n_inner_jobs < 2:
+            features = [df]
+            for stat, window in self.stats:
+                feature = self._compute_stat(df, stat, window)
+                features.append(feature)
+        else:         
+            dfs = Parallel(n_jobs=self.n_inner_jobs)(delayed(self._compute_stat)(
+                df, stat, window) for stat, window in self.stats )
+            features = [df] + dfs
+        
         df_out = pd.concat(features, axis=1)
         return df_out
 
