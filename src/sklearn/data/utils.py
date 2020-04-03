@@ -1,6 +1,7 @@
 import os
 import pickle
 import json
+from collections import defaultdict
 
 def save_pickle(obj, filename, protocol=4):
     """ Basic pickle dumping """
@@ -24,4 +25,27 @@ def load_json(filename):
     return obj
 
 
+def load_data(path='datasets/physionet2019/data/sklearn/processed'):
+    """ 
+    Load preprocessed Data in sklearn format from pickle
+    """ 
+    data = defaultdict()
+    file_renaming = { 
+                'X_features_train': 'X_train',
+                'y_train': 'y_train', 
+                'X_features_validation': 'X_validation',
+                'y_validation': 'y_validation'
+    } 
+    
+    for filename in file_renaming.keys():
+        filepath = os.path.join(path, filename + '.pkl')
+        data[file_renaming[filename]] = load_pickle(filepath)
+    return data
 
+def to_tsfresh_form(df, labels):
+    """ Puts the data into a form where tsfresh extractors can be used. """
+    tsfresh_frame = df.reset_index()
+    labels = labels.groupby('id').apply(lambda x: x.iloc[0]).astype(int)
+    return tsfresh_frame, labels
+ 
+ 
