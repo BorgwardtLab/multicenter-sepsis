@@ -385,7 +385,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
     def septic_shock(df):
         shock = np.zeros(shape=df.shape[0])
         shock[df['MAP'].values < 65] += 1
-        shock[df['Lactate'].values < 2] += 1
+        shock[df['Lactate'].values > 2] += 1
         return shock
 
     def transform(self, df):
@@ -397,18 +397,16 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # SOFA
         df['SOFA'] = self.SOFA(df[['Platelets', 'MAP', 'Creatinine', 'Bilirubin_total']])
         df['SOFA_deterioration'] = self.SOFA_deterioration(df['SOFA'])
-        # df['SOFA_max_24hrs'] = self.SOFA_max_24(df['SOFA'])
-        # df['HepaticSOFA'] = self.hepatic_sofa(df)
-        # df['qSOFA'] = self.qSOFA(df)
+        df['SOFA_max_24hrs'] = self.SOFA_max_24(df['SOFA'])
+        df['qSOFA'] = self.qSOFA(df)
         # df['SOFA_24hrmaxdet'] = self.SOFA_deterioration(df['SOFA_max_24hrs'])
         # df['SOFA_deterioration_new'] = self.SOFA_deterioration_new(df['SOFA_max_24hrs'])
-        # df['SepticShock'] = self.septic_shock(df)
+        df['SepticShock'] = self.septic_shock(df)
 
         # Other scores
-        # sirs_df = self.sirs_criteria(df)
-        # df['MEWS'] = self.mews_score(df)
-        # df['SIRS'] = sirs_df['SIRS']
-        # df['SIRS_path'] = sirs_df['SIRS_path']
+        sirs_df = self.sirs_criteria(df)
+        df['MEWS'] = self.mews_score(df)
+        df['SIRS'] = sirs_df['SIRS']
         return df
 
 
