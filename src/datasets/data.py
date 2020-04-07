@@ -62,12 +62,12 @@ class Physionet2019Dataset(Dataset):
 
         with open(split_file, 'rb') as f:
             d = pickle.load(f)
-        patients = d[split_repetition_name][split]
+        self.patients = d[split_repetition_name][split]
 
         self.files = [
             # Patient ids are int but files contain leading zeros
             os.path.join(root_dir, f'p{patient_id:06d}.psv')
-            for patient_id in patients
+            for patient_id in self.patients
         ]
         self.transform = transform
 
@@ -100,6 +100,8 @@ class Physionet2019Dataset(Dataset):
         instance_data = pd.read_csv(filename, sep='|')
         if self.as_dict:
             instance_data = self._split_instance_data_into_dict(instance_data)
+        else: #feeding the ids to sklearn pipeline
+            instance_data = self.patients[idx], instance_data
 
         if self.transform:
             instance_data = self.transform(instance_data)

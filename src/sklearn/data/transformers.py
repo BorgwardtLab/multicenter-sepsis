@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer, ParallelBaseIDTransformer
-from extracted import columns_with_nans, ts_columns, columns_not_to_normalize
+from extracted import columns_with_nans, ts_columns, extended_ts_columns ,columns_not_to_normalize
 
 import sys
 sys.path.append(os.getcwd())
@@ -45,7 +45,7 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         """
         # Make the dataframe
         df = pd.concat(
-            [ self._add_id(instance, i) for i, instance in enumerate(self.dataloader) ]
+            [ self._add_id(instance, i) for i, instance in self.dataloader ]
         )
 
         # Idx according to id and time
@@ -169,7 +169,7 @@ class LookbackFeatures(ParallelBaseIDTransformer):
         """
         super().__init__(n_jobs=n_outer_jobs)
         self.n_inner_jobs = n_inner_jobs #n_jobs to parallelize the loop over statistics 
-        self.cols = ts_columns #apply look-back stats to time series columns
+        self.cols = extended_ts_columns #apply look-back stats to time series columns
         if stats is None:
             keys = ['min','max', 'mean', 'median','var']
             windows = [4,8,16] #5
@@ -185,7 +185,10 @@ class LookbackFeatures(ParallelBaseIDTransformer):
         """
         #first get the function to compute the statistic:
         func = getattr(pd.DataFrame, stat)
-        stats = df[self.cols].rolling(window, min_periods=0).apply(func).fillna(0) #min_periods=0 ensures, that
+        
+        #determine available columns (which could be a subset of the predefined cols, depending on the setup):
+        used_cols = [col for col in self.cols if col in df.columns]  
+        stats = df[used_cols].rolling(window, min_periods=0).apply(func).fillna(0) #min_periods=0 ensures, that
         #the first window is  computed in an expanding fashion. Still certain stats (e.g. var) leave nan 
         #in the start, replace it with 0s here. 
         
@@ -392,12 +395,12 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # Compute things
         df['ShockIndex'] = df['HR'].values / df['SBP'].values
         df['BUN/CR'] = df['BUN'].values / df['Creatinine'].values
-        df['SaO2/FiO2'] = df['SaO2'].values / df['FiO2'].values
+        df['SaO2/FiO2'] = df['SaO2'].values / df['FiO2'].values #shouldnt it be PaO2/Fi ratio?
 
         # SOFA
         df['SOFA'] = self.SOFA(df[['Platelets', 'MAP', 'Creatinine', 'Bilirubin_total']])
         df['SOFA_deterioration'] = self.SOFA_deterioration(df['SOFA'])
-        df['SOFA_max_24hrs'] = self.SOFA_max_24(df['SOFA'])
+        #df['sofa_max_24hrs'] = self.SOFA_max_24(df['SOFA'])
         df['qSOFA'] = self.qSOFA(df)
         # df['SOFA_24hrmaxdet'] = self.SOFA_deterioration(df['SOFA_max_24hrs'])
         # df['SOFA_deterioration_new'] = self.SOFA_deterioration_new(df['SOFA_max_24hrs'])
