@@ -1,6 +1,7 @@
 import argparse
 import os
 import pandas as pd
+import sys
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.pipeline import Pipeline
 from time import time
@@ -30,7 +31,7 @@ def main():
     parser.add_argument('--n_inner_jobs', type=int,
         default=1,
         help='number of paralllel jobs to compute different stats on one df chunk')
-    parser.add_argument('--overwrite', type=bool,
+    parser.add_argument('--overwrite', action='store_true',
         default=False,
         help='compute all preprocessing steps and overwrite existing intermediary files') 
     args = parser.parse_args()
@@ -43,12 +44,11 @@ def main():
 
     data_dir = os.path.join(base_dir, 'extracted') #only used when creating df directly from psv
     out_dir = os.path.join(base_dir, args.out_dir, 'processed')
-    splits = ['train', 'validation'] # save 'test' for later
+    splits = ['train', 'validation'] # save 'test' for later 
      
     for split in splits:
         # Run full pipe
         print(f'Processing {split} split ..')
-        
         
         #1. Fixed Data Pipeline: Dataloading and normalization (non-parallel)
         #--------------------------------------------------------------------
@@ -61,13 +61,14 @@ def main():
             start = time() 
             data_pipeline = Pipeline([
                 ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split)),
+                ('derived_features', DerivedFeatures()),
                 ('normalization', Normalizer(data_dir=out_dir, split=split))
             ])
             df = data_pipeline.fit_transform(None) 
             print(f'.. finished. Took {time() - start} seconds.')
             # Save
             save_pickle(df, dump)
-        
+
         #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
         #---------------------------------------------------------------------------------
         print('Running (tunable) preprocessing pipeline and dumping it..')
@@ -75,7 +76,6 @@ def main():
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_outer_jobs=args.n_outer_jobs, n_inner_jobs=args.n_inner_jobs)),
             ('imputation', CarryForwardImputation()),
-            #('derive_features', DerivedFeatures()),
             ('remove_nans', FillMissing())
         ])
         df = pipeline.fit_transform(df)  
