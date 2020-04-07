@@ -25,12 +25,9 @@ def main():
     parser.add_argument('--out_dir',
         default='sklearn',
         help='relative path from <dataset>/data dir, where processed dump will be written to') 
-    parser.add_argument('--n_outer_jobs', type=int,
+    parser.add_argument('--n_jobs', type=int,
         default=10,
         help='number of paralllel jobs to process the full df in chunks')
-    parser.add_argument('--n_inner_jobs', type=int,
-        default=1,
-        help='number of paralllel jobs to compute different stats on one df chunk')
     parser.add_argument('--overwrite', action='store_true',
         default=False,
         help='compute all preprocessing steps and overwrite existing intermediary files') 
@@ -74,7 +71,7 @@ def main():
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
-            ('lookback_features', LookbackFeatures(n_outer_jobs=args.n_outer_jobs, n_inner_jobs=args.n_inner_jobs)),
+            ('lookback_features', LookbackFeatures(n_jobs=args.n_jobs)),
             ('imputation', CarryForwardImputation()),
             ('remove_nans', FillMissing())
         ])

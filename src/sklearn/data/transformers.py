@@ -162,13 +162,12 @@ class LookbackFeatures(ParallelBaseIDTransformer):
     """ 
     Simple statistical features including moments over a tunable look-back window. 
     """
-    def __init__(self, stats=None, n_outer_jobs=4, n_inner_jobs=1):
+    def __init__(self, stats=None, n_jobs=4):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values) 
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
-        super().__init__(n_jobs=n_outer_jobs)
-        self.n_inner_jobs = n_inner_jobs #n_jobs to parallelize the loop over statistics 
+        super().__init__(n_jobs=n_jobs)
         self.cols = extended_ts_columns #apply look-back stats to time series columns
         if stats is None:
             keys = ['min','max', 'mean', 'median','var']
@@ -180,7 +179,7 @@ class LookbackFeatures(ParallelBaseIDTransformer):
         self.stats = stats 
  
     def _compute_stat(self, df, stat, window):
-        """ Computes 1 statistic over look-back window for all time series variables
+        """ Computes current statistic over look-back window for all time series variables
             and returns renamed df
         """
         #first get the function to compute the statistic:
@@ -201,16 +200,10 @@ class LookbackFeatures(ParallelBaseIDTransformer):
         #compute all statistics in stats dictionary:
         
         #features = [df]
-        if self.n_inner_jobs < 2:
-            features = [df]
-            for stat, window in self.stats:
-                feature = self._compute_stat(df, stat, window)
-                features.append(feature)
-        else:         
-            dfs = Parallel(n_jobs=self.n_inner_jobs)(delayed(self._compute_stat)(
-                df, stat, window) for stat, window in self.stats )
-            features = [df] + dfs
-        
+        features = [df]
+        for stat, window in self.stats:
+            feature = self._compute_stat(df, stat, window)
+            features.append(feature)
         df_out = pd.concat(features, axis=1)
         return df_out
 
