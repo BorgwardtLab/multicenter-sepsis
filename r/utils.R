@@ -34,8 +34,8 @@ challenge_map <- data.frame(rbind(
   , c("WBC", "white_blood_cells")
   , c("Fibrinogen", "fibrinogen")
   , c("Platelets", "platelet_count")
-# , c("Age", "?")
-# , c("Gender", "?")
+  , c("Age", "age")
+  , c("Gender", "sex")
 # , c("Unit1", "?")
 # , c("Unit2", "?")
 # , c("HospAdmTime", "?")
@@ -43,31 +43,50 @@ challenge_map <- data.frame(rbind(
 # , c("SepsisLabel", "?")
 ) , stringsAsFactors = FALSE)
 
-sepsis3_score <- function(source) {
+sepsis3_score <- function(source, pids = NULL) {
 
-  sofa <- sofa_data(source)
+  sofa <- sofa_data(source, id_type = "icustay", patient_ids = pids)
   sofa <- sofa_window(sofa)
   sofa <- sofa_compute(sofa)
 
-  suin <- si_data(source)
-  suin <- si_windows(suin)
+  if (grepl("eicu", source)) {
+
+    suin <- si_data(source, abx_min_count = 2L, positive_cultures = TRUE,
+                    id_type = "icustay", patient_ids = pids)
+    suin <- si_windows(suin, mode = "or")
+
+  } else if (identical(source, "hirid")) {
+
+    suin <- si_data(source, abx_min_count = 2L, id_type = "icustay",
+                    patient_ids = pids)
+    suin <- si_windows(suin, mode = "or")
+
+  } else {
+
+    suin <- si_data(source, id_type = "icustay", patient_ids = pids)
+    suin <- si_windows(suin)
+  }
 
   sepsis_3(sofa, suin)
 }
 
 dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
 
-  sep3 <- sepsis3_score(source)
+  dat <- load_dictionary(source, challenge_map[[2L]], id_type = "icustay")
+  ids <- unique(dat[age >= 14, id(dat), with = FALSE])
+  dat <- merge(dat, ids, all.y = TRUE)
 
-  dat <- load_concepts(source, challenge_map[[2L]])
-  dat <- rename_cols(dat, challenge_map[[1L]], challenge_map[[2L]])
+  sep3 <- sepsis3_score(source, ids)
+  sep3 <- data.table::set(sep3, j = "SepsisLabel", value = 1L)
 
-  res <- merge(dat, sep3, all = TRUE)
-  res <- data.table::set(res, j = c("SepsisLabel", "si_time"),
-    value = list(ifelse(is.na(res[["si_time"]]), NA_integer_, 1L), NULL)
-  )
+  dat <- rename_cols(dat, challenge_map[[1L]], challenge_map[[2L]],
+                     skip_absent = TRUE)
+
+  res <- merge(dat, sep3[, c(meta_cols(sep3), "SepsisLabel"), with = FALSE],
+               all.x = TRUE)
   res <- res[, c("SepsisLabel") := data.table::nafill(SepsisLabel, "locf"),
-             by = c(key(res))]
+             by = c(id(res))]
+  res <- res[, c("SepsisLabel") := data.table::nafill(SepsisLabel, fill = 0L)]
 
   dir <- file.path(dir, source)
 
