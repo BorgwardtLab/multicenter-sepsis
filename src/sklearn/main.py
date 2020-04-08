@@ -57,12 +57,6 @@ def main():
     n_iter_search = args.n_iter_search
     method = args.method
 
-    ##Check if the classification ran before succesfully (result file exists)
-    #result_file = os.path.join(args.result_path, method + '_' + dataset + '.csv') 
-    #if os.path.exists(result_file) and not overwrite:
-    #    print('Classification Result already exists. Skip this job..')
-    #    sys.exit()
-    
     # load data 
     data  = load_data(path=os.path.join(input_path, 'processed'))
     # unpack train and validation splits:
@@ -74,6 +68,7 @@ def main():
         import lightgbm as lgb
         est = lgb.LGBMClassifier(n_jobs=args.clf_n_jobs)
         pipe = Pipeline(steps=[('est', est)])
+        # hyper-parameter grid:
         param_dist = {
         'est__n_estimators': [50,100,300,500, 1000],
         'est__boosting_type': ['gbdt', 'dart'],
