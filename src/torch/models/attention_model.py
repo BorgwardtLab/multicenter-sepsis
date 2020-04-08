@@ -5,11 +5,30 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def get_subsequent_mask(seq):
+    ''' For masking out the subsequent info. '''
+    sz_b, len_s, n_features = seq.size()
+    subsequent_mask = (1 - torch.triu(
+        torch.ones((1, len_s, len_s), device=seq.device), diagonal=1)).bool()
+    return subsequent_mask[None, ...]
+
+
+class MaskedLayerNorm(nn.LayerNorm):
+    def forward(self, x):
+        # Compute cummulative summary statics along time axis
+        N = torch.arange(
+            start=1., end=x.shape[1]+1, device=x.device)[None, :, None]
+        mean_x = torch.cumsum(x, 1) / N
+        std_x = torch.sqrt(torch.cumsum((x - mean_x) ** 2, 1) / N + self.eps)
+
+        return ((x - mean_x) / std_x) * self.weight + self.bias
+
+
 # pylint: disable=R0902,C0103,W0221
 class MultiHeadAttention(nn.Module):
     """Multi head attention layer."""
 
-    def __init__(self, d_model, n_heads, d_k, d_v, mask_future=False):
+    def __init__(self, d_model, n_heads, d_k, d_v, mask_future=True):
         """Multi head attention layer.
 
         Args:
@@ -33,7 +52,7 @@ class MultiHeadAttention(nn.Module):
         self.w_o = nn.Linear(n_heads * d_v, d_model)
 
     def compute_mask(self, x):
-        raise NotImplementedError()
+        return get_subsequent_mask(x)
 
     def forward(self, x):
         """Apply multi head attention to input data x.
@@ -129,7 +148,7 @@ class PositionwiseFeedForward(nn.Module):
         super().__init__()
         self.w_1 = nn.Conv1d(d_in, d_hid, 1)  # position-wise
         self.w_2 = nn.Conv1d(d_hid, d_in, 1)  # position-wise
-        self.layer_norm = nn.LayerNorm(d_in)
+        self.layer_norm = MaskedLayerNorm(d_in)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
@@ -189,9 +208,9 @@ class AttentionLayer(nn.Module):
         super().__init__()
         self.layers = nn.ModuleList([
             MultiHeadAttention(d_model, n_heads, qkv_dim, qkv_dim),
-            nn.LayerNorm(d_model),
+            MaskedLayerNorm(d_model),
             PositionwiseFeedForward(d_model, ff_hidden_dim),
-            nn.LayerNorm(d_model)
+            MaskedLayerNorm(d_model)
         ])
 
     def forward(self, x):
@@ -243,8 +262,5 @@ class AttentionModel(nn.Module):
             }
             kwargs.update(defaults)
             kwargs.pop('hypersearch')
-            return cls(**kwargs) 
-       
-
-
+            return cls(**kwargs)
 

@@ -9,7 +9,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
 
-sys.path.append(os.getcwd())
 from src.datasets.data import ComposeTransformations, PositionalEncoding, \
     to_observation_tuples, Physionet2019Dataset
 from src.torch.models.attention_model import AttentionModel
