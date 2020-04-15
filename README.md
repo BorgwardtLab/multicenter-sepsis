@@ -5,9 +5,13 @@ In this repo, we gather pipelining code for a multicenter sepsis prediction effo
 
 datasets: (code for downloading and extracting this dataset)
 - physionet2019   
-- mimic3  
 --> inside the dataset folder, to download and extract the dataset, simply run:  
  ```make```  
+
+for the other datasets: mimic3, eicu, hirid: first download the zip files from polybox (internal for now),
+then move the zips to the following path (example with e-ICU):  
+```datasets/eicu/data/downloads/eicu.zip```  
+
 
 src:
 - torch: pytorch-based pipeline and models (currently an attention model)  
