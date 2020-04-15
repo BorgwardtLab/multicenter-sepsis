@@ -11,7 +11,7 @@ import time
 import pickle
 
 from sklearn.model_selection import StratifiedShuffleSplit
-
+from IPython import embed
 
 def intersection(lst1, lst2): 
     lst3 = [value for value in lst1 if value in lst2]
@@ -48,7 +48,9 @@ def main(args):
 
         # get patient IDs and Labels
         head, tail = os.path.split(fname)
-        pat_id = int(tail[1:7])
+        #pat_id = int(tail[1:7]) #hard-coded indexing (works for physionet)
+        pat_id = int(tail.lstrip('p').rstrip('.psv') )
+
         label = 1 if pat['SepsisLabel'].sum() > 0 else 0
 
          # append current patient info to dict:
