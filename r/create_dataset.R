@@ -26,7 +26,7 @@ option_list <- list(
 opt_parser <- OptionParser(option_list = option_list)
 opt <- parse_args(opt_parser)
 
-data_sources <- c("mimic", "mimic_demo")
+data_sources <- c("mimic", "mimic_demo", "eicu", "eicu_demo", "hirid")
 
 if (!(length(opt$src) == 1L && opt$src %in% data_sources)) {
   cat("\nSelect a data source among the following options:\n  ",
@@ -43,6 +43,6 @@ if (!dir.exists(opt$path)) {
 }
 
 library(ricu)
-source(file.path(wd, "..", "r", "utils.R"))
+source(file.path(wd, "utils.R"))
 
 dump_dataset(source = opt$src, dir = opt$path)

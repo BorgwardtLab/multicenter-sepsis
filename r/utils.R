@@ -45,29 +45,24 @@ challenge_map <- data.frame(rbind(
 
 sepsis3_score <- function(source, pids = NULL) {
 
-  sofa <- sofa_data(source, id_type = "icustay", patient_ids = pids)
-  sofa <- sofa_window(sofa)
-  sofa <- sofa_compute(sofa)
+  sofa_score <- sofa(source, id_type = "icustay", patient_ids = pids)
 
   if (grepl("eicu", source)) {
 
-    suin <- si_data(source, abx_min_count = 2L, positive_cultures = TRUE,
-                    id_type = "icustay", patient_ids = pids)
-    suin <- si_windows(suin, mode = "or")
+    susp_infec <- si(source, abx_min_count = 2L, positive_cultures = TRUE,
+                     id_type = "icustay", patient_ids = pids, mode = "or")
 
   } else if (identical(source, "hirid")) {
 
-    suin <- si_data(source, abx_min_count = 2L, id_type = "icustay",
-                    patient_ids = pids)
-    suin <- si_windows(suin, mode = "or")
+    susp_infec <- si(source, abx_min_count = 2L, id_type = "icustay",
+                     patient_ids = pids, mode = "or")
 
   } else {
 
-    suin <- si_data(source, id_type = "icustay", patient_ids = pids)
-    suin <- si_windows(suin)
+    susp_infec <- si(source, id_type = "icustay", patient_ids = pids)
   }
 
-  sepsis_3(sofa, suin)
+  sepsis_3(sofa_score, susp_infec)
 }
 
 dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
@@ -88,9 +83,17 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
              by = c(id(res))]
   res <- res[, c("SepsisLabel") := data.table::nafill(SepsisLabel, fill = 0L)]
 
+  wins <- stay_windows(source, id_type = "icustay", win_type = "icustay",
+                       in_time = "intime", out_time = "outtime")
+  res  <- res[, c("join_time") := list(get(index(res)))]
+
+  join <- c(paste(id(res), "==", id(wins)), "join_time <= outtime")
+  res <- res[wins, on = join]
+  res <- rm_cols(res, c("join_time", "intime"))
+
   dir <- file.path(dir, source)
 
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
 
-  write_psv(res, dir, na_rm = TRUE)
+  write_psv(res, dir, na_rows = TRUE)
 }
