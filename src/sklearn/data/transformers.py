@@ -1,12 +1,11 @@
 """
-Various data transformers, TODO: add copyright notice here! 
+Various data loading, filtering and feature transformers, TODO: add copyright notice here! 
 """
 from copy import deepcopy
 import numpy as np
 import os
 import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
-from joblib import Parallel, delayed
 
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer, ParallelBaseIDTransformer
@@ -63,9 +62,50 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
             os.makedirs(self.data_dir, exist_ok=True)
             save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
             save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
-
+        
         return df_values
 
+class PatientFiltration(TransformerMixin, BaseEstimator):
+    """
+    Removes patients which do not match inclusion criteria:
+    --> sepsis-cases with:
+        - onset within the first t_start hours of ICU stay (or before)
+        - onset after t_end hours of ICU stay 
+        defaults: t_start = 3 (which corresponds to 4 hours due to rounding of the chart times), t_end = 168 (1 week)
+    """
+    def __init__(self, save=False, data_dir=None, split='train', onset_bounds=(3,168)):
+        self.save = save
+        self.data_dir = data_dir
+        self.split = split 
+        self.onset_bounds = onset_bounds
+    
+    def fit(self, df, labels=None):
+        return self
+
+    def transform(self, df):
+        """ It seems like the easiest solution is to quickly load the small label pickle (instead of breaking the pipeline API here)
+        """
+        labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))    
+        #get labels of all cases
+        case_labels = labels[labels == 1]
+        case_ids = case_labels.reset_index()['id'].unique() 
+        case_all_labels = labels.loc[case_ids] #also including 0s before onset
+        #determine onset times:
+        onsets = case_all_labels.groupby('id').apply(np.argmax) #argmax returns the first index with the maximum 
+        #filter onsets by start and end time:
+        start, end = self.onset_bounds
+        included = onsets[onsets > start][ onsets <= end ]
+        excluded = onsets[(onsets <= start) | (onsets > end) ] 
+        excluded_ids = excluded.reset_index()['id']
+        df = df.drop(excluded_ids)
+        labels = labels.drop(excluded_ids)
+ 
+        # Save if specified (overwriting the raw dump of DataframeFromDataLoader)
+        if self.save is not False:
+            os.makedirs(self.data_dir, exist_ok=True)
+            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+            save_pickle(df, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
+        return df
 
 class CarryForwardImputation(BaseIDTransformer):
     """
