@@ -129,11 +129,15 @@ option_list <- list(
 opt_parser <- OptionParser(option_list = option_list)
 opt <- parse_args(opt_parser)
 
-data_sources <- c("mimic", "mimic_demo", "eicu", "eicu_demo", "hirid")
+demo <- c("mimic_demo", "eicu_demo")
+prod <- c("mimic", "eicu", "hirid")
+all  <- c(demo, prod)
 
-if (!(length(opt$src) == 1L && opt$src %in% data_sources)) {
+data_opts <- c(all, "demo", "production", "all")
+
+if (!(length(opt$src) == 1L && opt$src %in% data_opts)) {
   cat("\nSelect a data source among the following options:\n  ",
-      paste0("\"", data_sources, "\"", collapse = ", "), "\n\n")
+      paste0("\"", data_opts, "\"", collapse = ", "), "\n\n")
   print_help(opt_parser)
   q("no", status = 1, runLast = FALSE)
 }
@@ -145,4 +149,17 @@ if (!dir.exists(opt$path)) {
   q("no", status = 1, runLast = FALSE)
 }
 
-dump_dataset(source = opt$src, dir = opt$path)
+if (identical(opt$src, "all")) {
+  sources <- all
+} else if (identical(opt$src, "demo")) {
+  sources <- demo
+} else if (identical(opt$src, "prod")) {
+  sources <- prod
+} else {
+  sources <- opt$src
+}
+
+for (src in sources) {
+  message("dumping `", src, "`")
+  dump_dataset(source = src, dir = opt$path)
+}
