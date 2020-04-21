@@ -21,12 +21,13 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     returns (and saves if requested) the dataset in one large sklearn-ready pd dataframe 
     format with patient and time multi-indices.
     """
-    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train'):
+    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train', drop_label=True):
         self.save = save
         dataset_class = getattr(datasets, dataset_cls)
         self.split = split
         self.dataloader = dataset_class(split=split, as_dict=False)
         self.data_dir = data_dir #outdir to save raw dataframe
+        self.drop_label = drop_label
  
     def fit(self, df, labels=None):
         return self
@@ -53,7 +54,10 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
 
         # Get values and labels
         if 'SepsisLabel' in df_idxed.columns:
-            df_values, labels = df_idxed.drop('SepsisLabel', axis=1), df_idxed['SepsisLabel']
+            if self.drop_label:
+                df_values, labels = df_idxed.drop('SepsisLabel', axis=1), df_idxed['SepsisLabel']
+            else:
+                df_values, labels = df_idxed, df_idxed['SepsisLabel']
         else:
             df_values = df_idxed
 
@@ -85,7 +89,7 @@ class PatientFiltration(TransformerMixin, BaseEstimator):
     def transform(self, df):
         """ It seems like the easiest solution is to quickly load the small label pickle (instead of breaking the pipeline API here)
         """
-        labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))    
+        labels = df['SepsisLabel'] #load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))    
         #get labels of all cases
         case_labels = labels[labels == 1]
         case_ids = case_labels.reset_index()['id'].unique() 
@@ -106,6 +110,21 @@ class PatientFiltration(TransformerMixin, BaseEstimator):
             save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
             save_pickle(df, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
         return df
+
+class CaseFiltrationAfterOnset(BaseIDTransformer):
+    """
+    This transform removes case time points after a predefined cut_off time after 
+    sepsis onset. This prevents us from making predictions long after sepsis (which
+    would be not very useful) while it still allows to punish models that detect sepsis
+    only too late.  
+    """
+    def __init__(self, cut_off=24):
+        self.cut_off = cut_off
+
+    def transform_id(self, df):
+        """ Patient-level transform
+        """
+        pass
 
 class CarryForwardImputation(BaseIDTransformer):
     """

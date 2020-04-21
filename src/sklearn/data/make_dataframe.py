@@ -57,7 +57,7 @@ def main():
             print('Running (fixed) data pipeline and dumping it..')
             start = time() 
             data_pipeline = Pipeline([
-                ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split)),
+                ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False)),
                 ('patient_onset_filtering', PatientFiltration(save=True, data_dir=out_dir, split=split )),  
                 ('derived_features', DerivedFeatures()),
                 ('normalization', Normalizer(data_dir=out_dir, split=split))
