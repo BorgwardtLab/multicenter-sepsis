@@ -18,6 +18,10 @@ torch = "*"
 pytorch-lightning = "*"
 lightgbm = "*"
 test-tube = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.7"
+
+[scripts]
+tests = "python -m pytest tests"
