@@ -154,4 +154,3 @@ def physionet2019_utility(y_true, y_score):
         / (unnormalized_best_utility - unnormalized_inaction_utility)
     )
     return normalized_observed_utility
-
