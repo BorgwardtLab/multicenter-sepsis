@@ -61,7 +61,9 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
     # Does the patient eventually have sepsis?
     if np.any(labels):
         is_septic = True
-        t_sepsis = np.argmax(labels) - dt_optimal
+        # Change this as we do not have shifted labels in our setup
+        # t_sepsis = np.argmax(labels) - dt_optimal
+        t_sepsis = np.argmax(labels)
     else:
         is_septic = False
         t_sepsis = float('inf')
@@ -116,7 +118,7 @@ def physionet2019_utility(y_true, y_score):
 
     """
     dt_early = -12
-    dt_optimal = -6
+    # dt_optimal = -6
     dt_late = 3.0
 
     utilities = []
@@ -130,7 +132,9 @@ def physionet2019_utility(y_true, y_score):
         inaction_predictions = np.zeros(num_rows)
 
         if np.any(labels):
-            t_sepsis = np.argmax(labels) - dt_optimal
+            # Change this as we do not have shifted labels in our setup
+            # t_sepsis = np.argmax(labels) - dt_optimal
+            t_sepsis = np.argmax(labels)
             pred_begin = int(max(0, t_sepsis + dt_early))
             pred_end = int(min(t_sepsis + dt_late + 1, num_rows))
             best_predictions[pred_begin:pred_end] = 1
@@ -150,4 +154,3 @@ def physionet2019_utility(y_true, y_score):
         / (unnormalized_best_utility - unnormalized_inaction_utility)
     )
     return normalized_observed_utility
-
