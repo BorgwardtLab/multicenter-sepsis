@@ -24,4 +24,5 @@ pytest = "*"
 python_version = "3.7"
 
 [scripts]
+sklearn = "python -m src.sklearn.main"
 tests = "python -m pytest tests"
