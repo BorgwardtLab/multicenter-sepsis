@@ -50,13 +50,15 @@ class OnlineScoreWrapper:
 class StratifiedPatientKFold(StratifiedKFold):
     """Stratified KFold on patient level."""
 
-    def split(self, X, y, groups):
+    def split(self, X, y, groups=None):
         """Split X and y into stratified folds based on patient ids."""
         patient_ids = X.index.get_level_values('id')
         unique_patient_ids = patient_ids.unique()
         patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
         for train, test in super().split(unique_patient_ids, patient_labels):
+            train_patients = unique_patient_ids[train]
+            test_patients = unique_patient_ids[test]
             yield (
-                np.where(patient_ids.isin(train))[0],
-                np.where(patient_ids.isin(test))[0]
+                np.where(patient_ids.isin(train_patients))[0],
+                np.where(patient_ids.isin(test_patients))[0]
             )

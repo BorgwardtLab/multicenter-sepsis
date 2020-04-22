@@ -2,56 +2,36 @@
 import pytest
 
 import pandas as pd
-import numpy as np
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import make_scorer
 
 from src.evaluation.sklearn_utils import (
-    OnlineScoreWrapper, StratifiedPatientKFold, NotConsecutiveError)
-
-MOCK_LENGTHS = [5, 3, 10, 12]
-MOCK_INDEX = pd.MultiIndex.from_arrays(
-    [
-        np.concatenate(
-            [np.repeat(np.random.randint(0, 100000), l) for l in MOCK_LENGTHS],
-            axis=0),
-        np.concatenate([np.arange(l) for l in MOCK_LENGTHS], axis=0)
-    ],
-    names=('id', 'time')
+    OnlineScoreWrapper,
+    StratifiedPatientKFold,
+    NotConsecutiveError,
+    NotOnsetLabelError
 )
-MOCK_INDEX_WRONG = pd.MultiIndex.from_arrays(
-    [
-        np.concatenate(
-            [np.repeat(np.random.randint(0, 100000), l) for l in MOCK_LENGTHS],
-            axis=0),
-        np.concatenate(
-            [np.random.randint(10, size=l) for l in MOCK_LENGTHS], axis=0)
-    ],
-    names=('id', 'time')
-)
-MOCK_X = pd.DataFrame(
-    np.random.random(size=(sum(MOCK_LENGTHS), 10)),
-    index=MOCK_INDEX
-)
-MOCK_Y = pd.Series(
-    np.random.randint(0, 1+1, size=sum(MOCK_LENGTHS)),
-    index=MOCK_INDEX
-)
-MOCK_Y_WRONG = pd.Series(
-    np.random.randint(0, 1+1, size=sum(MOCK_LENGTHS)),
-    index=MOCK_INDEX_WRONG
-)
+import tests.evaluation.mock as mock
 
 
-def MOCK_SCORE(y_label, y_pred):
-    return np.mean(
-        [np.all(label, pred) for label, pred in zip(y_label, y_pred)])
+def test_stratified_patient_kfold():
+    cv = StratifiedPatientKFold(n_splits=2)
+    for train_indices, test_indices in cv.split(mock.MOCK_X, mock.MOCK_Y):
+        train_data = mock.MOCK_X.iloc[train_indices]
+        train_patients = train_data.index.get_level_values('id').unique()
+        test_data = mock.MOCK_X.iloc[test_indices]
+        test_patients = test_data.index.get_level_values('id').unique()
+        train_patients = set(train_patients)
+        test_patients = set(test_patients)
+        assert len(train_patients.intersection(test_patients)) == 0
+        assert len(train_patients.union(test_patients)) == (
+            len(train_patients) + len(test_patients))
 
 
 def test_with_gridsearch_cv():
-    wrapped_scorer = OnlineScoreWrapper(MOCK_SCORE)
+    wrapped_scorer = OnlineScoreWrapper(mock.ALL_EQUAL_SCORE)
 
     clf = LogisticRegression()
     grid = {
