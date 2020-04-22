@@ -69,6 +69,20 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         
         return df_values
 
+class DropLabels(TransformerMixin, BaseEstimator):
+    """
+    Remove label information, which was required for filtering steps.
+    """
+    def __init__(self, label='SepsisLabel'):
+        self.label = label
+
+    def fit(self, df, labels=None):
+        return self
+    
+    def transform(self, df):
+        df = df.drop(self.label, axis=1)
+        return df
+
 class PatientFiltration(TransformerMixin, BaseEstimator):
     """
     Removes patients which do not match inclusion criteria:
