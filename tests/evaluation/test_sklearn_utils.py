@@ -43,14 +43,31 @@ def test_with_gridsearch_cv():
         cv=StratifiedPatientKFold(n_splits=2),
         scoring=make_scorer(wrapped_scorer)
     )
-    gridsearch.fit(MOCK_X, MOCK_Y)
+    gridsearch.fit(mock.MOCK_X, mock.MOCK_Y)
 
 
 def test_consecutive_check():
     with pytest.raises(NotConsecutiveError):
-        wrapped_scorer = OnlineScoreWrapper(MOCK_SCORE)
-        wrapped_scorer(MOCK_Y_WRONG, MOCK_Y_WRONG)
+        wrapped_scorer = OnlineScoreWrapper(mock.ALL_EQUAL_SCORE)
+        wrapped_scorer(
+            mock.MOCK_Y_CONSECUTIVE_ERROR, mock.MOCK_Y_CONSECUTIVE_ERROR)
 
 
+def test_onset_label_check():
+    with pytest.raises(NotOnsetLabelError):
+        wrapped_scorer = OnlineScoreWrapper(
+            mock.ALL_EQUAL_SCORE, shift_onset_label=2)
+        wrapped_scorer(mock.MOCK_Y_ONSET_ERROR, mock.MOCK_Y_ONSET_ERROR)
 
 
+def test_onset_label_shift():
+    mock_index = pd.MultiIndex.from_arrays(
+        [[0, 0, 0, 0], [0, 1, 2, 3]],
+        names=('id', 'time')
+    )
+    mock_y = pd.DataFrame([0, 0, 0, 1], index=mock_index)
+    mock_pred = pd.DataFrame([0, 0, 1, 1], index=mock_index)
+    wrapped_scorer = OnlineScoreWrapper(
+        mock.ALL_EQUAL_SCORE, shift_onset_label=-1)
+    score = wrapped_scorer(mock_y, mock_pred)
+    assert score is True
