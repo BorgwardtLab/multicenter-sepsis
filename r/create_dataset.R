@@ -124,7 +124,9 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
 
     data_dir <- file.path(dir, "training_setB")
 
-    stopifnot(dir.exists(data_dir))
+    if (!dir.exists(data_dir)) {
+      stop("need directory ", data_dir, " to continue")
+    }
 
     dat <- read_psv(data_dir, col_spec = challenge_spec, id_col = "ID")
 
@@ -193,23 +195,12 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
   write_psv(res, dir, na_rows = TRUE)
 }
 
-get_wd <- function() {
-  args <- commandArgs()
-  this_dir <- dirname(
-    regmatches(args, regexpr("(?<=^--file=).+", args, perl = TRUE))
-  )
-  stopifnot(length(this_dir) == 1L)
-  this_dir
-}
-
-wd <- get_wd()
-
 option_list <- list(
   make_option(c("-s", "--source"), type = "character", default = "mimic_demo",
               help = "data source name (e.g. \"mimic\")",
               metavar = "source", dest = "src"),
   make_option(c("-d", "--dir"), type = "character",
-              default = file.path(wd, "..", "datasets"),
+              default = "datasets",
               help = "output directory [default = \"%default\"]",
               metavar = "dir", dest = "path")
 )
@@ -237,6 +228,8 @@ if (!dir.exists(opt$path)) {
   q("no", status = 1, runLast = FALSE)
 }
 
+setwd(opt$path)
+
 if (identical(opt$src, "all")) {
   sources <- all
 } else if (identical(opt$src, "demo")) {
@@ -248,8 +241,10 @@ if (identical(opt$src, "all")) {
 }
 
 for (src in sources) {
+
   message("dumping `", src, "`")
-  dump_dataset(source = src, dir = opt$path)
-  dir <- file.path(opt$path, src)
-  tar(paste0(dir, ".tar.gz"), dir, "gzip")
+
+  dump_dataset(source = src, dir = ".")
+
+  tar(paste0(src, ".tar.gz"), src, "gzip")
 }
