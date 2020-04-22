@@ -58,7 +58,8 @@ def main():
             start = time() 
             data_pipeline = Pipeline([
                 ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False)),
-                ('patient_onset_filtering', PatientFiltration(save=True, data_dir=out_dir, split=split )),  
+                ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, split=split )),  
+                ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset()),
                 ('drop_labels', DropLabels()),
                 ('derived_features', DerivedFeatures()),
                 ('normalization', Normalizer(data_dir=out_dir, split=split))
