@@ -2,6 +2,7 @@
 import pytest
 
 import pandas as pd
+import numpy as np
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LogisticRegression
@@ -28,6 +29,32 @@ def test_stratified_patient_kfold():
         assert len(train_patients.intersection(test_patients)) == 0
         assert len(train_patients.union(test_patients)) == (
             len(train_patients) + len(test_patients))
+
+
+def test_online_score_wrapper():
+    per_patient_label = [
+        np.array([0, 0, 1, 1, 1, 1]),
+        np.array([0, 1, 1, 1, 1])
+    ]
+    labels = pd.DataFrame(
+        np.concatenate(per_patient_label, axis=0),
+        index=pd.MultiIndex.from_arrays(
+            [
+                [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4]
+            ],
+            names=('id', 'time')
+        )
+    )
+
+    def score(y_true, y_pred):
+        all_same = True
+        for i, lab in enumerate(y_true):
+            all_same &= bool(np.all(per_patient_label[i] == lab))
+        return all_same
+
+    wrapped_score = OnlineScoreWrapper(score)
+    assert wrapped_score(labels, labels) is True
 
 
 def test_with_gridsearch_cv():
