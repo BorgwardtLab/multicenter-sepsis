@@ -14,7 +14,8 @@ from sklearn.metrics._scorer import _cached_call
 from sklearn.externals import joblib
 
 from src.sklearn.data.utils import load_data
-from src.evaluation import physionet2019_scorer, StratifiedPatientKFold
+from src.evaluation import (
+    get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 
 
 def load_data_from_input_path(input_path, dataset_name):
@@ -57,9 +58,19 @@ def get_pipeline_and_grid(method_name, clf_params):
         raise ValueError('Invalid method: {}'.format(method_name))
 
 
+def apply_label_shift(labels, shift):
+    """Apply label shift to labels."""
+    labels = labels.copy()
+    patients = labels.get_level_values('id').unique()
+    for patient in patients:
+        labels[patient] = shift_onset_label(patient, labels[patient], shift)
+    return labels
+
+
 def main():
     """Parse arguments and launch fitting of model."""
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         '--input_path', default='data/sklearn',
         help='Path to input data directory (relative from dataset directory)'
@@ -71,6 +82,10 @@ def main():
     parser.add_argument(
         '--dataset', default='physionet2019',
         help='Dataset Name: [physionet2019, ..]'
+    )
+    parser.add_argument(
+        '--label-propagation', default=6, type=int,
+        help='By how many hours to shift label into the past. Default: 6'
     )
     parser.add_argument(
         '--overwrite', action='store_true', default=True,
@@ -95,10 +110,17 @@ def main():
 
     X_train, X_val, y_train, y_val = load_data_from_input_path(
         args.input_path, args.dataset)
+    if args.label_propagation != 0:
+        # Label shift is normally assumed to be in the direction of the future.
+        # For label propagation we should thus take the negative of the
+        # provided label propagation parameter
+        y_train = apply_label_shift(y_train, -args.label_propagation)
+        y_val = apply_label_shift(y_val, -args.label_propagation)
+
     pipeline, hparam_grid = get_pipeline_and_grid(args.method, args.clf_params)
 
     scores = {
-        'physionet_utility': physionet2019_scorer,
+        'physionet_utility': get_physionet2019_scorer(args.label_propagation),
         'roc_auc': SCORERS['roc_auc'],
         'average_precision': SCORERS['average_precision'],
         'balanced_accuracy': SCORERS['balanced_accuracy'],
@@ -145,7 +167,7 @@ def main():
             results['val_' + method] = call(
                 best_estimator, method, X_val).to_list()
         except AttributeError:
-            # Not all methods support all predictions types
+            # Not all estimators support all methods
             continue
 
     with open(os.path.join(result_path, 'results.json'), 'w') as f:

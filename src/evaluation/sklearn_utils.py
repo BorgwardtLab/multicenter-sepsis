@@ -36,7 +36,18 @@ def ensure_consecutive(patient_id, instance):
 
 
 def shift_onset_label(patient_id, label, shift):
-    """Shift the label onset."""
+    """Shift the label onset.
+
+    Args:
+        patient_id: The patient_id for more informative errors
+        labels: pd.Series of the labels
+        shift: The number of hours to shift the label. Positive values
+               correspond to shifting into the future.
+
+    Returns:
+        pd.Series with labels shifted.
+
+    """
     onset = np.argmax(label)
     # Check if label is a onset
     if not np.all(label.iloc[onset:]):
