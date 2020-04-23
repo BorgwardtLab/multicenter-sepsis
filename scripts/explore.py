@@ -18,10 +18,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     path = os.path.join('datasets', args.dataset, args.path)
-    df_path = os.path.join(path, 'X_normalized_train.pkl')
+    normalized_path = os.path.join(path, 'X_normalized_train.pkl')
+    features_path = os.path.join(path, 'X_features_train.pkl')
     y_path = os.path.join(path, 'y_train.pkl')
 
-    df = load_pickle(df_path)
+    df = load_pickle(normalized_path)
+    X = load_pickle(features_path)
     y = load_pickle(y_path)
 
     embed()
