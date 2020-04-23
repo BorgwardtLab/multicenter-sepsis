@@ -3,7 +3,7 @@ all: data/split_info.pkl
 .DELETE_ON_ERROR:
 .PHONY: all tests
 
-data/extracted: data/downloads/eicu.zip
+data/extracted: ../downloads/eicu.zip
 	-mkdir -p data/extracted
 	unzip -q -j $< -d $@
 	cd $@ && for f in *.psv; do mv $$f p$$f; done
