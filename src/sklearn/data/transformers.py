@@ -171,7 +171,7 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         return self
 
     def _remove_pre_icu(self, df):
-        return df[df.index >= 0] # remove time points before ICU (upon prediction)
+        return df[df.index.get_level_values('time') >=0]
     
     def _remove_too_few_observations(self, df, thres):
         ind_to_keep = (~df.isnull()).sum(axis=1) > 1
@@ -190,8 +190,12 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         assert len(labels) == len(df)
         df['SepsisLabel'] = labels #we temporarily add the labels to consistently remove time steps.
         
-        df = df.groupy('id').apply(self._transform_id)
-       
+        df = df.groupby('id', as_index=False).apply(self._transform_id)
+        #groupby can create None indices, drop them:
+        if None in df.index.names:
+            print('None in indices, dropping it')
+            df.index = df.index.droplevel(None)
+  
         if self.save:
             save_pickle(df['SepsisLabel'], os.path.join(self.data_dir, f'y_{self.split}.pkl'))
         df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
