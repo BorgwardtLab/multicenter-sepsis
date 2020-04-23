@@ -147,8 +147,32 @@ class CaseFiltrationAfterOnset(BaseIDTransformer):
     def transform_id(self, df):
         """ Patient-level transform
         """
-        onset = df[self.label].argmax()
-        return df[:onset+self.cut_off+1] 
+        if df[self.label].sum() > 0:
+            #Case:
+            onset = df[self.label].argmax()
+            return df[:onset+self.cut_off+1]
+        else:
+            #Control:
+            return df
+
+class InvalidTimesFiltration(BaseIDTransformer):
+    """
+    This transform removes invalid time steps right before training / prediction phase (final step of preprocessing).
+        - time steps before ICU admission 
+        - time steps with less than <thres> many observations. 
+    """
+    def __init__(self, data_dir=None, thres=1, label='SepsisLabel'):
+        self.data_dir = data_dir
+        self.thres = thres
+        self.label = label
+
+    def transform_id(self, df):
+        """ Patient-level transform
+        """
+        pass
+        #onset = df[self.label].argmax()
+        #return df[:onset+self.cut_off+1] 
+
 
 class CarryForwardImputation(BaseIDTransformer):
     """
