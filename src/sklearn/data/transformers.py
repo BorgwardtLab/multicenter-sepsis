@@ -64,7 +64,7 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         # Save if specified
         if self.save is not False:
             os.makedirs(self.data_dir, exist_ok=True)
-            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+            save_pickle(labels, os.path.join(self.data_dir, f'raw_y_{self.split}.pkl'))
             save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
         
         return df_values
@@ -73,13 +73,19 @@ class DropLabels(TransformerMixin, BaseEstimator):
     """
     Remove label information, which was required for filtering steps.
     """
-    def __init__(self, label='SepsisLabel'):
+    def __init__(self, label='SepsisLabel', save=True, data_dir=None, split=None):
         self.label = label
+        self.save = save
+        self.data_dir = data_dir
+        self.split = split 
 
     def fit(self, df, labels=None):
         return self
     
     def transform(self, df):
+        if self.save:
+            labels = df[self.label]
+            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))        
         df = df.drop(self.label, axis=1)
         return df
 
@@ -464,7 +470,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # Compute things
         df['ShockIndex'] = df['HR'].values / df['SBP'].values
         df['BUN/CR'] = df['BUN'].values / df['Creatinine'].values
-        df['SaO2/FiO2'] = df['SaO2'].values / df['FiO2'].values #shouldnt it be PaO2/Fi ratio?
+        df['O2Sat/FiO2'] = df['O2Sat'].values / df['FiO2'].values #shouldnt it be PaO2/Fi ratio?
 
         # SOFA
         df['SOFA'] = self.SOFA(df[['Platelets', 'MAP', 'Creatinine', 'Bilirubin_total']])
@@ -510,38 +516,6 @@ class AddRecordingCount(BaseEstimator, TransformerMixin):
         counts.columns = [x + '_count' for x in counts.columns]
 
         return pd.concat([df, counts], axis=1)
-
-
-class RemoveExtremeValues(BaseEstimator, TransformerMixin):
-    def __init__(self, quantile):
-        self.quantile = quantile
-        self.cols = ['HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
-                     'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'SaO2', 'AST', 'BUN',
-                     'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine', 'Bilirubin_direct',
-                     'Glucose', 'Lactate', 'Magnesium', 'Phosphate', 'Potassium',
-                     'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT', 'WBC',
-                     'Fibrinogen', 'Platelets']
-
-    def fit(self, df, labels=None):
-        self.percentiles_1 = np.nanpercentile(df[self.cols], self.quantile, axis=0)
-        self.percentiles_2 = np.nanpercentile(df[self.cols], 1 - self.quantile, axis=0)
-        return self
-
-    def transform(self, df):
-        # Drop derived cols
-        df.drop(['HepaticSOFA', 'SIRS', 'SIRS_path', 'MEWS', 'qSOFA', 'SOFA', 'SepticShock'], axis=1, inplace=True)
-
-        # Remove extreme vals
-        for i, col in enumerate(self.cols):
-            p1, p2 = self.percentiles_1[i], self.percentiles_2[i]
-            mask = (min(p1, p2) > df[col]) | (max(p1, p2) < df[col])
-            df[mask][col] = np.nan
-
-        # Redo ffill and derived feature calcs
-        df.fillna(method='ffill', inplace=True)
-        df = DerivedFeatures().transform(df)
-
-        return df
 
 
 def make_eventual_labels(labels):
