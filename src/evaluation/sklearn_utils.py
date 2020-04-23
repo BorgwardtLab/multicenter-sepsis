@@ -55,9 +55,12 @@ class OnlineScoreWrapper:
         self.score_func = score_func
         self.shift_onset_label = shift_onset_label
 
+    @property
+    def __name__(self):
+        return self.score_func.__name__
+
     def __call__(self, y_true, y_pred):
         """Call score_func on dataframe input."""
-        print(y_true, y_pred)
         if len(y_pred.shape) == 2 and y_pred.shape[1] == 1:
             # Drop additional dimension in case of one dimensional label
             y_pred = pd.Series(y_pred.iloc[:, 0], index=y_true.index)

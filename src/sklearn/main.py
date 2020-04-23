@@ -121,7 +121,7 @@ def main():
         "RandomizedSearchCV took %.2f seconds for %d candidates"
         " parameter settings." % ((elapsed), args.n_iter_search)
     )
-    result_path = os.path.join(args.input_path, args.result_path)
+    result_path = os.path.join(args.result_path, args.dataset+'_'+args.method)
     os.makedirs(result_path, exist_ok=True)
 
     cv_results = pd.DataFrame(random_search.cv_results_)
@@ -133,7 +133,7 @@ def main():
     cache = {}
     call = partial(_cached_call, cache)
     for score_name, scorer in scores.items():
-        results['val_' + score_name] = scorer(
+        results['val_' + score_name] = scorer._score(
             call, best_estimator, X_val, y_val)
     print(results)
     results['method'] = args.method
@@ -141,9 +141,14 @@ def main():
     results['n_iter_search'] = args.n_iter_search
     results['runtime'] = elapsed
     for method in ['predict', 'predict_proba', 'decision_function']:
-        results['val_' + method] = call(best_estimator, method, X_val)
+        try:
+            results['val_' + method] = call(
+                best_estimator, method, X_val).to_list()
+        except AttributeError:
+            # Not all methods support all predictions types
+            continue
 
-    with open(os.path.join(result_path, 'results.json')) as f:
+    with open(os.path.join(result_path, 'results.json'), 'w') as f:
         json.dump(results, f)
     joblib.dump(
         best_estimator,
