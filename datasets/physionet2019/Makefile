@@ -11,7 +11,7 @@ data/extracted: ../downloads/challenge.zip
         #data/downloads/training_setB.zip 
 	mkdir -p data/extracted
 	unzip -q -j $(word 1,$^) -d $@
-	#unzip -q -j $(word 2,$^) -d $@
+	cd $@ && for f in *.psv; do mv $$f p$$f; done
 
 # data/downloads:
 # 	# Download files (currently not used)
