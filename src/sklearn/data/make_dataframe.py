@@ -11,14 +11,16 @@ from transformers import *
 dataset_class_mapping = {
     'physionet2019': 'Physionet2019Dataset',
     'mimic3': 'MIMIC3Dataset',
-    'test': None
+    'eicu': 'EICUDataset',
+    'hirid': 'HiridDataset',
+    'demo': 'DemoDataset'
 }
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', 
         default='physionet2019',
-        help='dataset to use: [physionet2019, ]')
+        help='dataset to use: [physionet2019, mimic3, eicu, hirid, demo]')
     parser.add_argument('--data_dir', 
         default='datasets',
         help='path pointing to the dataset directory')
