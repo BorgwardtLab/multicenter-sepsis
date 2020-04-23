@@ -66,7 +66,7 @@ class Physionet2019Dataset(Dataset):
 
         self.files = [
             # Patient ids are int but files contain leading zeros
-            os.path.join(root_dir, f'p{patient_id:06d}.psv')
+            os.path.join(root_dir, f'p{patient_id}.psv') #{patient_id:06d}
             for patient_id in self.patients
         ]
         self.transform = transform
