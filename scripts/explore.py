@@ -10,11 +10,16 @@ from IPython import embed
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path', type=str, help='path to pickled df file to inspect', 
-        default='datasets/physionet2019/data/sklearn/processed')
+    parser.add_argument('--path', type=str, help='path from dataset to pickled df file to inspect', 
+        default='data/sklearn/processed')
+    parser.add_argument('--dataset', type=str, help='dataset to use', 
+        default='physionet2019')
+
     args = parser.parse_args()
-    df_path = os.path.join(args.path, 'X_features_train.pkl')
-    y_path = os.path.join(args.path, 'y_train.pkl')
+    
+    path = os.path.join('datasets', args.dataset, args.path)
+    df_path = os.path.join(path, 'X_normalized_train.pkl')
+    y_path = os.path.join(path, 'y_train.pkl')
 
     df = load_pickle(df_path)
     y = load_pickle(y_path)
