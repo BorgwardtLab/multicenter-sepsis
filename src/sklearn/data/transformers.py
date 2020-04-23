@@ -49,8 +49,9 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         )
 
         # Idx according to id and time
-        df.index.name = 'time'
-        df_idxed = df.reset_index().set_index(['id', 'time']).sort_index(ascending=True)
+        #df.index.name = 'time'
+        df = df.rename(columns={'ICULOS': 'time'}) #rename for easier understanding
+        df_idxed = df.reset_index(drop=True).set_index(['id', 'time']).sort_index(ascending=True)
 
         # Get values and labels
         if 'SepsisLabel' in df_idxed.columns:
@@ -524,7 +525,6 @@ def make_eventual_labels(labels):
         return pd.Series(index=s.index, data=s.max())
 
     return labels.groupby('id').apply(make_one)
-
 
 #Old format: useful for quick testing with a subset of the data
 class CreateDataframe(TransformerMixin, BaseEstimator):
