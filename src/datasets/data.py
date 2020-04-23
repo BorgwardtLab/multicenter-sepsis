@@ -33,16 +33,16 @@ class Physionet2019Dataset(Dataset):
     """Physionet 2019 Dataset for Sepsis early detection in the ICU."""
 
     STATIC_COLUMNS = [
-        'Age', 'Gender', 'Unit1', 'Unit2', 'HospAdmTime']
+        'Age', 'Gender']  #'Unit1', 'Unit2', 'HospAdmTime']
     TIME_COLUMN = 'ICULOS'
     TS_COLUMNS = [
         'HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
-        'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'SaO2', 'AST', 'BUN',
+        'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'AST', 'BUN',
         'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine',
         'Bilirubin_direct', 'Glucose', 'Lactate', 'Magnesium', 'Phosphate',
         'Potassium', 'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT',
-        'WBC', 'Fibrinogen', 'Platelets'
-    ]
+        'WBC', 'Fibrinogen', 'Platelets' 
+    ] #SaO2
     LABEL_COLUMN = 'SepsisLabel'
 
     def __init__(self, root_dir='datasets/physionet2019/data/extracted',
