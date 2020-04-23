@@ -69,6 +69,20 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         
         return df_values
 
+class DropLabels(TransformerMixin, BaseEstimator):
+    """
+    Remove label information, which was required for filtering steps.
+    """
+    def __init__(self, label='SepsisLabel'):
+        self.label = label
+
+    def fit(self, df, labels=None):
+        return self
+    
+    def transform(self, df):
+        df = df.drop(self.label, axis=1)
+        return df
+
 class PatientFiltration(TransformerMixin, BaseEstimator):
     """
     Removes patients which do not match inclusion criteria:
@@ -77,11 +91,12 @@ class PatientFiltration(TransformerMixin, BaseEstimator):
         - onset after t_end hours of ICU stay 
         defaults: t_start = 3 (which corresponds to 4 hours due to rounding of the chart times), t_end = 168 (1 week)
     """
-    def __init__(self, save=False, data_dir=None, split='train', onset_bounds=(3,168)):
+    def __init__(self, save=False, data_dir=None, split='train', onset_bounds=(3,168), label='SepsisLabel'):
         self.save = save
         self.data_dir = data_dir
         self.split = split 
         self.onset_bounds = onset_bounds
+        self.label = label
     
     def fit(self, df, labels=None):
         return self
@@ -89,7 +104,7 @@ class PatientFiltration(TransformerMixin, BaseEstimator):
     def transform(self, df):
         """ It seems like the easiest solution is to quickly load the small label pickle (instead of breaking the pipeline API here)
         """
-        labels = df['SepsisLabel'] #load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))    
+        labels = df[self.label] #load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))    
         #get labels of all cases
         case_labels = labels[labels == 1]
         case_ids = case_labels.reset_index()['id'].unique() 
@@ -118,13 +133,15 @@ class CaseFiltrationAfterOnset(BaseIDTransformer):
     would be not very useful) while it still allows to punish models that detect sepsis
     only too late.  
     """
-    def __init__(self, cut_off=24):
+    def __init__(self, cut_off=24, label='SepsisLabel'):
         self.cut_off = cut_off
+        self.label = label
 
     def transform_id(self, df):
         """ Patient-level transform
         """
-        pass
+        onset = df[self.label].argmax()
+        return df[:onset+self.cut_off+1] 
 
 class CarryForwardImputation(BaseIDTransformer):
     """

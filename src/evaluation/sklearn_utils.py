@@ -36,7 +36,18 @@ def ensure_consecutive(patient_id, instance):
 
 
 def shift_onset_label(patient_id, label, shift):
-    """Shift the label onset."""
+    """Shift the label onset.
+
+    Args:
+        patient_id: The patient_id for more informative errors
+        labels: pd.Series of the labels
+        shift: The number of hours to shift the label. Positive values
+               correspond to shifting into the future.
+
+    Returns:
+        pd.Series with labels shifted.
+
+    """
     onset = np.argmax(label)
     # Check if label is a onset
     if not np.all(label.iloc[onset:]):
@@ -55,9 +66,12 @@ class OnlineScoreWrapper:
         self.score_func = score_func
         self.shift_onset_label = shift_onset_label
 
+    @property
+    def __name__(self):
+        return self.score_func.__name__
+
     def __call__(self, y_true, y_pred):
         """Call score_func on dataframe input."""
-        print(y_true, y_pred)
         if len(y_pred.shape) == 2 and y_pred.shape[1] == 1:
             # Drop additional dimension in case of one dimensional label
             y_pred = pd.Series(y_pred.iloc[:, 0], index=y_true.index)
