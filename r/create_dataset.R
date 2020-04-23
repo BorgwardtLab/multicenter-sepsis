@@ -133,7 +133,7 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
     dat <- dat[, Gender := fifelse(Gender == 0L, "Female", "Male")]
     dat <- dat[, O2Sat := rowMeans(.SD, na.rm=TRUE),
                .SDcols = c("O2Sat", "SaO2")]
-    dat <- dat[, ICULOS := as.difftime(ICULOS, units = "hours")]
+    dat <- dat[, ICULOS := as.difftime(ICULOS - 1, units = "hours")]
     dat <- as_ts_tbl(dat, "ID")
 
     sep <- dat[(SepsisLabel), .(ICULOS = min(ICULOS) + 6), by = "ID"]
@@ -176,7 +176,8 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
              by = c(id(res))]
   res <- res[, c("SepsisLabel") := nafill(SepsisLabel, fill = 0L)]
 
-  res <- rm_cols(res, setdiff(data_cols(res), challenge_map[[1L]]))
+  res <- rm_cols(res, setdiff(data_cols(res),
+                              c(challenge_map[[1L]], "SepsisLabel")))
 
   miss_cols <- setdiff(challenge_map[[1L]], data_cols(res))
 
@@ -246,5 +247,5 @@ for (src in sources) {
 
   dump_dataset(source = src, dir = ".")
 
-  tar(paste0(src, ".tar.gz"), src, "gzip")
+  zip(paste0(src, ".zip"), src, flags = "-qr9X")
 }
