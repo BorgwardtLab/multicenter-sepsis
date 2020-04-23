@@ -1,7 +1,8 @@
-all: data/split_info.pkl
+all: data/extracted
+splits: data/split_info.pkl
 
 .DELETE_ON_ERROR:
-.PHONY: all tests
+.PHONY: all clean
 
 data/extracted: ../downloads/hirid.zip
 	-mkdir -p data/extracted
