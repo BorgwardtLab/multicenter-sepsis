@@ -129,7 +129,7 @@ class PatientFiltration(TransformerMixin, BaseEstimator):
         if self.save is not False:
             os.makedirs(self.data_dir, exist_ok=True)
             save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-            save_pickle(df, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
+            save_pickle(df, os.path.join(self.data_dir, f'filt_data_{self.split}.pkl')) 
         return df
 
 class CaseFiltrationAfterOnset(BaseIDTransformer):
@@ -174,7 +174,7 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         return df[df.index.get_level_values('time') >=0]
     
     def _remove_too_few_observations(self, df, thres):
-        ind_to_keep = (~df.isnull()).sum(axis=1) > 1
+        ind_to_keep = (~df[ts_columns].isnull()).sum(axis=1) >= thres
         return df[ind_to_keep]
     
     def _transform_id(self, df):
