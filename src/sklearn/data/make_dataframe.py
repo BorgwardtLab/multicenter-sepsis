@@ -77,9 +77,9 @@ def main():
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=args.n_jobs)),
+            ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split)),
             ('imputation', CarryForwardImputation()),
-            ('remove_nans', FillMissing()),
-            ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split))
+            ('remove_nans', FillMissing())
         ])
         df = pipeline.fit_transform(df)  
         print(f'.. finished. Took {time() - start} seconds.')
