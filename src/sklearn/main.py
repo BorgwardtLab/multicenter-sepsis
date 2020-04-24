@@ -61,7 +61,7 @@ def get_pipeline_and_grid(method_name, clf_params):
 def apply_label_shift(labels, shift):
     """Apply label shift to labels."""
     labels = labels.copy()
-    patients = labels.get_level_values('id').unique()
+    patients = labels.index.get_level_values('id').unique()
     for patient in patients:
         labels[patient] = shift_onset_label(patient, labels[patient], shift)
     return labels
