@@ -110,6 +110,11 @@ def main():
 
     X_train, X_val, y_train, y_val = load_data_from_input_path(
         args.input_path, args.dataset)
+
+    # FIXME: !!! Workaround for now
+    X_train.drop(columns=['Gender'], inplace=True)
+    X_val.drop(columns=['Gender'], inplace=True)
+
     if args.label_propagation != 0:
         # Label shift is normally assumed to be in the direction of the future.
         # For label propagation we should thus take the negative of the
