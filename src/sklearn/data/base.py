@@ -69,10 +69,5 @@ class ParallelBaseIDTransformer(TransformerMixin, BaseEstimator):
         """
         #we assume that instance ids are on the first level of the df multi-indices (id, time) 
         ids = df.index.levels[0].tolist() #gather all instance ids 
-        id_splits = np.array_split(ids,self.n_jobs) #split ids into n_jobs many chunks
-        
-        # due to multi-indexing, splitting of df is not as straight-forward as np.split (as the [n:] 
-        # gets messed up, so here we manually select df locations with first and last id per split
-        df_splits = [df.loc[split[0] : split[-1]] for split in id_splits]
-        dfs = Parallel(n_jobs=self.n_jobs)(delayed(self._transform_func)(chunk) for chunk in df_splits)
+        dfs = Parallel(n_jobs=self.n_jobs)(delayed(self._transform_func)(df.loc[[patient_id]]) for patient_id in ids) 
         return pd.concat(dfs)
