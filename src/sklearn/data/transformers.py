@@ -132,14 +132,15 @@ class PatientFiltration(TransformerMixin, BaseEstimator):
             save_pickle(df, os.path.join(self.data_dir, f'filt_data_{self.split}.pkl')) 
         return df
 
-class CaseFiltrationAfterOnset(BaseIDTransformer):
+class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
     """
     This transform removes case time points after a predefined cut_off time after 
     sepsis onset. This prevents us from making predictions long after sepsis (which
     would be not very useful) while it still allows to punish models that detect sepsis
     only too late.  
     """
-    def __init__(self, cut_off=24, label='SepsisLabel'):
+    def __init__(self, cut_off=24, label='SepsisLabel', n_jobs=4):
+        super().__init__(n_jobs=n_jobs)
         self.cut_off = cut_off
         self.label = label
 
@@ -201,19 +202,24 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
         return df
 
-
-class CarryForwardImputation(BaseIDTransformer):
+class CarryForwardImputation(ParallelBaseIDTransformer):
     """
     First fills in missing values by carrying forward, then fills backwards. The backwards method takes care of the
     NaN values at the start that cannot be filled by a forward fill.
     """
+    def __init__(self, n_jobs=4):
+        super().__init__(n_jobs=n_jobs)
+
     def transform_id(self, df):
         return df.fillna(method='ffill')
 
-class IndicatorImputation(BaseIDTransformer):
+class IndicatorImputation(ParallelBaseIDTransformer):
     """
     Adds indicator dimension for every channel to indicate if there was a nan
     """
+    def __init__(self, n_jobs=4):
+        super().__init__(n_jobs=n_jobs)
+
     def transform_id(self, df):
         cols = ts_columns #we consider all time-series columns (for consistency with pytorch approach)
         valid_indicators = (~df[cols].isnull()).astype(int).add_suffix('_indicator') 
