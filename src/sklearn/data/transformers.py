@@ -264,8 +264,7 @@ class Normalizer(TransformerMixin, BaseEstimator):
     def _compute_stats(self, df):
         return {
             'means': df.mean(),
-            'stds': df.std(),
-            'used_cols': df.mean().index.to_list()
+            'stds': df.std()
         }
     def _apply_normalizer(self, df, stats):
         means = stats['means']
