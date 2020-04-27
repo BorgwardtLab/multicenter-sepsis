@@ -49,8 +49,8 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         )
 
         # Idx according to id and time
-        df.index.name = 'time'
-        df_idxed = df.reset_index().set_index(['id', 'time']).sort_index(ascending=True)
+        df = df.rename(columns={'ICULOS': 'time'}) #rename for easier understanding
+        df_idxed = df.reset_index(drop=True).set_index(['id', 'time']).sort_index(ascending=True)
 
         # Get values and labels
         if 'SepsisLabel' in df_idxed.columns:
@@ -64,7 +64,7 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         # Save if specified
         if self.save is not False:
             os.makedirs(self.data_dir, exist_ok=True)
-            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+            save_pickle(labels, os.path.join(self.data_dir, f'raw_y_{self.split}.pkl'))
             save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
         
         return df_values
@@ -73,13 +73,19 @@ class DropLabels(TransformerMixin, BaseEstimator):
     """
     Remove label information, which was required for filtering steps.
     """
-    def __init__(self, label='SepsisLabel'):
+    def __init__(self, label='SepsisLabel', save=True, data_dir=None, split=None):
         self.label = label
+        self.save = save
+        self.data_dir = data_dir
+        self.split = split 
 
     def fit(self, df, labels=None):
         return self
     
     def transform(self, df):
+        if self.save:
+            labels = df[self.label]
+            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))        
         df = df.drop(self.label, axis=1)
         return df
 
@@ -123,7 +129,7 @@ class PatientFiltration(TransformerMixin, BaseEstimator):
         if self.save is not False:
             os.makedirs(self.data_dir, exist_ok=True)
             save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-            save_pickle(df, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
+            save_pickle(df, os.path.join(self.data_dir, f'filt_data_{self.split}.pkl')) 
         return df
 
 class CaseFiltrationAfterOnset(BaseIDTransformer):
@@ -140,8 +146,61 @@ class CaseFiltrationAfterOnset(BaseIDTransformer):
     def transform_id(self, df):
         """ Patient-level transform
         """
-        onset = df[self.label].argmax()
-        return df[:onset+self.cut_off+1] 
+        if df[self.label].sum() > 0:
+            #Case:
+            onset = df[self.label].argmax()
+            return df[:onset+self.cut_off+1]
+        else:
+            #Control:
+            return df
+
+class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
+    """
+    This transform removes invalid time steps right before training / prediction phase (final step of preprocessing).
+        - time steps before ICU admission (i.e. negative timestamps) 
+        - time steps with less than <thres> many observations. 
+    """
+    def __init__(self, save=True, data_dir=None, split=None, thres=1, label='SepsisLabel'):
+        self.save = save
+        self.data_dir = data_dir
+        self.split = split
+        self.thres = thres
+        self.label = label
+
+    def fit(self, df, labels=None):
+        return self
+
+    def _remove_pre_icu(self, df):
+        return df[df.index.get_level_values('time') >=0]
+    
+    def _remove_too_few_observations(self, df, thres):
+        ind_to_keep = (~df[ts_columns].isnull()).sum(axis=1) >= thres
+        return df[ind_to_keep]
+    
+    def _transform_id(self, df):
+        """ Patient level transformation
+        """
+        df = self._remove_pre_icu(df)
+        return self._remove_too_few_observations(df, self.thres) 
+     
+    def transform(self, df):
+        """ As this time filtering step also affects labels, for simplicity we load and adjust them too. 
+        """
+        labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))    
+        assert len(labels) == len(df)
+        df['SepsisLabel'] = labels #we temporarily add the labels to consistently remove time steps.
+        
+        df = df.groupby('id', as_index=False).apply(self._transform_id)
+        #groupby can create None indices, drop them:
+        if None in df.index.names:
+            print('None in indices, dropping it')
+            df.index = df.index.droplevel(None)
+  
+        if self.save:
+            save_pickle(df['SepsisLabel'], os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+        df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
+        return df
+
 
 class CarryForwardImputation(BaseIDTransformer):
     """
@@ -464,7 +523,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # Compute things
         df['ShockIndex'] = df['HR'].values / df['SBP'].values
         df['BUN/CR'] = df['BUN'].values / df['Creatinine'].values
-        df['SaO2/FiO2'] = df['SaO2'].values / df['FiO2'].values #shouldnt it be PaO2/Fi ratio?
+        df['O2Sat/FiO2'] = df['O2Sat'].values / df['FiO2'].values #shouldnt it be PaO2/Fi ratio?
 
         # SOFA
         df['SOFA'] = self.SOFA(df[['Platelets', 'MAP', 'Creatinine', 'Bilirubin_total']])
@@ -512,38 +571,6 @@ class AddRecordingCount(BaseEstimator, TransformerMixin):
         return pd.concat([df, counts], axis=1)
 
 
-class RemoveExtremeValues(BaseEstimator, TransformerMixin):
-    def __init__(self, quantile):
-        self.quantile = quantile
-        self.cols = ['HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
-                     'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'SaO2', 'AST', 'BUN',
-                     'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine', 'Bilirubin_direct',
-                     'Glucose', 'Lactate', 'Magnesium', 'Phosphate', 'Potassium',
-                     'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT', 'WBC',
-                     'Fibrinogen', 'Platelets']
-
-    def fit(self, df, labels=None):
-        self.percentiles_1 = np.nanpercentile(df[self.cols], self.quantile, axis=0)
-        self.percentiles_2 = np.nanpercentile(df[self.cols], 1 - self.quantile, axis=0)
-        return self
-
-    def transform(self, df):
-        # Drop derived cols
-        df.drop(['HepaticSOFA', 'SIRS', 'SIRS_path', 'MEWS', 'qSOFA', 'SOFA', 'SepticShock'], axis=1, inplace=True)
-
-        # Remove extreme vals
-        for i, col in enumerate(self.cols):
-            p1, p2 = self.percentiles_1[i], self.percentiles_2[i]
-            mask = (min(p1, p2) > df[col]) | (max(p1, p2) < df[col])
-            df[mask][col] = np.nan
-
-        # Redo ffill and derived feature calcs
-        df.fillna(method='ffill', inplace=True)
-        df = DerivedFeatures().transform(df)
-
-        return df
-
-
 def make_eventual_labels(labels):
 
     def make_one(s):
@@ -551,91 +578,6 @@ def make_eventual_labels(labels):
 
     return labels.groupby('id').apply(make_one)
 
-
-#Old format: useful for quick testing with a subset of the data
-class CreateDataframe(TransformerMixin, BaseEstimator):
-    """
-    Transform method takes either a filename or folder and creates a dataframe of the file or all psv files contained
-    in the folder
-    available splits:
-        - train, validation, test
-    """
-    def __init__(self, save=False, data_dir=None, split='train', split_file='datasets/physionet2019/data/split_info.pkl'):
-        self.save = save
-        self.data_dir = data_dir
-        self.split = split
-        split_info = load_pickle(split_file)
-        self.split_ids = split_info['split_0'][split] 
-
-    def _file_to_id(self, string):
-        """ Convert string of psv file to integer id
-        """
-        return int(string.rstrip('.psv').lstrip('p'))
-    
-    def _id_to_file(self, pat_id, pad_until=6):
-        """ Convert patient id (integer) to file string with zeros padded """
-        return 'p' + str(pat_id).zfill(pad_until) + '.psv'
-
-    def _extract_split(self, fnames):
-        """ Return list of fnames (to load) which are contained in predefined split ids
-        """
-        used_files = []
-        for fname in fnames:
-            tail, head = os.path.split(fname)
-            curr_id = self._file_to_id(head)
-            if curr_id in self.split_ids:
-                used_files.append(fname) 
-        return used_files
-
-    def fit(self, df, y=None):
-        return self
-    
-    @staticmethod
-    def psv_to_dataframe(fname):
-        """ Transforms a single psv file into a dataframe with an id column"""
-        df = pd.read_csv(fname, sep='|')
-        df['id'] = int(fname.split('.psv')[0].split('p')[-1])
-
-        return df
-
-    def transform(self, location):
-        """
-        Given either a location of psv files or single psv file, transforms into dataframes indexed with time and id
-        :param location: either a folder containing psv files or a single psv file
-        :return: df of all psv files indexed by [id, time]
-        """
-
-        # If location is a directory, make with all files, else make with a single file
-        if isinstance(location, list):
-            fnames = [l + '/' + x for l in location for x in os.listdir(l)]
-        elif not location.endswith('.psv'):
-            fnames = [location + '/' + x for x in os.listdir(location)]
-        else:
-            fnames = [location]
-        
-        fnames_old = fnames
-        fnames = self._extract_split(fnames)
-
-        # Make the dataframe
-        df = pd.concat([self.psv_to_dataframe(fname) for fname in fnames])
-
-        # Idx according to id and time
-        df.index.name = 'time'
-        df_idxed = df.reset_index().set_index(['id', 'time']).sort_index(ascending=True)
-
-        # Get values and labels
-        if 'SepsisLabel' in df_idxed.columns:
-            df_values, labels = df_idxed.drop('SepsisLabel', axis=1), df_idxed['SepsisLabel']
-        else:
-            df_values = df_idxed
-
-        # Save if specified
-        if self.save is not False:
-            os.makedirs(self.data_dir, exist_ok=True)
-            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-            save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
-
-        return df_values
 
 if __name__ == '__main__':
     CreateDataframe()  

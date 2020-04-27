@@ -11,14 +11,16 @@ from transformers import *
 dataset_class_mapping = {
     'physionet2019': 'Physionet2019Dataset',
     'mimic3': 'MIMIC3Dataset',
-    'test': None
+    'eicu': 'EICUDataset',
+    'hirid': 'HiridDataset',
+    'demo': 'DemoDataset'
 }
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', 
         default='physionet2019',
-        help='dataset to use: [physionet2019, ]')
+        help='dataset to use: [physionet2019, mimic3, eicu, hirid, demo]')
     parser.add_argument('--data_dir', 
         default='datasets',
         help='path pointing to the dataset directory')
@@ -60,7 +62,7 @@ def main():
                 ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False)),
                 ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, split=split )),  
                 ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset()),
-                ('drop_labels', DropLabels()),
+                ('drop_labels', DropLabels(save=True, data_dir=out_dir, split=split)),
                 ('derived_features', DerivedFeatures()),
                 ('normalization', Normalizer(data_dir=out_dir, split=split))
             ])
@@ -75,6 +77,7 @@ def main():
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=args.n_jobs)),
+            ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split)),
             ('imputation', CarryForwardImputation()),
             ('remove_nans', FillMissing())
         ])

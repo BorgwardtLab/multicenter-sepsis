@@ -33,16 +33,16 @@ class Physionet2019Dataset(Dataset):
     """Physionet 2019 Dataset for Sepsis early detection in the ICU."""
 
     STATIC_COLUMNS = [
-        'Age', 'Gender', 'Unit1', 'Unit2', 'HospAdmTime']
+        'Age', 'Gender']  #'Unit1', 'Unit2', 'HospAdmTime']
     TIME_COLUMN = 'ICULOS'
     TS_COLUMNS = [
         'HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
-        'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'SaO2', 'AST', 'BUN',
+        'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'AST', 'BUN',
         'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine',
         'Bilirubin_direct', 'Glucose', 'Lactate', 'Magnesium', 'Phosphate',
         'Potassium', 'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT',
-        'WBC', 'Fibrinogen', 'Platelets'
-    ]
+        'WBC', 'Fibrinogen', 'Platelets' 
+    ] #SaO2
     LABEL_COLUMN = 'SepsisLabel'
 
     def __init__(self, root_dir='datasets/physionet2019/data/extracted',
@@ -66,7 +66,7 @@ class Physionet2019Dataset(Dataset):
 
         self.files = [
             # Patient ids are int but files contain leading zeros
-            os.path.join(root_dir, f'p{patient_id:06d}.psv')
+            os.path.join(root_dir, f'p{patient_id}.psv') #{patient_id:06d}
             for patient_id in self.patients
         ]
         self.transform = transform
@@ -110,18 +110,9 @@ class Physionet2019Dataset(Dataset):
 
 class DemoDataset(Physionet2019Dataset):
     """
-    Demo dataset (based on physionet 2019) for quick testing of pipeline steps.
+    Demo dataset (based on subset of MIMIC) for quick testing of pipeline steps.
     """
-    STATIC_COLUMNS = []
-    TIME_COLUMN = 'charttime'
-    TS_COLUMNS = [
-        'O2Sat', 'FiO2', 'Temp', 'SBP', 'DBP', 'MAP',
-        'Resp', 'HR', 'Glucose', 'Alkalinephos', 'AST', 'HCO3',
-        'Bilirubin_total', 'Chloride', 'Creatinine', 'Potassium', 'BUN', 'Hct',
-        'Hgb', 'Platelets', 'WBC', 'Lactate', 'PTT', 'Calcium', 'Magnesium',
-        'Phosphate', 'BaseExcess', 'PaCO2', 'pH', 'Bilirubin_direct',
-        'Fibrinogen'
-    ]
+    
     def __init__(self, root_dir='datasets/demo/data/extracted',
                  split_file='datasets/demo/data/split_info.pkl',
                  split='train', split_repetition=0, as_dict=True, transform=None):
@@ -132,16 +123,7 @@ class DemoDataset(Physionet2019Dataset):
 
 
 class MIMIC3Dataset(Physionet2019Dataset):
-    STATIC_COLUMNS = []
-    TIME_COLUMN = 'charttime'
-    TS_COLUMNS = [
-        'O2Sat', 'FiO2', 'Temp', 'SBP', 'DBP', 'MAP',
-        'Resp', 'HR', 'Glucose', 'Alkalinephos', 'AST', 'HCO3',
-        'Bilirubin_total', 'Chloride', 'Creatinine', 'Potassium', 'BUN', 'Hct',
-        'Hgb', 'Platelets', 'WBC', 'Lactate', 'PTT', 'Calcium', 'Magnesium',
-        'Phosphate', 'BaseExcess', 'PaCO2', 'pH', 'Bilirubin_direct',
-        'Fibrinogen'
-    ]
+    
     def __init__(self, root_dir='datasets/mimic3/data/extracted',
                  split_file='datasets/mimic3/data/split_info.pkl',
                  split='train', split_repetition=0, as_dict=True, transform=None):
@@ -150,6 +132,25 @@ class MIMIC3Dataset(Physionet2019Dataset):
             split_repetition=split_repetition, as_dict=as_dict, transform=transform
         )
 
+class HiridDataset(Physionet2019Dataset):
+    
+    def __init__(self, root_dir='datasets/hirid/data/extracted',
+                 split_file='datasets/hirid/data/split_info.pkl',
+                 split='train', split_repetition=0, as_dict=True, transform=None):
+        super().__init__(
+            root_dir=root_dir, split_file=split_file, split=split,
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+        )
+
+class EICUDataset(Physionet2019Dataset):
+    
+    def __init__(self, root_dir='datasets/eicu/data/extracted',
+                 split_file='datasets/eicu/data/split_info.pkl',
+                 split='train', split_repetition=0, as_dict=True, transform=None):
+        super().__init__(
+            root_dir=root_dir, split_file=split_file, split=split,
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+        )
 
 # pylint: disable=R0903
 class PositionalEncoding():

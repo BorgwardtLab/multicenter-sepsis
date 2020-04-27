@@ -48,15 +48,20 @@ def shift_onset_label(patient_id, label, shift):
         pd.Series with labels shifted.
 
     """
-    onset = np.argmax(label)
-    # Check if label is a onset
-    if not np.all(label.iloc[onset:]):
-        raise NotOnsetLabelError(patient_id)
-    new_onset = onset + shift
-    new_onset = min(max(0, new_onset), len(label))
-    new_label = np.zeros(len(label), dtype=label.dtype)
-    new_label[new_onset:] = 1
-    return pd.Series(new_label, index=label.index)
+    is_case = np.any(label)
+    if is_case:
+        onset = np.argmax(label)
+        # Check if label is a onset
+        if not np.all(label.iloc[onset:]):
+            raise NotOnsetLabelError(patient_id)
+
+        new_onset = onset + shift
+        new_onset = min(max(0, new_onset), len(label))
+        new_label = np.zeros(len(label), dtype=label.dtype)
+        new_label[new_onset:] = 1
+        return pd.Series(new_label, index=label.index)
+    else:
+        return label
 
 
 class OnlineScoreWrapper:
