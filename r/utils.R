@@ -6,12 +6,12 @@ sepsis3_score <- function(source, pids = NULL) {
   if (grepl("eicu", source)) {
 
     susp_infec <- si(source, abx_min_count = 2L, positive_cultures = TRUE,
-                     id_type = "icustay", patient_ids = pids, mode = "or")
+                     id_type = "icustay", patient_ids = pids, si_mode = "or")
 
   } else if (identical(source, "hirid")) {
 
     susp_infec <- si(source, abx_min_count = 2L, id_type = "icustay",
-                     patient_ids = pids, mode = "or")
+                     patient_ids = pids, si_mode = "or")
 
   } else {
 
@@ -19,6 +19,20 @@ sepsis3_score <- function(source, pids = NULL) {
   }
 
   sepsis_3(sofa_score, susp_infec)
+}
+
+cohort <- function(source) {
+
+  res <- load_dictionary(source, "age", id_type = "icustay")
+  res <- res[age > 14, ]
+
+  if (grepl("eicu", source)) {
+    hosp <- data_id(source, "patient", cols = c(id(res), "hospitalid"))
+    hosp <- hosp[hospitalid %in% eicu_hospitals, ]
+    res <- merge(res, hosp)
+  }
+
+  res[[id(res)]]
 }
 
 dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
@@ -46,9 +60,10 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
 
   } else {
 
-    dat <- load_dictionary(source, challenge_map[[2L]], id_type = "icustay")
-    ids <- unique(dat[age >= 14, id(dat), with = FALSE])
-    dat <- merge(dat, ids, all.y = TRUE)
+    pid <- cohort(source)
+
+    dat <- load_dictionary(source, challenge_map[[2L]], id_type = "icustay",
+                           patient_ids = pid)
 
     dat <- rename_cols(dat, c("ICULOS", challenge_map[[1L]]),
                             c(index(dat), challenge_map[[2L]]),
@@ -63,13 +78,18 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
     dat <- dat[win, on = join]
     dat <- rm_cols(dat, c("join_time", "intime"))
 
-    sep <- sepsis3_score(source, ids)
+    sep <- sepsis3_score(source, pid)
     sep  <- sep[, c("join_time") := list(get(index(sep)))]
 
     join <- c(paste(id(sep), "==", id(win)), "join_time >= intime",
                                              "join_time <= outtime")
-    sep <- sep[win, on = join]
-    sep <- rm_cols(sep, data_cols(sep))
+    new <- sep[win, on = join]
+    flt <- setdiff(sep[[id(sep)]], new[[id(new)]])
+    sep <- rm_cols(new, data_cols(new))
+
+    if (length(flt) > 0L) {
+      dat <- dat[!get(id(dat)) %in% flt, ]
+    }
   }
 
   sep <- data.table::set(sep, j = "SepsisLabel", value = 1L)

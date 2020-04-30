@@ -58,6 +58,5 @@ for (src in sources) {
 
   dump_dataset(source = src, dir = ".")
 
-  #tar(paste0(src, ".tar.gz"), src, "gzip")
   zip(paste0(src, ".zip"), src, flags = "-qr9X")
 }
