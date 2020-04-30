@@ -34,7 +34,7 @@ def main():
         default=False,
         help='compute all preprocessing steps and overwrite existing intermediary files') 
     args = parser.parse_args()
-    
+    n_jobs = args.n_jobs
     overwrite = args.overwrite 
     dataset = args.dataset
     dataset_cls = dataset_class_mapping[dataset]
@@ -57,16 +57,16 @@ def main():
             df = load_pickle(dump)
         else:
             print('Running (fixed) data pipeline and dumping it..')
-            start = time() 
+            start = time()
             data_pipeline = Pipeline([
                 ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False)),
-                ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, split=split )),  
-                ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset()),
+                ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, split=split, n_jobs=n_jobs)),
+                ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset(n_jobs=n_jobs, concat_output=True)),
                 ('drop_labels', DropLabels(save=True, data_dir=out_dir, split=split)),
                 ('derived_features', DerivedFeatures()),
                 ('normalization', Normalizer(data_dir=out_dir, split=split))
             ])
-            df = data_pipeline.fit_transform(None) 
+            df = data_pipeline.fit_transform(None)
             print(f'.. finished. Took {time() - start} seconds.')
             # Save
             save_pickle(df, dump)
@@ -76,14 +76,14 @@ def main():
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
-            ('lookback_features', LookbackFeatures(n_jobs=args.n_jobs)),
+            ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
             ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split)),
-            ('imputation', CarryForwardImputation()),
+            ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True)),
             ('remove_nans', FillMissing())
         ])
-        df = pipeline.fit_transform(df)  
+        df = pipeline.fit_transform(df)
         print(f'.. finished. Took {time() - start} seconds.')
-        
+
         # Save
         save_pickle(df, os.path.join(out_dir, f'X_features_{split}.pkl'))
 
