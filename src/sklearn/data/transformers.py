@@ -5,6 +5,7 @@ from copy import deepcopy
 import numpy as np
 import os
 import pandas as pd
+from joblib import Parallel, delayed
 from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
@@ -21,36 +22,41 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     returns (and saves if requested) the dataset in one large sklearn-ready pd dataframe 
     format with patient and time multi-indices.
     """
-    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train', drop_label=True):
+    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train', drop_label=True, n_jobs=10, concat_output=False):
         self.save = save
         dataset_class = getattr(datasets, dataset_cls)
         self.split = split
         self.dataloader = dataset_class(split=split, as_dict=False)
         self.data_dir = data_dir #outdir to save raw dataframe
         self.drop_label = drop_label
+        self.n_jobs = n_jobs
+        self.concat_output = concat_output
  
     def fit(self, df, labels=None):
         return self
-    
-    def _add_id(self, df, id):
-        """ df format uses an instance id (as outer index)
-        """
-        df['id'] = id
+
+    def _load_index_and_prepare(self, index):
+        patient_id, df = self.dataloader[index]
+        df['id'] = patient_id
+        # Idx according to id and time
+        df = df.rename(columns={'ICULOS': 'time'}) #rename for easier understanding
+        df.reset_index(drop=True, inplace=True)
+        df.set_index(['id', 'time'], inplace=True)
+        df.sort_index(ascending=True, inplace=True)
         return df
-         
+
     def transform(self, df):
         """
         Takes dataset_cls (in self), loads iteratable instances and concatenates them to a multi-indexed 
         pandas dataframe which is returned
         """
         # Make the dataframe
-        df = pd.concat(
-            [ self._add_id(instance, i) for i, instance in self.dataloader ]
-        )
+        output = Parallel(n_jobs=self.n_jobs, verbose=1, batch_size=1000)(
+            delayed(self._load_index_and_prepare)(i) for i in range(len(self.dataloader)))
 
-        # Idx according to id and time
-        df = df.rename(columns={'ICULOS': 'time'}) #rename for easier understanding
-        df_idxed = df.reset_index(drop=True).set_index(['id', 'time']).sort_index(ascending=True)
+        if self.concat_output:
+            output = pd.concat(output)
+        return output
 
         # Get values and labels
         if 'SepsisLabel' in df_idxed.columns:
@@ -66,7 +72,8 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
             os.makedirs(self.data_dir, exist_ok=True)
             save_pickle(labels, os.path.join(self.data_dir, f'raw_y_{self.split}.pkl'))
             save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
-        
+
+        print('Done with DataframeFromDataloader')
         return df_values
 
 class DropLabels(TransformerMixin, BaseEstimator):
@@ -77,19 +84,21 @@ class DropLabels(TransformerMixin, BaseEstimator):
         self.label = label
         self.save = save
         self.data_dir = data_dir
-        self.split = split 
+        self.split = split
 
     def fit(self, df, labels=None):
         return self
-    
+
     def transform(self, df):
         if self.save:
             labels = df[self.label]
-            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))        
+            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
         df = df.drop(self.label, axis=1)
+
+        print('Done with DropLabels')
         return df
 
-class PatientFiltration(TransformerMixin, BaseEstimator):
+class PatientFiltration(ParallelBaseIDTransformer):
     """
     Removes patients which do not match inclusion criteria:
     --> sepsis-cases with:
@@ -97,52 +106,39 @@ class PatientFiltration(TransformerMixin, BaseEstimator):
         - onset after t_end hours of ICU stay 
         defaults: t_start = 3 (which corresponds to 4 hours due to rounding of the chart times), t_end = 168 (1 week)
     """
-    def __init__(self, save=False, data_dir=None, split='train', onset_bounds=(3,168), label='SepsisLabel'):
+    def __init__(self, save=False, data_dir=None, split='train', onset_bounds=(3,168), label='SepsisLabel', **kwargs):
         self.save = save
         self.data_dir = data_dir
-        self.split = split 
+        self.split = split
         self.onset_bounds = onset_bounds
         self.label = label
-    
+        super().__init__(**kwargs)
+
     def fit(self, df, labels=None):
         return self
 
-    def transform(self, df):
+    def transform_id(self, df):
         """ It seems like the easiest solution is to quickly load the small label pickle (instead of breaking the pipeline API here)
         """
-        labels = df[self.label] #load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))    
-        #get labels of all cases
-        case_labels = labels[labels == 1]
-        case_ids = case_labels.reset_index()['id'].unique() 
-        case_all_labels = labels.loc[case_ids] #also including 0s before onset
-        #determine onset times:
-        onsets = case_all_labels.groupby('id').apply(np.argmax) #argmax returns the first index with the maximum 
-        #filter onsets by start and end time:
+        label = df[self.label] #load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+        onset = np.argmax(label)
         start, end = self.onset_bounds
-        included = onsets[onsets > start][ onsets <= end ]
-        excluded = onsets[(onsets <= start) | (onsets > end) ] 
-        excluded_ids = excluded.reset_index()['id']
-        df = df.drop(excluded_ids)
-        labels = labels.drop(excluded_ids)
- 
-        # Save if specified (overwriting the raw dump of DataframeFromDataLoader)
-        if self.save is not False:
-            os.makedirs(self.data_dir, exist_ok=True)
-            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-            save_pickle(df, os.path.join(self.data_dir, f'filt_data_{self.split}.pkl')) 
+        if onset <= start or onset > end:
+            return None  # This drops the patient
         return df
+
 
 class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
     """
     This transform removes case time points after a predefined cut_off time after 
     sepsis onset. This prevents us from making predictions long after sepsis (which
     would be not very useful) while it still allows to punish models that detect sepsis
-    only too late.  
+    only too late.
     """
-    def __init__(self, cut_off=24, label='SepsisLabel', n_jobs=4):
-        super().__init__(n_jobs=n_jobs)
+    def __init__(self, cut_off=24, label='SepsisLabel', **kwargs):
         self.cut_off = cut_off
         self.label = label
+        super().__init__(**kwargs)
 
     def transform_id(self, df):
         """ Patient-level transform
@@ -154,6 +150,7 @@ class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
         else:
             #Control:
             return df
+
 
 class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
     """
@@ -200,6 +197,7 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         if self.save:
             save_pickle(df['SepsisLabel'], os.path.join(self.data_dir, f'y_{self.split}.pkl'))
         df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
+        print('Done with InvalidTimesFiltration')
         return df
 
 class CarryForwardImputation(ParallelBaseIDTransformer):
@@ -207,9 +205,6 @@ class CarryForwardImputation(ParallelBaseIDTransformer):
     First fills in missing values by carrying forward, then fills backwards. The backwards method takes care of the
     NaN values at the start that cannot be filled by a forward fill.
     """
-    def __init__(self, n_jobs=4):
-        super().__init__(n_jobs=n_jobs)
-
     def transform_id(self, df):
         return df.fillna(method='ffill')
 
@@ -302,12 +297,11 @@ class LookbackFeatures(ParallelBaseIDTransformer):
     """ 
     Simple statistical features including moments over a tunable look-back window. 
     """
-    def __init__(self, stats=None, n_jobs=4):
+    def __init__(self, stats=None, **kwargs):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values) 
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
-        super().__init__(n_jobs=n_jobs)
         self.cols = extended_ts_columns #apply look-back stats to time series columns
         if stats is None:
             keys = ['min','max', 'mean', 'median','var']
@@ -316,7 +310,8 @@ class LookbackFeatures(ParallelBaseIDTransformer):
             for key in keys:
                 for window in windows:
                     stats.append( (key, window) )
-        self.stats = stats 
+        self.stats = stats
+        super().__init__(**kwargs)
  
     def _compute_stat(self, df, stat, window):
         """ Computes current statistic over look-back window for all time series variables
