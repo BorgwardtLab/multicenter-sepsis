@@ -121,7 +121,7 @@ class PatientFiltration(ParallelBaseIDTransformer):
         """ It seems like the easiest solution is to quickly load the small label pickle (instead of breaking the pipeline API here)
         """
         label = df[self.label] #load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-        is_case = np.any(onset)
+        is_case = np.any(label)
         if is_case:
             onset = np.argmax(label)
             start, end = self.onset_bounds
