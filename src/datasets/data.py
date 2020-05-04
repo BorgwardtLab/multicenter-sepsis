@@ -48,13 +48,18 @@ class Physionet2019Dataset(Dataset):
     def __init__(self, root_dir='datasets/physionet2019/data/extracted',
                  split_file='datasets/physionet2019/data/split_info.pkl',
                  split='train', split_repetition=0, as_dict=True,
-                 transform=None):
+                 transform=None, custom_path=None):
         """Physionet 2019 Dataset.
 
         Args:
-            root_dir: Path to patient files as provided by physionet
+            root_dir: Path to extracted patient files as provided by physionet
+            split_file: Path to split file
             transform: Tranformation that should be applied to each instance
+            custom_path: when working from a different repo, custom path can be used to replace the root of the other paths
         """
+        if custom_path is not None:
+           root_dir = os.path.join(custom_path, os.path.split(root_dir)[1])
+           split_file = os.path.join(custom_path, os.path.split(split_file)[1]) 
         self.root_dir = root_dir
         self.as_dict = as_dict
 
@@ -115,10 +120,11 @@ class DemoDataset(Physionet2019Dataset):
     
     def __init__(self, root_dir='datasets/demo/data/extracted',
                  split_file='datasets/demo/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None):
+                 split='train', split_repetition=0, as_dict=True, transform=None, custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
-            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
         )
 
 
