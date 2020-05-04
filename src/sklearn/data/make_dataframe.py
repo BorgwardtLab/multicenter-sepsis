@@ -7,6 +7,7 @@ from sklearn.pipeline import Pipeline
 from time import time
 
 from transformers import *
+from IPython import embed
 
 dataset_class_mapping = {
     'physionet2019': 'Physionet2019Dataset',
@@ -15,6 +16,17 @@ dataset_class_mapping = {
     'hirid': 'HiridDataset',
     'demo': 'DemoDataset'
 }
+
+def df_to_chunks(df, n_chunks=1):
+    ids = df.index.levels[0].tolist() # we assume ids to be first index of the multi-indexed df.
+    splits = np.array_split(ids, n_chunks)
+    result = []
+    for split in splits:
+        embed()
+        chunk = df.loc[split[0]:split[-1]]
+        embed()
+        result.append(chunk)
+    return result
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -33,6 +45,10 @@ def main():
     parser.add_argument('--overwrite', action='store_true',
         default=False,
         help='compute all preprocessing steps and overwrite existing intermediary files') 
+    parser.add_argument('--n_chunks', type=int, 
+        default=1,
+        help='Number of splits of df for feature engineering (to reduce memory load of joblib)') 
+
     args = parser.parse_args()
     n_jobs = args.n_jobs
     overwrite = args.overwrite 
@@ -45,7 +61,7 @@ def main():
     out_dir = os.path.join(base_dir, args.out_dir, 'processed')
     splits = ['train', 'validation'] # save 'test' for later 
      
-    for split in splits:
+    for split in splits: # Train/Val/Test splits
         # Run full pipe
         print(f'Processing {split} split ..')
         
@@ -71,19 +87,27 @@ def main():
             # Save
             save_pickle(df, dump)
 
-        #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
+        #2. Tunable Pipeline: Feature Extraction, and further Preprocessing
         #---------------------------------------------------------------------------------
         print('Running (tunable) preprocessing pipeline and dumping it..')
-        start = time()
+        #For saving memory in very large datasets, we chunk the df as a quick solution
+        # in case df is not sorted according to indeces anymore, sort for not causing an error in chunking:
+        # df.sort_index(ascending=True, inplace=True) #however, for large df this expensive, so don't do it if not needed 
+        df_chunks = df_to_chunks(df, args.n_chunks) 
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
             ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split)),
             ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True)),
-            ('remove_nans', FillMissing())
-        ])
-        df = pipeline.fit_transform(df)
-        print(f'.. finished. Took {time() - start} seconds.')
-
+            ('remove_nans', FillMissing())                                                                 
+        ])                                                                                                 
+        results = []
+        for i, chunk in enumerate(df_chunks):
+            start = time()
+            chunk_out = pipeline.fit_transform(chunk)
+            print(f'.. finished. Took {time() - start} seconds.')
+            save_pickle(chunk_out, os.path.join(out_dir, f'X_features_{split}_chunk_{i}.pkl'))
+            results.append(chunk_out)
+        df = pd.concat(results)
         # Save
         save_pickle(df, os.path.join(out_dir, f'X_features_{split}.pkl'))
 
