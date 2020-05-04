@@ -9,7 +9,7 @@ from joblib import Parallel, delayed
 from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
-from base import BaseIDTransformer, ParallelBaseIDTransformer
+from base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
 from extracted import columns_with_nans, ts_columns, extended_ts_columns ,columns_not_to_normalize
 
 import sys
@@ -22,11 +22,14 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     returns (and saves if requested) the dataset in one large sklearn-ready pd dataframe 
     format with patient and time multi-indices.
     """
-    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train', drop_label=True, n_jobs=10, concat_output=False):
+    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train', drop_label=True, n_jobs=10, concat_output=False, custom_path=None):
         self.save = save
         dataset_class = getattr(datasets, dataset_cls)
         self.split = split
-        self.dataloader = dataset_class(split=split, as_dict=False)
+        if custom_path:
+            #remove last two folders (framework-agnostic) from data_dir path to get to base_dir
+            custom_path = os.path.split(os.path.split(data_dir)[0])[0]
+        self.dataloader = dataset_class(split=split, as_dict=False, custom_path=custom_path)
         self.data_dir = data_dir #outdir to save raw dataframe
         self.drop_label = drop_label
         self.n_jobs = n_jobs
@@ -295,7 +298,7 @@ class Normalizer(TransformerMixin, BaseEstimator):
         return df_out
 
 
-class LookbackFeatures(ParallelBaseIDTransformer):
+class LookbackFeatures(DaskIDTransformer):
     """ 
     Simple statistical features including moments over a tunable look-back window. 
     """
@@ -336,7 +339,6 @@ class LookbackFeatures(ParallelBaseIDTransformer):
     def transform_id(self, df):
         #compute all statistics in stats dictionary:
         
-        #features = [df]
         features = [df]
         for stat, window in self.stats:
             feature = self._compute_stat(df, stat, window)
