@@ -19,6 +19,8 @@ pytorch-lightning = "*"
 lightgbm = "*"
 test-tube = "*"
 pytest = "*"
+dask = {extras = ["bag"],version = "*"}
+distributed = "*"
 
 [requires]
 python_version = "3.7"
