@@ -1,7 +1,7 @@
 """Base Classes for Dataset Transformers, TODO: add copyright notice here!""" 
 
 import numpy as np
-import pandas as pd
+import modin.pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 from joblib import Parallel, delayed
 
@@ -9,8 +9,8 @@ class BaseIDTransformer(TransformerMixin, BaseEstimator):
     """
     Base class when performing transformations over ids. One must implement a transform_id method.
     """
-    def __init__(self):
-        pass
+    def __init__(self, **kwargs):
+        print(f' Unused kwargs: {kwargs}')
 
     def __init_subclass__(cls, *args, **kwargs):
         if not hasattr(cls, 'transform_id'):
@@ -21,10 +21,7 @@ class BaseIDTransformer(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, df):
-        if isinstance(df, pd.DataFrame):
-            df_transformed = df.groupby(['id'], as_index=False).apply(self.transform_id)
-        elif isinstance(df, pd.Series):
-            df_transformed = df.groupby(['id']).apply(self.transform_id)
+        df_transformed = df.groupby(['id'], as_index=False).apply(self.transform_id)
 
         # Sometimes creates a None level
         if None in df_transformed.index.names:
@@ -33,7 +30,7 @@ class BaseIDTransformer(TransformerMixin, BaseEstimator):
 
         return df_transformed
 
-
+    
 
 class ParallelBaseIDTransformer(TransformerMixin, BaseEstimator):
     """

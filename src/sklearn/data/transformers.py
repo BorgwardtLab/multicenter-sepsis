@@ -4,12 +4,12 @@ Various data loading, filtering and feature transformers, TODO: add copyright no
 from copy import deepcopy
 import numpy as np
 import os
-import pandas as pd
+import modin.pandas as pd
 from joblib import Parallel, delayed
 from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
-from base import BaseIDTransformer, ParallelBaseIDTransformer
+from base import BaseIDTransformer 
 from extracted import columns_with_nans, ts_columns, extended_ts_columns ,columns_not_to_normalize
 
 import sys
@@ -98,7 +98,7 @@ class DropLabels(TransformerMixin, BaseEstimator):
         print('Done with DropLabels')
         return df
 
-class PatientFiltration(ParallelBaseIDTransformer):
+class PatientFiltration(BaseIDTransformer):
     """
     Removes patients which do not match inclusion criteria:
     --> sepsis-cases with:
@@ -130,7 +130,7 @@ class PatientFiltration(ParallelBaseIDTransformer):
         return df
 
 
-class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
+class CaseFiltrationAfterOnset(BaseIDTransformer):
     """
     This transform removes case time points after a predefined cut_off time after 
     sepsis onset. This prevents us from making predictions long after sepsis (which
@@ -202,7 +202,7 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         print('Done with InvalidTimesFiltration')
         return df
 
-class CarryForwardImputation(ParallelBaseIDTransformer):
+class CarryForwardImputation(BaseIDTransformer):
     """
     First fills in missing values by carrying forward, then fills backwards. The backwards method takes care of the
     NaN values at the start that cannot be filled by a forward fill.
@@ -210,7 +210,7 @@ class CarryForwardImputation(ParallelBaseIDTransformer):
     def transform_id(self, df):
         return df.fillna(method='ffill')
 
-class IndicatorImputation(ParallelBaseIDTransformer):
+class IndicatorImputation(BaseIDTransformer):
     """
     Adds indicator dimension for every channel to indicate if there was a nan
     """
@@ -295,7 +295,7 @@ class Normalizer(TransformerMixin, BaseEstimator):
         return df_out
 
 
-class LookbackFeatures(ParallelBaseIDTransformer):
+class LookbackFeatures(BaseIDTransformer):
     """ 
     Simple statistical features including moments over a tunable look-back window. 
     """

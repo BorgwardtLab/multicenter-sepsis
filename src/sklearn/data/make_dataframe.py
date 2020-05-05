@@ -1,10 +1,11 @@
 import argparse
 import os
-import pandas as pd
 import sys
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.pipeline import Pipeline
 from time import time
+
+os.environ["MODIN_CPUS"] = "10"
 
 from transformers import *
 
@@ -59,7 +60,7 @@ def main():
             print('Running (fixed) data pipeline and dumping it..')
             start = time()
             data_pipeline = Pipeline([
-                ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False)),
+                ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False, concat_output=True)),
                 ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, split=split, n_jobs=n_jobs)),
                 ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset(n_jobs=n_jobs, concat_output=True)),
                 ('drop_labels', DropLabels(save=True, data_dir=out_dir, split=split)),
