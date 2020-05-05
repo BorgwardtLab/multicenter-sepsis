@@ -214,15 +214,15 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
 
 class CarryForwardImputation(DaskIDTransformer):
     """
-    First fills in missing values by carrying forward, then fills backwards. The backwards method takes care of the
-    NaN values at the start that cannot be filled by a forward fill.
+    First fills in missing values by carrying forward, then fills remaining NaN (at start) with zero. 
     """
     def transform_id(self, df):
-        return df.fillna(method='ffill')
+        return df.fillna(method='ffill').fillna(0)
 
 class IndicatorImputation(ParallelBaseIDTransformer):
     """
     Adds indicator dimension for every channel to indicate if there was a nan
+    IndicatorImputation still requires FillMissing afterwards!
     """
     def __init__(self, n_jobs=4):
         super().__init__(n_jobs=n_jobs)
