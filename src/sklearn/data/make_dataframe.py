@@ -35,7 +35,10 @@ def main():
         help='number of paralllel jobs to process the full df in chunks')
     parser.add_argument('--overwrite', action='store_true',
         default=False,
-        help='compute all preprocessing steps and overwrite existing intermediary files') 
+        help='compute all preprocessing steps and overwrite existing intermediary files')
+    parser.add_argument('--n_partitions', type=int,
+        default=10,
+        help='number of df partitions in dask')
     args = parser.parse_args()
     client = Client(n_workers=3)
     n_jobs = args.n_jobs
@@ -78,13 +81,13 @@ def main():
         #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
         #---------------------------------------------------------------------------------
         df.reset_index(level='time', drop=False, inplace=True)
-        df = dd.from_pandas(df, npartitions=10)
+        df = dd.from_pandas(df, npartitions=args.n_partitions)
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
-            ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split))
-            #('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
+            ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split)),
+            ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
             #('remove_nans', FillMissing())
         ])
         df = pipeline.fit_transform(df).compute()
