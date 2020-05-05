@@ -179,7 +179,12 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         return df[df['time'] >= 0]
 
     def _remove_too_few_observations(self, df, thres):
+        """ in rare cases it is possible that Lookbackfeatures leak zeros into invalid nan rows (which makes time handling easier)
+            additionally drop those rows by identifying nan labels
+        """
         ind_to_keep = (~df[ts_columns].isnull()).sum(axis=1) >= thres
+        ind_labels = (~df['SepsisLabel'].isnull()) #sanity check to prevent lookbackfeatures 0s to mess up nan rows
+        ind_to_keep = np.logical_and(ind_to_keep, ind_labels) 
         return df[ind_to_keep]
 
     def _transform_id(self, df):
