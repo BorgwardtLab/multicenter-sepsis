@@ -5,6 +5,9 @@ import sys
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.pipeline import Pipeline
 from time import time
+from dask.distributed import Client
+import dask.dataframe as dd
+
 
 from transformers import *
 
@@ -34,6 +37,7 @@ def main():
         default=False,
         help='compute all preprocessing steps and overwrite existing intermediary files') 
     args = parser.parse_args()
+    client = Client(n_workers=3)
     n_jobs = args.n_jobs
     overwrite = args.overwrite 
     dataset = args.dataset
@@ -73,6 +77,8 @@ def main():
 
         #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
         #---------------------------------------------------------------------------------
+        df.reset_index(level='time', drop=False, inplace=True)
+        df = dd.from_pandas(df, npartitions=10)
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
@@ -81,13 +87,11 @@ def main():
             ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True)),
             ('remove_nans', FillMissing())
         ])
-        df = pipeline.fit_transform(df)
+        df = pipeline.fit_transform(df).compute()
         print(f'.. finished. Took {time() - start} seconds.')
-
         # Save
         save_pickle(df, os.path.join(out_dir, f'X_features_{split}.pkl'))
+        client.close()
 
 if __name__ == '__main__':
     main()
-
-

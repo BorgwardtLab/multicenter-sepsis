@@ -19,7 +19,7 @@ pytorch-lightning = "*"
 lightgbm = "*"
 test-tube = "*"
 pytest = "*"
-dask = {extras = ["bag"],version = "*"}
+dask = {extras = ["dataframe"],version = "*"}
 distributed = "*"
 
 [requires]
