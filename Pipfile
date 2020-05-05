@@ -19,6 +19,7 @@ pytorch-lightning = "*"
 lightgbm = "*"
 test-tube = "*"
 pytest = "*"
+psutil = "*"
 
 [requires]
 python_version = "3.7"

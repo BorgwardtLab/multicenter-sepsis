@@ -1,13 +1,12 @@
 import argparse
+import gc
 import os
 import pandas as pd
 import sys
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.pipeline import Pipeline
-from time import time
-
+import time
 from transformers import *
-from IPython import embed
 
 dataset_class_mapping = {
     'physionet2019': 'Physionet2019Dataset',
@@ -22,9 +21,7 @@ def df_to_chunks(df, n_chunks=1):
     splits = np.array_split(ids, n_chunks)
     result = []
     for split in splits:
-        embed()
         chunk = df.loc[split[0]:split[-1]]
-        embed()
         result.append(chunk)
     return result
 
@@ -70,10 +67,11 @@ def main():
         # this step is not tunable, hence we cache it out in a pkl dump
         dump = os.path.join(out_dir, f'X_normalized_{split}.pkl')
         if os.path.exists(dump) and not overwrite: 
+            print('Loading fixed pipeline pickle dump..')
             df = load_pickle(dump)
         else:
             print('Running (fixed) data pipeline and dumping it..')
-            start = time()
+            start = time.time()
             data_pipeline = Pipeline([
                 ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False)),
                 ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, split=split, n_jobs=n_jobs)),
@@ -83,7 +81,7 @@ def main():
                 ('normalization', Normalizer(data_dir=out_dir, split=split))
             ])
             df = data_pipeline.fit_transform(None)
-            print(f'.. finished. Took {time() - start} seconds.')
+            print(f'.. finished. Took {time.time() - start} seconds.')
             # Save
             save_pickle(df, dump)
 
@@ -92,24 +90,29 @@ def main():
         print('Running (tunable) preprocessing pipeline and dumping it..')
         #For saving memory in very large datasets, we chunk the df as a quick solution
         # in case df is not sorted according to indeces anymore, sort for not causing an error in chunking:
-        # df.sort_index(ascending=True, inplace=True) #however, for large df this expensive, so don't do it if not needed 
+        df.sort_index(ascending=True, inplace=True)  
         df_chunks = df_to_chunks(df, args.n_chunks) 
-        pipeline = Pipeline([
+        ##df_chunk = df_chunks[0]
+        ##del df_chunks
+        del df
+        gc.collect()                                                                                                 
+        #results = []
+        for i, chunk in enumerate(df_chunks):
+            start = time.time()
+            pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
             ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split)),
             ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True)),
             ('remove_nans', FillMissing())                                                                 
-        ])                                                                                                 
-        results = []
-        for i, chunk in enumerate(df_chunks):
-            start = time()
+                ])
+
             chunk_out = pipeline.fit_transform(chunk)
-            print(f'.. finished. Took {time() - start} seconds.')
+            print(f'.. finished. Took {time.time() - start} seconds.')
             save_pickle(chunk_out, os.path.join(out_dir, f'X_features_{split}_chunk_{i}.pkl'))
-            results.append(chunk_out)
-        df = pd.concat(results)
+        #    results.append(chunk_out)
+        #df = pd.concat(results)
         # Save
-        save_pickle(df, os.path.join(out_dir, f'X_features_{split}.pkl'))
+        #save_pickle(df, os.path.join(out_dir, f'X_features_{split}.pkl'))
 
 if __name__ == '__main__':
     main()

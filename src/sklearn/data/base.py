@@ -2,8 +2,17 @@
 
 import numpy as np
 import pandas as pd
+import gc
 from sklearn.base import TransformerMixin, BaseEstimator
 from joblib import Parallel, delayed
+
+def collected(func):
+    def wrapped_func(df):
+        df = func(df)
+        gc.collect()
+        return df
+    return wrapped_func
+        
 
 class BaseIDTransformer(TransformerMixin, BaseEstimator):
     """
@@ -74,9 +83,10 @@ class ParallelBaseIDTransformer(TransformerMixin, BaseEstimator):
             raise ValueError('Unknown input: {}'.format(type(df_or_list)))
 
         # Use multiprocessing as we can then share memory via fork.
-        output = Parallel(n_jobs=self.n_jobs, batch_size=100, max_nbytes=None, verbose=1)(
-            delayed(self.transform_id)(get_instance(i)) for i in range(n))
-
+        #output = Parallel(n_jobs=self.n_jobs, batch_size=100, max_nbytes=None, verbose=1)(
+        #    delayed(self.transform_id)(get_instance(i)) for i in range(n))
+        output = Parallel(n_jobs=self.n_jobs, batch_size=100, max_nbytes=None, verbose=1)(    
+            delayed(self.transform_id)(get_instance(i)) for i in range(n))                 
         if self.concat_output:
             output = pd.concat(output)
 
