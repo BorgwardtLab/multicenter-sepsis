@@ -132,30 +132,33 @@ class MIMIC3Dataset(Physionet2019Dataset):
     
     def __init__(self, root_dir='datasets/mimic3/data/extracted',
                  split_file='datasets/mimic3/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None):
+                 split='train', split_repetition=0, as_dict=True, transform=None, custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
-            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
         )
 
 class HiridDataset(Physionet2019Dataset):
     
     def __init__(self, root_dir='datasets/hirid/data/extracted',
                  split_file='datasets/hirid/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None):
+                 split='train', split_repetition=0, as_dict=True, transform=None, custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
-            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
         )
 
 class EICUDataset(Physionet2019Dataset):
     
     def __init__(self, root_dir='datasets/eicu/data/extracted',
                  split_file='datasets/eicu/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None):
+                 split='train', split_repetition=0, as_dict=True, transform=None, custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
-            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
         )
 
 # pylint: disable=R0903
