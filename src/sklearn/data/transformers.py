@@ -200,12 +200,12 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         assert len(labels) == len(df)
         df = dd.concat([df, labels], axis=1)
 
-        df = df.groupby('id').apply(self._transform_id)
+        df = df.groupby('id', group_keys=False).apply(self._transform_id)
         # #groupby can create None indices, drop them:
         # if None in df.index.names:
         #     print('None in indices, dropping it')
         #     df.index = df.index.droplevel(None)
-  
+ 
         if self.save:
             save_pickle(df['SepsisLabel'].compute(), os.path.join(self.data_dir, f'y_{self.split}_final.pkl'))
         df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 

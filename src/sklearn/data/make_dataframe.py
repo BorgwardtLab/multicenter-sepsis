@@ -83,8 +83,8 @@ def main():
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
-            ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split)),
-            ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
+            ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split))
+            #('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
             #('remove_nans', FillMissing())
         ])
         df = pipeline.fit_transform(df).compute()
