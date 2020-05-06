@@ -321,7 +321,7 @@ class LookbackFeatures(DaskIDTransformer):
         """
         self.cols = extended_ts_columns #apply look-back stats to time series columns
         if stats is None:
-            keys = ['min'] #, 'max', 'mean', 'median', 'var']
+            keys = ['min', 'max', 'mean', 'median', 'var']
             windows = [4, 8, 16] #5
             stats = []
             for key in keys:
