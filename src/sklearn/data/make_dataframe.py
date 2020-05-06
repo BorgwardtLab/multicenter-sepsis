@@ -80,8 +80,12 @@ def main():
 
         #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
         #---------------------------------------------------------------------------------
+        # We need to sort the index by ourselves to ensure the time axis is
+        # correctly ordered. Dask would not take this into account.
+        df.sort_index(
+            axis='index', level='id', inplace=True, sort_remaining=True)
         df.reset_index(level='time', drop=False, inplace=True)
-        df = dd.from_pandas(df, npartitions=args.n_partitions, sort=False) 
+        df = dd.from_pandas(df, npartitions=args.n_partitions, sort=True)
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
@@ -91,10 +95,12 @@ def main():
             #('remove_nans', FillMissing())
         ])
         df = pipeline.fit_transform(df).compute()
+        # df.to_hdf(os.path.join(out_dir, f'X_features_{split}.h5'), '/data')
+        # consecutive = df.groupby('id').apply(lambda x: np.all(np.diff(x['time']) >= 0))
         print(f'.. finished. Took {time() - start} seconds.')
         # Save
         save_pickle(df, os.path.join(out_dir, f'X_features_{split}.pkl'))
-        client.close()
+    client.close()
 
 if __name__ == '__main__':
     main()
