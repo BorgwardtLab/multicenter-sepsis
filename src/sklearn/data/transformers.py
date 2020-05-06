@@ -196,14 +196,15 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
     def transform(self, df):
         """ As this time filtering step also affects labels, for simplicity we load and adjust them too. 
         """
-        labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-        labels.reset_index(level='time', drop=True, inplace=True)
-        labels = dd.from_pandas(
-            pd.DataFrame(labels, columns=['SepsisLabel']),
-            npartitions=df.npartitions
-        )
-        assert len(labels) == len(df)
-        df = dd.concat([df, labels], axis=1)
+        #labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+        #labels.reset_index(level='time', drop=True, inplace=True)
+        # labels = dd.from_pandas(
+        #     pd.DataFrame(labels, columns=['SepsisLabel']),
+        #     npartitions=df.npartitions
+        # )
+        #assert len(labels) == len(df)
+        #df['SepsisLabel'] = labels
+        # df = dd.concat([df, labels], axis=1)
 
         df = df.groupby('id', group_keys=False).apply(self._transform_id)
         # #groupby can create None indices, drop them:
@@ -211,9 +212,9 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         #     print('None in indices, dropping it')
         #     df.index = df.index.droplevel(None)
  
-        if self.save:
-            save_pickle(df['SepsisLabel'].compute(), os.path.join(self.data_dir, f'y_{self.split}_final.pkl'))
-        df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
+        #if self.save:
+        #    save_pickle(df['SepsisLabel'].compute(), os.path.join(self.data_dir, f'y_{self.split}_final.pkl'))
+        #df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
         print('Done with InvalidTimesFiltration')
         return df
 

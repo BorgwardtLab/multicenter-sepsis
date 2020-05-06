@@ -37,7 +37,7 @@ def main():
         default=False,
         help='compute all preprocessing steps and overwrite existing intermediary files')
     parser.add_argument('--n_partitions', type=int,
-        default=10,
+        default=50,
         help='number of df partitions in dask')
     args = parser.parse_args()
     client = Client(n_workers=3)
@@ -69,7 +69,7 @@ def main():
                 ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False)),
                 ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, split=split, n_jobs=n_jobs)),
                 ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset(n_jobs=n_jobs, concat_output=True)),
-                ('drop_labels', DropLabels(save=True, data_dir=out_dir, split=split)),
+                #('drop_labels', DropLabels(save=True, data_dir=out_dir, split=split)),
                 ('derived_features', DerivedFeatures()),
                 ('normalization', Normalizer(data_dir=out_dir, split=split))
             ])
@@ -81,7 +81,7 @@ def main():
         #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
         #---------------------------------------------------------------------------------
         df.reset_index(level='time', drop=False, inplace=True)
-        df = dd.from_pandas(df, npartitions=args.n_partitions)
+        df = dd.from_pandas(df, npartitions=args.n_partitions, sort=False) 
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
