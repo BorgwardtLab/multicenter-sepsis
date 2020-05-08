@@ -40,7 +40,7 @@ def main():
         default=50,
         help='number of df partitions in dask')
     args = parser.parse_args()
-    client = Client(n_workers=args.n_jobs)
+    client = Client(n_workers=args.n_jobs, memory_limit='50GB', local_directory='/local0/tmp/dask')
     n_jobs = args.n_jobs
     overwrite = args.overwrite 
     dataset = args.dataset
