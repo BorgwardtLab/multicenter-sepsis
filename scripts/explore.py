@@ -22,9 +22,9 @@ if __name__ == "__main__":
     path = os.path.join('datasets', args.dataset, args.path)
     #normalized_path = os.path.join(path, f'X_normalized_{split}.pkl')
     features_path = os.path.join(path, f'X_features_{split}.pkl')
-    y_path = os.path.join(path, f'y_{split}.pkl')
+    X_f_path = os.path.join(path, f'X_filtered_{split}.pkl')
     #df_n = load_pickle(normalized_path)
     X = load_pickle(features_path)
-    #y = load_pickle(y_path)
+    X_f = load_pickle(X_f_path)
 
     embed()

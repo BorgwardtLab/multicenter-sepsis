@@ -168,10 +168,7 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         - time steps before ICU admission (i.e. negative timestamps) 
         - time steps with less than <thres> many observations. 
     """
-    def __init__(self, save=True, data_dir=None, split=None, thres=1, label='SepsisLabel'):
-        self.save = save
-        self.data_dir = data_dir
-        self.split = split
+    def __init__(self, thres=1, label='SepsisLabel'):
         self.thres = thres
         self.label = label
 

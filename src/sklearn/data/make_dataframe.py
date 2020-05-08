@@ -64,6 +64,8 @@ def main():
         #--------------------------------------------------------------------
         # this step is not tunable, hence we cache it out in a pkl dump
         dump = os.path.join(out_dir, f'X_normalized_{split}.pkl')
+        dump_for_deep = os.path.join(out_dir, f'X_filtered_{split}.pkl')
+ 
         if os.path.exists(dump) and not overwrite: 
             df = load_pickle(dump)
         else:
@@ -84,7 +86,19 @@ def main():
             print(f'.. finished. Took {time() - start} seconds.')
             # Save
             save_pickle(df, dump)
-
+           
+            # 1.B) Filtering for deep learning pipeline:
+            #------------------------------------------ 
+            # In addition, to prepare the data for the deep learning pipeline, 
+            # consistently apply the same final invalid times filtration steps as in sklearn pipe
+            # while skipping the manual feature engineering
+            filter_for_deep_pipe =  Pipeline([
+            ('filter_invalid_times', InvalidTimesFiltration())
+            ])
+            df_deep = df.reset_index(level='time', drop=False) # invalid times filt. can't handle multi-index due to dask
+            df_deep = filter_for_deep_pipe.fit_transform(df_deep) 
+            save_pickle(df_deep, dump_for_deep)
+    
         #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
         #---------------------------------------------------------------------------------
         # We need to sort the index by ourselves to ensure the time axis is
@@ -97,7 +111,7 @@ def main():
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
-            ('filter_invalid_times', InvalidTimesFiltration(save=True, data_dir=out_dir, split=split)),
+            ('filter_invalid_times', InvalidTimesFiltration()),
             ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
             #('remove_nans', FillMissing())
         ])
