@@ -11,6 +11,7 @@ from sklearn.base import TransformerMixin, BaseEstimator
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer, ParallelBaseIDTransformer
 from extracted import columns_with_nans, ts_columns, extended_ts_columns ,columns_not_to_normalize
+from IPython import embed
 
 import sys
 sys.path.append(os.getcwd())
@@ -136,10 +137,13 @@ class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
     sepsis onset. This prevents us from making predictions long after sepsis (which
     would be not very useful) while it still allows to punish models that detect sepsis
     only too late.
+    Additionally, to ensure that controls cannot be systematically longer than cases,
+    we cut controls after cut_off + onset_bounds[1] hours (i.e. after 7d + 24h) 
     """
-    def __init__(self, cut_off=24, label='SepsisLabel', **kwargs):
+    def __init__(self, cut_off=24, onset_bounds=(3,168), label='SepsisLabel', **kwargs):
         self.cut_off = cut_off
         self.label = label
+        self.control_cut_off = cut_off + onset_bounds[1]
         super().__init__(**kwargs)
 
     def transform_id(self, df):
@@ -151,8 +155,7 @@ class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
             return df[:onset+self.cut_off+1]
         else:
             #Control:
-            return df
-
+            return df[df.index.levels[1] <= self.control_cut_off] #we assume time to be index.levels[1]
 
 class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
     """

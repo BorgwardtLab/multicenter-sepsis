@@ -44,6 +44,10 @@ def main():
     data_dir = os.path.join(base_dir, 'extracted') #only used when creating df directly from psv
     out_dir = os.path.join(base_dir, args.out_dir, 'processed')
     splits = ['train', 'validation'] # save 'test' for later 
+    
+    #For verbosity, we outline preprocessing / filtering parameters here:
+    cut_off = 24 #how many hours we include after a sepsis onset
+    onset_bounds = (3, 168) #the included sepsis onset window (before too early, after too late)
      
     for split in splits:
         # Run full pipe
@@ -59,9 +63,12 @@ def main():
             print('Running (fixed) data pipeline and dumping it..')
             start = time()
             data_pipeline = Pipeline([
-                ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, split=split, drop_label=False)),
-                ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, split=split, n_jobs=n_jobs)),
-                ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset(n_jobs=n_jobs, concat_output=True)),
+                ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, 
+                    split=split, drop_label=False)),
+                ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, 
+                    split=split, onset_bounds=onset_bounds, n_jobs=n_jobs)),
+                ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset(n_jobs=n_jobs, 
+                    cut_off=cut_off, onset_bounds=onset_bounds, concat_output=True)),
                 ('drop_labels', DropLabels(save=True, data_dir=out_dir, split=split)),
                 ('derived_features', DerivedFeatures()),
                 ('normalization', Normalizer(data_dir=out_dir, split=split))
