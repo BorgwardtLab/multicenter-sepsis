@@ -19,6 +19,9 @@ pytorch-lightning = "*"
 lightgbm = "*"
 test-tube = "*"
 pytest = "*"
+dask = {extras = ["dataframe"],version = "*"}
+distributed = "*"
+bokeh = "*"
 
 [requires]
 python_version = "3.7"

@@ -9,9 +9,11 @@ from joblib import Parallel, delayed
 from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
-from base import BaseIDTransformer, ParallelBaseIDTransformer
+from base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
 from extracted import columns_with_nans, ts_columns, extended_ts_columns ,columns_not_to_normalize
 from IPython import embed
+
+import dask.dataframe as dd
 
 import sys
 sys.path.append(os.getcwd())
@@ -23,11 +25,14 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     returns (and saves if requested) the dataset in one large sklearn-ready pd dataframe 
     format with patient and time multi-indices.
     """
-    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train', drop_label=True, n_jobs=10, concat_output=False):
+    def __init__(self, save=False, dataset_cls=None, data_dir=None, split='train', drop_label=True, n_jobs=10, concat_output=False, custom_path=None):
         self.save = save
         dataset_class = getattr(datasets, dataset_cls)
         self.split = split
-        self.dataloader = dataset_class(split=split, as_dict=False)
+        if custom_path:
+            #remove last two folders (framework-agnostic) from data_dir path to get to base_dir
+            custom_path = os.path.split(os.path.split(data_dir)[0])[0]
+        self.dataloader = dataset_class(split=split, as_dict=False, custom_path=custom_path)
         self.data_dir = data_dir #outdir to save raw dataframe
         self.drop_label = drop_label
         self.n_jobs = n_jobs
@@ -174,48 +179,59 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         return self
 
     def _remove_pre_icu(self, df):
-        return df[df.index.get_level_values('time') >=0]
-    
+        return df[df['time'] >= 0]
+
     def _remove_too_few_observations(self, df, thres):
+        """ in rare cases it is possible that Lookbackfeatures leak zeros into invalid nan rows (which makes time handling easier)
+            additionally drop those rows by identifying nan labels
+        """
         ind_to_keep = (~df[ts_columns].isnull()).sum(axis=1) >= thres
+        ind_labels = (~df['SepsisLabel'].isnull()) #sanity check to prevent lookbackfeatures 0s to mess up nan rows
+        ind_to_keep = np.logical_and(ind_to_keep, ind_labels) 
         return df[ind_to_keep]
-    
+
     def _transform_id(self, df):
         """ Patient level transformation
         """
         df = self._remove_pre_icu(df)
-        return self._remove_too_few_observations(df, self.thres) 
-     
+        return self._remove_too_few_observations(df, self.thres)
+
     def transform(self, df):
         """ As this time filtering step also affects labels, for simplicity we load and adjust them too. 
         """
-        labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))    
-        assert len(labels) == len(df)
-        df['SepsisLabel'] = labels #we temporarily add the labels to consistently remove time steps.
-        
-        df = df.groupby('id', as_index=False).apply(self._transform_id)
-        #groupby can create None indices, drop them:
-        if None in df.index.names:
-            print('None in indices, dropping it')
-            df.index = df.index.droplevel(None)
-  
-        if self.save:
-            save_pickle(df['SepsisLabel'], os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-        df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
+        #labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))
+        #labels.reset_index(level='time', drop=True, inplace=True)
+        # labels = dd.from_pandas(
+        #     pd.DataFrame(labels, columns=['SepsisLabel']),
+        #     npartitions=df.npartitions
+        # )
+        #assert len(labels) == len(df)
+        #df['SepsisLabel'] = labels
+        # df = dd.concat([df, labels], axis=1)
+
+        df = df.groupby('id', group_keys=False).apply(self._transform_id)
+        # #groupby can create None indices, drop them:
+        # if None in df.index.names:
+        #     print('None in indices, dropping it')
+        #     df.index = df.index.droplevel(None)
+ 
+        #if self.save:
+        #    save_pickle(df['SepsisLabel'].compute(), os.path.join(self.data_dir, f'y_{self.split}_final.pkl'))
+        #df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
         print('Done with InvalidTimesFiltration')
         return df
 
-class CarryForwardImputation(ParallelBaseIDTransformer):
+class CarryForwardImputation(DaskIDTransformer):
     """
-    First fills in missing values by carrying forward, then fills backwards. The backwards method takes care of the
-    NaN values at the start that cannot be filled by a forward fill.
+    First fills in missing values by carrying forward, then fills remaining NaN (at start) with zero. 
     """
     def transform_id(self, df):
-        return df.fillna(method='ffill')
+        return df.fillna(method='ffill').fillna(0)
 
 class IndicatorImputation(ParallelBaseIDTransformer):
     """
     Adds indicator dimension for every channel to indicate if there was a nan
+    IndicatorImputation still requires FillMissing afterwards!
     """
     def __init__(self, n_jobs=4):
         super().__init__(n_jobs=n_jobs)
@@ -298,54 +314,52 @@ class Normalizer(TransformerMixin, BaseEstimator):
         return df_out
 
 
-class LookbackFeatures(ParallelBaseIDTransformer):
-    """ 
-    Simple statistical features including moments over a tunable look-back window. 
+class LookbackFeatures(DaskIDTransformer):
+    """
+    Simple statistical features including moments over a tunable look-back window.
     """
     def __init__(self, stats=None, **kwargs):
-        """ takes dictionary of stats (keys) and corresponding look-back windows (values) 
+        """ takes dictionary of stats (keys) and corresponding look-back windows (values)
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
         self.cols = extended_ts_columns #apply look-back stats to time series columns
         if stats is None:
-            keys = ['min','max', 'mean', 'median','var']
-            windows = [4,8,16] #5
+            keys = ['min', 'max', 'mean', 'median', 'var']
+            windows = [4, 8, 16] #5
             stats = []
             for key in keys:
                 for window in windows:
                     stats.append( (key, window) )
         self.stats = stats
         super().__init__(**kwargs)
- 
+
     def _compute_stat(self, df, stat, window):
         """ Computes current statistic over look-back window for all time series variables
             and returns renamed df
         """
-        #first get the function to compute the statistic:
-        func = getattr(pd.DataFrame, stat)
-        
-        #determine available columns (which could be a subset of the predefined cols, depending on the setup):
-        used_cols = [col for col in self.cols if col in df.columns]  
-        stats = df[used_cols].rolling(window, min_periods=0).apply(func).fillna(0) #min_periods=0 ensures, that
-        #the first window is  computed in an expanding fashion. Still certain stats (e.g. var) leave nan 
-        #in the start, replace it with 0s here. 
-        
-        #rename the features by the statistic:
+        # first get the function to compute the statistic:
+        # determine available columns (which could be a subset of the
+        # predefined cols, depending on the setup):
+        used_cols = [col for col in self.cols if col in df.columns]
+        grouped = df[used_cols].rolling(window, min_periods=0)
+        stats = getattr(grouped, stat)().fillna(0)
+        # the first window is  computed in an expanding fashion. Still certain
+        # stats (e.g. var) leave nan in the start, replace it with 0s here. 
+        # rename the features by the statistic:
         stats = stats.add_suffix(f'_{stat}_{window}_hours') 
-        
+
         return stats
- 
+
     def transform_id(self, df):
         #compute all statistics in stats dictionary:
-        
-        #features = [df]
         features = [df]
         for stat, window in self.stats:
             feature = self._compute_stat(df, stat, window)
             features.append(feature)
         df_out = pd.concat(features, axis=1)
         return df_out
+
 
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
