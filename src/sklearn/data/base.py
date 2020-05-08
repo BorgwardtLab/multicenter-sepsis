@@ -82,3 +82,25 @@ class ParallelBaseIDTransformer(TransformerMixin, BaseEstimator):
 
         print('Done with', self.__class__.__name__)
         return output
+
+
+class DaskIDTransformer(TransformerMixin, BaseEstimator):
+    """
+    Dask-based Parallelized Base class when performing transformations over ids. The child class requires to have a transform_id method.
+    """
+    def __init__(self, **kwargs):
+        print('Got unused args:', kwargs)
+
+    def __init_subclass__(cls, *args, **kwargs):
+        if not hasattr(cls, 'transform_id'):
+            raise TypeError('Class must take a transform_id method')
+        return super().__init_subclass__(*args, **kwargs)
+
+    def fit(self, df, y=None):
+        return self
+
+    def transform(self, dask_df):
+        """ Parallelized transform
+        """
+        result = dask_df.groupby('id').apply(self.transform_id)
+        return result
