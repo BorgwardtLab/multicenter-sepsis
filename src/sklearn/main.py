@@ -17,7 +17,6 @@ from src.sklearn.data.utils import load_data
 from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 
-
 def load_data_from_input_path(input_path, dataset_name):
     """Load the data according to dataset_name.
 
@@ -110,7 +109,7 @@ def main():
 
     X_train, X_val, y_train, y_val = load_data_from_input_path(
         args.input_path, args.dataset)
-
+    
     # FIXME: !!! Workaround for now
     X_train.drop(columns=['Gender'], inplace=True)
     X_val.drop(columns=['Gender'], inplace=True)
