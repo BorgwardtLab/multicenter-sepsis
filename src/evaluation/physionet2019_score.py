@@ -32,19 +32,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import numpy as np
-
-
-def nanany(array: np.ndarray):
-    """Any operation which ignores NaNs.
-
-    Numpy by default interprets NaN as True, thus returning True for any on
-    arrays containing NaNs.
-
-    """
-    array = np.asarray(array)
-    return np.any(array[~np.isnan(array)])
-
-
+from .sklearn_utils import nanany
 
 def compute_prediction_utility(labels, predictions, dt_early=-12,
                                dt_optimal=-6, dt_late=3.0, max_u_tp=1,

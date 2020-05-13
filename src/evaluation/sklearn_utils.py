@@ -5,6 +5,19 @@ import numpy as np
 from sklearn.model_selection import StratifiedKFold
 
 
+def nanany(array: np.ndarray):
+    """Any operation which ignores NaNs.
+
+    Numpy by default interprets NaN as True, thus returning True for any on
+    arrays containing NaNs.
+
+    """
+    array = np.asarray(array)
+    return np.any(array[~np.isnan(array)])
+
+
+
+
 class NotAlignedError(Exception):
     """Error for non-aligned predictions and labels."""
 
@@ -86,12 +99,11 @@ def shift_onset_label(patient_id, label, shift):
     """
     # We need to exclude NaNs as they are considered positive. This would lead
     # to treating controls as cases.
-    is_case = np.any(label.values[~np.isnan(label)])
+    is_case = nanany(label)
     if is_case:
         onset = np.nanargmax(label.values)
         # Check if label is a onset
-        if not np.all(label.iloc[onset:]) or \
-                np.any(np.isnan(label.iloc[onset:])):
+        if not np.all(label.iloc[onset:]):
             raise NotOnsetLabelError(patient_id)
 
         new_onset = onset + shift
