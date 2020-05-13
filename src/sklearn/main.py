@@ -4,7 +4,7 @@ from functools import partial
 import json
 import os
 from time import time
-
+import numpy as np
 import pandas as pd
 
 from sklearn.pipeline import Pipeline
@@ -53,6 +53,19 @@ def get_pipeline_and_grid(method_name, clf_params):
             'est__scale_pos_weight': [1, 10, 20, 50, 100]
         }
         return pipe, param_dist
+    elif method_name == 'lr':
+        from sklearn.linear_model import LogisticRegression as LR
+        parameters = {'n_jobs': 10}
+        parameters.update(clf_params)
+        est = LR(**parameters)
+        pipe = Pipeline(steps=[('est', est)])
+        # hyper-parameter grid:
+        param_dist = {
+            'est__penalty': ['l2','none'],
+            'est__C': np.logspace(-2,2,50),
+            'est__solver': ['sag', 'saga'], 
+        }
+        return pipe, param_dist
     else:
         raise ValueError('Invalid method: {}'.format(method_name))
 
@@ -92,7 +105,7 @@ def main():
     )
     parser.add_argument(
         '--method', default='lgbm', type=str,
-        help='<Method to use for classification [lgbm, ..]'
+        help='Method to use for classification [lgbm, lr]'
     )
     parser.add_argument(
         '--clf_params', nargs='+', default=[],
