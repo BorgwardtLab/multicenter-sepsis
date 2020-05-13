@@ -34,6 +34,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import numpy as np
 
 
+def nanany(array: np.ndarray):
+    """Any operation which ignores NaNs.
+
+    Numpy by default interprets NaN as True, thus returning True for any on
+    arrays containing NaNs.
+
+    """
+    array = np.asarray(array)
+    return np.any(array[~np.isnan(array)])
+
+
+
 def compute_prediction_utility(labels, predictions, dt_early=-12,
                                dt_optimal=-6, dt_late=3.0, max_u_tp=1,
                                min_u_fn=-2, u_fp=-0.05, u_tn=0,
@@ -45,11 +57,11 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
             raise Exception('Numbers of predictions and labels must be the same.')
 
         for label in labels:
-            if not label in (0, 1):
+            if not label in (0, 1) and not np.isnan(label):
                 raise Exception('Labels must satisfy label == 0 or label == 1.')
 
         for prediction in predictions:
-            if not prediction in (0, 1):
+            if not prediction in (0, 1) and not np.isnan(prediction):
                 raise Exception('Predictions must satisfy prediction == 0 or prediction == 1.')
 
         if dt_early >= dt_optimal:
@@ -59,7 +71,7 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
             raise Exception('The optimal time for predictions must be before the latest beneficial time.')
 
     # Does the patient eventually have sepsis?
-    if np.any(labels):
+    if nanany(labels):
         is_septic = True
         # Change this as we do not have shifted labels in our setup
         # t_sepsis = np.argmax(labels) - dt_optimal
@@ -84,23 +96,26 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
     for t in range(n):
         if t <= t_sepsis + dt_late:
             # TP
-            if is_septic and predictions[t]:
+            if is_septic and (predictions[t] == 1.):
                 if t <= t_sepsis + dt_optimal:
                     u[t] = max(m_1 * (t - t_sepsis) + b_1, u_fp)
                 elif t <= t_sepsis + dt_late:
                     u[t] = m_2 * (t - t_sepsis) + b_2
             # FP
-            elif not is_septic and predictions[t]:
+            elif not is_septic and (predictions[t] == 1.):
                 u[t] = u_fp
             # FN
-            elif is_septic and not predictions[t]:
+            elif is_septic and (predictions[t] == 0.):
                 if t <= t_sepsis + dt_optimal:
                     u[t] = 0
                 elif t <= t_sepsis + dt_late:
                     u[t] = m_3 * (t - t_sepsis) + b_3
             # TN
-            elif not is_septic and not predictions[t]:
+            elif not is_septic and (predictions[t] == 0.):
                 u[t] = u_tn
+            else:
+                # predictions[t] is probably np.NaN
+                pass
 
     # Find total utility for patient.
     return np.sum(u)
@@ -131,13 +146,14 @@ def physionet2019_utility(y_true, y_score):
         best_predictions = np.zeros(num_rows)
         inaction_predictions = np.zeros(num_rows)
 
-        if np.any(labels):
+        if nanany(labels):
             # Change this as we do not have shifted labels in our setup
             # t_sepsis = np.argmax(labels) - dt_optimal
             t_sepsis = np.nanargmax(labels)
             pred_begin = int(max(0, t_sepsis + dt_early))
             pred_end = int(min(t_sepsis + dt_late + 1, num_rows))
             best_predictions[pred_begin:pred_end] = 1
+            best_predictions[np.isnan(labels)] = np.NaN
 
         utilities.append(
             compute_prediction_utility(labels, observed_predictions))
