@@ -1,6 +1,6 @@
 """Methods for implementing the physionet 2019 sepsis recognition score.
 
-The python methods to compute the physionet score are based on the code inL
+The python methods to compute the physionet score are based on the code at
 https://github.com/physionetchallenges/evaluation-2019
 
 Which was published under the following licence:
@@ -63,7 +63,7 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
         is_septic = True
         # Change this as we do not have shifted labels in our setup
         # t_sepsis = np.argmax(labels) - dt_optimal
-        t_sepsis = np.argmax(labels)
+        t_sepsis = np.nanargmax(labels)
     else:
         is_septic = False
         t_sepsis = float('inf')
@@ -134,7 +134,7 @@ def physionet2019_utility(y_true, y_score):
         if np.any(labels):
             # Change this as we do not have shifted labels in our setup
             # t_sepsis = np.argmax(labels) - dt_optimal
-            t_sepsis = np.argmax(labels)
+            t_sepsis = np.nanargmax(labels)
             pred_begin = int(max(0, t_sepsis + dt_early))
             pred_end = int(min(t_sepsis + dt_late + 1, num_rows))
             best_predictions[pred_begin:pred_end] = 1

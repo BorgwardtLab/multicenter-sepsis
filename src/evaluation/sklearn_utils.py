@@ -84,17 +84,24 @@ def shift_onset_label(patient_id, label, shift):
         pd.Series with labels shifted.
 
     """
-    is_case = np.any(label)
+    # We need to exclude NaNs as they are considered positive. This would lead
+    # to treating controls as cases.
+    is_case = np.any(label.values[~np.isnan(label)])
     if is_case:
-        onset = np.argmax(label)
+        onset = np.nanargmax(label.values)
         # Check if label is a onset
-        if not np.all(label.iloc[onset:]):
+        if not np.all(label.iloc[onset:]) or \
+                np.any(np.isnan(label.iloc[onset:])):
             raise NotOnsetLabelError(patient_id)
 
         new_onset = onset + shift
         new_onset = min(max(0, new_onset), len(label))
-        new_label = np.zeros(len(label), dtype=label.dtype)
-        new_label[new_onset:] = 1
+        old_onset_segment = label.values[new_onset:]
+        new_onset_segment = np.ones(len(label) - new_onset)
+        # NaNs should stay NaNs
+        new_onset_segment[np.isnan(old_onset_segment)] = np.NaN
+        new_label = np.concatenate(
+            [label.values[:new_onset], new_onset_segment], axis=0)
         return pd.Series(new_label, index=label.index)
     else:
         return label

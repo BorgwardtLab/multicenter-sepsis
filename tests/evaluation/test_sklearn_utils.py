@@ -118,3 +118,55 @@ def test_onset_label_shift():
         mock.ALL_EQUAL_SCORE, shift_onset_label=-1)
     score = wrapped_scorer(mock_y, mock_pred)
     assert score is True
+
+
+def test_onset_label_shift_with_gaps():
+    mock_index = pd.MultiIndex.from_arrays(
+        [[0, 0, 0, 0], [0, 1, 3, 4]],
+        names=('id', 'time')
+    )
+    mock_y = pd.DataFrame([0, 0, 0, 1], index=mock_index)
+    mock_pred = pd.DataFrame([0, 0, 1, 1], index=mock_index)
+    wrapped_scorer = OnlineScoreWrapper(
+        mock.ALL_EQUAL_SCORE, shift_onset_label=-1)
+    score = wrapped_scorer(mock_y, mock_pred)
+    assert score is True
+
+
+def test_onset_label_shift_with_gap_in_onset():
+    mock_index = pd.MultiIndex.from_arrays(
+        [[0, 0, 0, 0], [0, 1, 2, 4]],
+        names=('id', 'time')
+    )
+    mock_y = pd.DataFrame([0, 0, 1, 1], index=mock_index)
+    mock_pred = pd.DataFrame([0, 1, 1, 1], index=mock_index)
+    wrapped_scorer = OnlineScoreWrapper(
+        mock.ALL_EQUAL_SCORE, shift_onset_label=-1)
+    with pytest.raises(NotOnsetLabelError):
+        wrapped_scorer(mock_y, mock_pred)
+
+
+def test_onset_label_shift_control():
+    # No shift should take place if sample is a control
+    mock_index = pd.MultiIndex.from_arrays(
+        [[0, 0, 0, 0], [0, 1, 2, 3]],
+        names=('id', 'time')
+    )
+    mock_y = pd.DataFrame([0, 0, 0, 0], index=mock_index)
+    wrapped_scorer = OnlineScoreWrapper(
+        mock.ALL_EQUAL_SCORE, shift_onset_label=-2)
+    score = wrapped_scorer(mock_y, mock_y)
+    assert score is True
+
+
+def test_onset_label_shift_control_with_NaN():
+    # No shift should take place if sample is a control
+    mock_index = pd.MultiIndex.from_arrays(
+        [[0, 0, 0, 0], [0, 1, 6, 7]],
+        names=('id', 'time')
+    )
+    mock_y = pd.DataFrame([0, 0, 0, 0], index=mock_index)
+    wrapped_scorer = OnlineScoreWrapper(
+        mock.ALL_EQUAL_SCORE, shift_onset_label=-2)
+    score = wrapped_scorer(mock_y, mock_y)
+    assert score is True

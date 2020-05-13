@@ -49,6 +49,11 @@ MOCK_Y_ONSET_ERROR = pd.Series(
 
 def ALL_EQUAL_SCORE(y_label, y_pred):
     return bool(
-        np.all([np.all(label == pred) for label, pred in zip(y_label, y_pred)])
+        np.all(
+            [
+                np.all(label[~np.isnan(label)] == pred[~np.isnan(pred)]) and
+                np.all(np.isnan(label) == np.isnan(pred))
+                for label, pred in zip(y_label, y_pred)
+            ]
+        )
     )
-
