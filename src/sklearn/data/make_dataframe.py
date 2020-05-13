@@ -80,7 +80,8 @@ def main():
                     cut_off=cut_off, onset_bounds=onset_bounds, concat_output=True)),
                 #('drop_labels', DropLabels(save=True, data_dir=out_dir, split=split)),
                 ('derived_features', DerivedFeatures()),
-                ('normalization', Normalizer(data_dir=out_dir, split=split))
+                ('normalization', Normalizer(data_dir=out_dir, split=split)),
+                ('categorical_one_hot_encoder', CategoricalOneHotEncoder())
             ])
             df = data_pipeline.fit_transform(None)
             print(f'.. finished. Took {time() - start} seconds.')

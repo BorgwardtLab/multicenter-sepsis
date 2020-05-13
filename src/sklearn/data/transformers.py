@@ -104,6 +104,24 @@ class DropLabels(TransformerMixin, BaseEstimator):
         print('Done with DropLabels')
         return df
 
+class CategoricalOneHotEncoder(TransformerMixin, BaseEstimator):
+    """
+    Categorical variables are one-hot encoded. 
+    """
+    def __init__(self):
+        pass
+
+    def fit(self, df, labels=None):
+        return self
+
+    def transform(self, df):
+        categorical_cols = list(set(df.columns) - set(df._get_numeric_data().columns))
+        print(f'Encoding {categorical_cols}')    
+        df = pd.get_dummies(df)
+
+        print('Done with Categorical Variable One-hot Encoder..')
+        return df
+
 class PatientFiltration(ParallelBaseIDTransformer):
     """
     Removes patients which do not match inclusion criteria:
