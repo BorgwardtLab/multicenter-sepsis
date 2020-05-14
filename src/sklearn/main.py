@@ -178,7 +178,7 @@ def main():
     for method in ['predict', 'predict_proba', 'decision_function']:
         try:
             results['val_' + method] = call(
-                best_estimator, method, X_val).to_list()
+                best_estimator, method, X_val).tolist()
         except AttributeError:
             # Not all estimators support all methods
             continue
