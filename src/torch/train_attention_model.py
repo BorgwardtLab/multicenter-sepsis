@@ -17,13 +17,12 @@ import src.datasets
 
 class PlAttentionModel(pl.LightningModule):
     transform = ComposeTransformations([
-        PositionalEncoding(1, 250000, 20),  # apply positional encoding
+        PositionalEncoding(1, 200, 10),     # apply positional encoding
         to_observation_tuples               # mask nan with zero add indicators
     ])
 
     def _get_input_dim(self):
         data = self.dataset_cls(
-            split_repetition=self.hparams.split_repetition,
             split='train',
             transform=self.transform
         )
@@ -120,14 +119,23 @@ class PlAttentionModel(pl.LightningModule):
 
     def configure_optimizers(self):
         """Get optimizers."""
-        return torch.optim.Adam(
+        optimizer = torch.optim.Adam(
             self.parameters(), lr=self.hparams.learning_rate)
+        return optimizer
+
+    def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, opt_closure):
+        if self.trainer.global_step < 500:
+            lr_scale = min(1., float(self.trainer.global_step + 1) / 500.)
+            for pg in optimizer.param_groups:
+                pg['lr'] = lr_scale * self.hparams.learning_rate
+
+        optimizer.step()
+        optimizer.zero_grad()
 
     def train_dataloader(self):
         """Get train data loader."""
         return DataLoader(
             self.dataset_cls(
-                split_repetition=self.hparams.split_repetition,
                 split='train',
                 transform=self.transform),
             shuffle=True,
@@ -141,7 +149,6 @@ class PlAttentionModel(pl.LightningModule):
         """Get validation data loader."""
         return DataLoader(
             self.dataset_cls(
-                split_repetition=self.hparams.split_repetition,
                 split='validation',
                 transform=self.transform),
             shuffle=False,
@@ -155,7 +162,6 @@ class PlAttentionModel(pl.LightningModule):
         """Get test data loader."""
         return DataLoader(
             self.dataset_cls(
-                split_repetition=self.hparams.split_repetition,
                 split='test',
                 transform=self.transform),
             shuffle=False,
@@ -170,10 +176,8 @@ class PlAttentionModel(pl.LightningModule):
         # training specific
         parser.add_argument(
             '--dataset', type=str, choices=src.datasets.__all__,
-            default='Physionet2019Dataset'
+            default='PreprocessedDemoDataset'
         )
-        parser.add_argument(
-            '--split-repetition', type=int, choices=[0, 1, 2, 3, 4], default=0)
         parser.add_argument('--learning_rate', default=0.02, type=float)
         parser.add_argument('--batch_size', default=32, type=int)
 
@@ -214,7 +218,8 @@ def main(hparams, model_cls):
     trainer = pl.Trainer(
         checkpoint_callback=model_checkpoint_cb,
         early_stop_callback=early_stopping_cb,
-        max_epochs=hparams.max_epochs
+        max_epochs=hparams.max_epochs,
+        logger=logger
     )
     trainer.fit(model)
     trainer.logger.save()
@@ -226,7 +231,7 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', default='train_attention_model')
     parser.add_argument('--model', choices=['AttentionModel'], type=str,
                         default='AttentionModel')
-    parser.add_argument('--max_epochs', default=100)
+    parser.add_argument('--max_epochs', default=100, type=int)
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
 

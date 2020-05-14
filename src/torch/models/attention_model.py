@@ -263,4 +263,3 @@ class AttentionModel(nn.Module):
             kwargs.update(defaults)
             kwargs.pop('hypersearch')
             return cls(**kwargs)
-
