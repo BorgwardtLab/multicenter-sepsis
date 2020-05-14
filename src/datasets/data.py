@@ -41,7 +41,7 @@ class Physionet2019Dataset(Dataset):
         'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine',
         'Bilirubin_direct', 'Glucose', 'Lactate', 'Magnesium', 'Phosphate',
         'Potassium', 'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT',
-        'WBC', 'Fibrinogen', 'Platelets' 
+        'WBC', 'Fibrinogen', 'Platelets'
     ] #SaO2
     LABEL_COLUMN = 'SepsisLabel'
 
@@ -113,14 +113,16 @@ class Physionet2019Dataset(Dataset):
 
         return instance_data
 
+
 class DemoDataset(Physionet2019Dataset):
     """
     Demo dataset (based on subset of MIMIC) for quick testing of pipeline steps.
     """
-    
+
     def __init__(self, root_dir='datasets/demo/data/extracted',
-                 split_file='datasets/demo/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None, custom_path=None):
+                 split_file='datasets/demo/data/split_info.pkl', split='train',
+                 split_repetition=0, as_dict=True, transform=None,
+                 custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
             split_repetition=split_repetition, as_dict=as_dict, transform=transform,
@@ -129,37 +131,112 @@ class DemoDataset(Physionet2019Dataset):
 
 
 class MIMIC3Dataset(Physionet2019Dataset):
-    
     def __init__(self, root_dir='datasets/mimic3/data/extracted',
                  split_file='datasets/mimic3/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None, custom_path=None):
+                 split='train', split_repetition=0, as_dict=True,
+                 transform=None, custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
             split_repetition=split_repetition, as_dict=as_dict, transform=transform,
             custom_path=custom_path
         )
+
 
 class HiridDataset(Physionet2019Dataset):
-    
     def __init__(self, root_dir='datasets/hirid/data/extracted',
                  split_file='datasets/hirid/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None, custom_path=None):
+                 split='train', split_repetition=0, as_dict=True,
+                 transform=None, custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
             split_repetition=split_repetition, as_dict=as_dict, transform=transform,
             custom_path=custom_path
         )
 
+
 class EICUDataset(Physionet2019Dataset):
-    
     def __init__(self, root_dir='datasets/eicu/data/extracted',
-                 split_file='datasets/eicu/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None, custom_path=None):
+                 split_file='datasets/eicu/data/split_info.pkl', split='train',
+                 split_repetition=0, as_dict=True, transform=None,
+                 custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
             split_repetition=split_repetition, as_dict=as_dict, transform=transform,
             custom_path=custom_path
         )
+
+
+class PreprocessedDataset(Dataset):
+    LABEL_COLUMN = 'SepsisLabel'
+    TIME_COLUMN = 'time'
+
+    def __init__(self, prefix, split='train', drop_pre_icu=True, transform=None):
+        self.file_path = '{}_{}.pkl'.format(prefix, split)
+
+        with open(self.file_path, 'rb') as f:
+            data = pickle.load(f)
+
+        self.patients = list(data.index.unique())
+        self.data = data
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.patients)
+
+    def _get_instance(self, idx):
+        patient_id = self.patients[idx]
+        patient_data = self.data.loc[patient_id]
+        time = patient_data[self.TIME_COLUMN].values
+        labels = patient_data[self.LABEL_COLUMN].values
+        ts_data = patient_data.drop(
+            columns=[self.LABEL_COLUMN]).values
+        return {
+            'times': time,
+            'ts': ts_data,
+            'labels': labels
+        }
+
+    def __getitem__(self, idx):
+        instance = self._get_instance(idx)
+        if self.transform:
+            instance = self.transform(instance)
+        return instance
+
+
+class PreprocessedDemoDataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/demo/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class PreprocessedPhysionet2019Dataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/physionet2019/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class PreprocessedMIMIC3Dataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/mimic3/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class PreprocessedHiridDataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/hirid/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class PreprocessedEICUDataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/eicu/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
 
 # pylint: disable=R0903
 class PositionalEncoding():
@@ -225,11 +302,15 @@ def to_observation_tuples(instance_dict):
         time = time[:, np.newaxis]
 
     ts_data = instance_dict['ts']
-    valid_measurements = np.isfinite(ts_data)
+    # Inspired by "Why not to use Zero Imputation"
+    # https://arxiv.org/abs/1906.00150
+    # We augment "absence indicators", which should reduce distribution shift
+    # and bias induced by measurements with low number of observations.
+    invalid_measurements = ~np.isfinite(ts_data)
     ts_data = np.nan_to_num(ts_data)  # Replace NaNs with zero
 
     # Combine into a vector
-    combined = np.concatenate((time, ts_data, valid_measurements), axis=-1)
+    combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1)
     # Replace time series data with new vectors
     instance_dict['ts'] = combined
     return instance_dict
