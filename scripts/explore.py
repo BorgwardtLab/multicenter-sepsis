@@ -7,6 +7,17 @@ sys.path.append(os.getcwd())
 from src.sklearn.data.utils import load_pickle
 from IPython import embed
 
+def check_times(df):
+    patients = df.index.unique()
+    for pat_id in patients:
+        patient_data = df.loc[pat_id]
+        try:
+            time = patient_data['time'].values
+        except:
+            print('Problem occured!')
+            embed()
+        print(f'Patient {pat_id} has times {time}')
+        
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
@@ -27,4 +38,6 @@ if __name__ == "__main__":
     X = load_pickle(features_path)
     X_f = load_pickle(X_f_path)
 
+    embed()
+    check_times(X_f)
     embed()
