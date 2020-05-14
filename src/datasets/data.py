@@ -185,7 +185,7 @@ class PreprocessedDataset(Dataset):
 
     def _get_instance(self, idx):
         patient_id = self.patients[idx]
-        patient_data = self.data.loc[patient_id]
+        patient_data = self.data.loc[[patient_id]]
         time = patient_data[self.TIME_COLUMN].values
         labels = patient_data[self.LABEL_COLUMN].values
         ts_data = patient_data.drop(
