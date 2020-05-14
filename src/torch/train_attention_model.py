@@ -9,6 +9,8 @@ from torch.utils.data import DataLoader
 
 from src.datasets.data import ComposeTransformations, PositionalEncoding, \
     to_observation_tuples
+from sklearn.metrics import (
+    average_precision_score, roc_auc_score, balanced_accuracy_score)
 from src.torch.torch_utils import variable_length_collate
 from src.torch.models import AttentionModel
 from src.evaluation import physionet2019_utility
@@ -62,7 +64,21 @@ class PlAttentionModel(pl.LightningModule):
         label_weight = label_weight.sum() / label_weight
 
         loss = F.nll_loss(output, labels, weight=label_weight)
-        return {'loss': loss}
+        return {'loss': loss, 'n_samples': data.shape[0]}
+
+    def training_epoch_end(self, outputs):
+        total_samples = 0
+        total_loss = 0
+        for x in outputs:
+            n_samples = x['n_samples']
+            total_samples += n_samples
+            total_loss += n_samples * x['loss']
+
+        average_loss = total_loss / total_samples
+        return {
+            'log': {'train_loss': average_loss},
+            'progress_bar': {'train_loss': average_loss}
+        }
 
     def _shared_eval(self, batch, batch_idx, prefix):
         data, labels = batch['ts'], batch['labels']
@@ -90,19 +106,34 @@ class PlAttentionModel(pl.LightningModule):
 
         labels = []
         predictions = []
+        scores = []
         for x in outputs:
             cur_labels = x[f'{prefix}_labels'].cpu().numpy()
-            cur_preds = x[f'{prefix}_predictions'].cpu().numpy()
-            cur_preds = np.argmax(cur_preds, axis=-1)
-            for label, pred in zip(cur_labels, cur_preds):
+            cur_scores = x[f'{prefix}_predictions'].cpu().numpy()
+            cur_preds = np.argmax(cur_scores, axis=-1)
+            for label, pred, score in zip(cur_labels, cur_preds, cur_scores):
                 selection = label != -100
                 labels.append(label[selection])
                 predictions.append(pred[selection])
+                scores.append(score[selection][:, 1])
 
         physionet_score = physionet2019_utility(labels, predictions)
-        return {
+        labels = np.concatenate(labels, axis=0)
+        predictions = np.concatenate(predictions, axis=0)
+        scores = np.concatenate(scores, axis=0)
+        average_precision = average_precision_score(labels, scores)
+        auroc = roc_auc_score(labels, scores)
+        balanced_accuracy = balanced_accuracy_score(labels, predictions)
+        data = {
             f'{prefix}_loss': val_loss_mean,
-            f'{prefix}_physionet2019_score': physionet_score
+            f'{prefix}_physionet2019_score': physionet_score,
+            f'{prefix}_average_precision': average_precision,
+            f'{prefix}_auroc': auroc,
+            f'{prefix}_balanced_accuracy': balanced_accuracy
+        }
+        return {
+            'progress_bar': data,
+            'log': data
         }
 
     def validation_step(self, batch, batch_idx):
@@ -212,7 +243,7 @@ def main(hparams, model_cls):
     model_checkpoint_cb = pl.callbacks.model_checkpoint.ModelCheckpoint(
         save_path, monitor='val_physionet2019_score', mode='max')
     early_stopping_cb = pl.callbacks.early_stopping.EarlyStopping(
-        monitor='val_physionet2019_score', patience=5, mode='max', strict=True)
+        monitor='val_physionet2019_score', patience=10, mode='max', strict=True)
 
     # most basic trainer, uses good defaults
     trainer = pl.Trainer(
