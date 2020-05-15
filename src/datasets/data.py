@@ -5,6 +5,8 @@ import math
 import os
 import pickle
 
+from sklearn.model_selection import train_test_split
+
 import numpy as np
 import pandas as pd
 
@@ -183,6 +185,20 @@ class PreprocessedDataset(Dataset):
     def __len__(self):
         return len(self.patients)
 
+    def get_stratified_split(self, random_state=None):
+        per_instance_labels = [
+            np.any(self.data.loc[[patient_id], self.LABEL_COLUMN])
+            for patient_id in self.patients
+        ]
+        train_indices, test_indices = train_test_split(
+            range(len(per_instance_labels)),
+            train_size=0.8,
+            stratify=per_instance_labels,
+            random_state=random_state
+        )
+        return train_indices, test_indices
+
+
     def _get_instance(self, idx):
         patient_id = self.patients[idx]
         patient_data = self.data.loc[[patient_id]]
@@ -314,6 +330,30 @@ def to_observation_tuples(instance_dict):
     # Replace time series data with new vectors
     instance_dict['ts'] = combined
     return instance_dict
+
+
+class LabelPropagation():
+    def __init__(self, hours_shift):
+        self.hours_shift = hours_shift
+
+    def __call__(self, instance):
+        label = instance['labels']
+        is_case = np.any(label)
+        assert not np.any(np.isnan(label))
+        if is_case:
+            onset = np.argmax(label)
+            # Check if label is a onset
+            if not np.all(label[onset:]):
+                raise ValueError('Did not get an onset label.')
+
+            new_onset = onset + self.hours_shift
+            new_onset = min(max(0, new_onset), len(label))
+            new_onset_segment = np.ones(len(label) - new_onset)
+            # NaNs should stay NaNs
+            new_label = np.concatenate(
+                [label[:new_onset], new_onset_segment], axis=0)
+            instance['labels'] = new_label
+        return instance
 
 
 # pylint: disable=R0903
