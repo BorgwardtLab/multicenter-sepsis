@@ -250,7 +250,8 @@ def main(hparams, model_cls):
         checkpoint_callback=model_checkpoint_cb,
         early_stop_callback=early_stopping_cb,
         max_epochs=hparams.max_epochs,
-        logger=logger
+        logger=logger,
+        gpus=hparams.gpus
     )
     trainer.fit(model)
     trainer.logger.save()
@@ -263,6 +264,8 @@ if __name__ == '__main__':
     parser.add_argument('--model', choices=['AttentionModel'], type=str,
                         default='AttentionModel')
     parser.add_argument('--max_epochs', default=100, type=int)
+    parser.add_argument(
+        '--gpus', type=int, nargs='+', default=None)
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
 
