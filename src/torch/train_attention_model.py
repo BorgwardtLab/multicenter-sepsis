@@ -19,7 +19,7 @@ import src.datasets
 
 class PlAttentionModel(pl.LightningModule):
     transform = ComposeTransformations([
-        PositionalEncoding(1, 200, 10),     # apply positional encoding
+        PositionalEncoding(1, 500, 10),     # apply positional encoding
         to_observation_tuples               # mask nan with zero add indicators
     ])
 
@@ -40,30 +40,32 @@ class PlAttentionModel(pl.LightningModule):
             d_model=hparams.d_model,
             n_layers=hparams.n_layers,
             n_heads=hparams.n_heads,
-            qkv_dim=hparams.qkv_dim
+            qkv_dim=hparams.qkv_dim,
+            dropout=hparams.dropout
         )
+        self.register_buffer('label_weights', torch.Tensor([1., 50.]))
 
-    def forward(self, data):
-        return self.model(data)
+    def forward(self, data, lengths):
+        return self.model(data, lengths)
 
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
-        data, labels = batch['ts'], batch['labels']
-        output = self.forward(data)
+        data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
+        output = self.forward(data, lengths)
         # Flatten outputs to support nll_loss
         output = output.reshape(-1, 2)
         labels = labels.reshape(-1)
 
         # approximate computation of class imbalance using batch
-        label_weight = (
-            labels[:, None] ==
-            torch.tensor([0, 1], device=labels.device)[None, :]
-        )
+        # label_weight = (
+        #     labels[:, None] ==
+        #     torch.tensor([0, 1], device=labels.device)[None, :]
+        # )
 
-        label_weight = label_weight.sum(dim=0, dtype=torch.float)
-        label_weight = label_weight.sum() / label_weight
+        # label_weight = label_weight.sum(dim=0, dtype=torch.float)
+        # label_weight = label_weight.sum() / label_weight
 
-        loss = F.nll_loss(output, labels, weight=label_weight)
+        loss = F.nll_loss(output, labels, weight=self.label_weights)
         return {'loss': loss, 'n_samples': data.shape[0]}
 
     def training_epoch_end(self, outputs):
@@ -81,8 +83,8 @@ class PlAttentionModel(pl.LightningModule):
         }
 
     def _shared_eval(self, batch, batch_idx, prefix):
-        data, labels = batch['ts'], batch['labels']
-        y_hat = self.forward(data)
+        data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
+        y_hat = self.forward(data, lengths)
 
         # Flatten outputs to support nll_loss
         y_hat_flat = y_hat.reshape(-1, 2)
@@ -90,7 +92,8 @@ class PlAttentionModel(pl.LightningModule):
         n_val = labels.shape[0]
 
         return {
-            f'{prefix}_loss': F.nll_loss(y_hat_flat, labels_flat),
+            f'{prefix}_loss': F.nll_loss(
+                y_hat_flat, labels_flat, weight=self.label_weights),
             f'{prefix}_n': n_val,
             f'{prefix}_labels': labels,
             f'{prefix}_predictions': y_hat
@@ -155,8 +158,9 @@ class PlAttentionModel(pl.LightningModule):
         return optimizer
 
     def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, opt_closure):
-        if self.trainer.global_step < 500:
-            lr_scale = min(1., float(self.trainer.global_step + 1) / 500.)
+        n_warmup = 1000.
+        if self.trainer.global_step < n_warmup:
+            lr_scale = min(1., float(self.trainer.global_step + 1) / n_warmup)
             for pg in optimizer.param_groups:
                 pg['lr'] = lr_scale * self.hparams.learning_rate
 
@@ -209,8 +213,9 @@ class PlAttentionModel(pl.LightningModule):
             '--dataset', type=str, choices=src.datasets.__all__,
             default='PreprocessedDemoDataset'
         )
-        parser.add_argument('--learning_rate', default=0.02, type=float)
+        parser.add_argument('--learning_rate', default=0.01, type=float)
         parser.add_argument('--batch_size', default=32, type=int)
+        parser.add_argument('--dropout', default=0.1, type=float)
 
         # MODEL specific
         parser.add_argument('--d-model', type=int, default=64)

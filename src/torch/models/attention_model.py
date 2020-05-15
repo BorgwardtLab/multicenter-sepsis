@@ -10,7 +10,50 @@ def get_subsequent_mask(seq):
     sz_b, len_s, n_features = seq.size()
     subsequent_mask = (1 - torch.triu(
         torch.ones((1, len_s, len_s), device=seq.device), diagonal=1)).bool()
-    return subsequent_mask[None, ...]
+    return subsequent_mask
+
+
+def length_to_mask(length, max_len=None, dtype=None):
+    """length: B.
+    return B x max_len.
+    If max_len is None, then max of length will be used.
+    """
+    assert len(length.shape) == 1, 'Length shape should be 1 dimensional.'
+    max_len = max_len or length.max().item()
+    mask = torch.arange(max_len, device=length.device,
+                        dtype=length.dtype).expand(len(length), max_len) < length.unsqueeze(1)
+    if dtype is not None:
+        mask = torch.as_tensor(mask, dtype=dtype, device=length.device)
+    return mask
+
+
+class BatchNorm(nn.Module):
+    def __init__(self, nf, mom=0.1, eps=1e-5):
+        super().__init__()
+        # NB: pytorch bn mom is opposite of what you'd expect
+        self.mom,self.eps = mom,eps
+        self.mults = nn.Parameter(torch.ones (1, 1, nf))
+        self.adds  = nn.Parameter(torch.zeros(1, 1, nf))
+        self.register_buffer('vars',  torch.ones(1, 1,nf))
+        self.register_buffer('means', torch.zeros(1, 1,nf))
+
+    def update_stats(self, x, lengths):
+        mask = length_to_mask(lengths)[:, :, None]
+        x = x.masked_fill(~mask, 0)
+        n_elements = mask.sum()
+        m = x.sum((0, 1), keepdim=True).div_(n_elements)
+        m_x_2 = (x*x).sum((0, 1), keepdim=True).div_(n_elements)
+        v = m_x_2 - m*m
+        self.means.lerp_(m, self.mom)
+        self.vars.lerp_ (v, self.mom)
+        return m,v
+
+    def forward(self, x, lengths):
+        if self.training:
+            with torch.no_grad(): m,v = self.update_stats(x, lengths)
+        else: m,v = self.means,self.vars
+        x = (x-m) / (v+self.eps).sqrt()
+        return x*self.mults + self.adds
 
 
 class MaskedLayerNorm(nn.LayerNorm):
@@ -28,7 +71,7 @@ class MaskedLayerNorm(nn.LayerNorm):
 class MultiHeadAttention(nn.Module):
     """Multi head attention layer."""
 
-    def __init__(self, d_model, n_heads, d_k, d_v, mask_future=True):
+    def __init__(self, d_model, n_heads, d_k, d_v, dropout, mask_future=True):
         """Multi head attention layer.
 
         Args:
@@ -48,7 +91,8 @@ class MultiHeadAttention(nn.Module):
         self.w_q = nn.Linear(d_model, n_heads * d_k)
         self.w_k = nn.Linear(d_model, n_heads * d_k)
         self.w_v = nn.Linear(d_model, n_heads * d_v)
-        self.attention = ScaledDotProductAttention(np.sqrt(d_k))
+        self.attention = ScaledDotProductAttention(
+            np.sqrt(d_k), dropout=dropout)
         self.w_o = nn.Linear(n_heads * d_v, d_model)
 
     def compute_mask(self, x):
@@ -124,7 +168,7 @@ class ScaledDotProductAttention(nn.Module):
 
         if mask is not None:
             # -inf is ignored by the softmax function
-            attention.masked_fill(mask, -np.inf)
+            attention.masked_fill_(~mask, -np.inf)
 
         attention = self.softmax(attention)
         out = torch.bmm(self.dropout(attention), v)
@@ -148,16 +192,16 @@ class PositionwiseFeedForward(nn.Module):
         super().__init__()
         self.w_1 = nn.Conv1d(d_in, d_hid, 1)  # position-wise
         self.w_2 = nn.Conv1d(d_hid, d_in, 1)  # position-wise
-        self.layer_norm = MaskedLayerNorm(d_in)
+        self.layer_norm = BatchNorm(d_in)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, lengths):
         residual = x
         output = x.transpose(-1, -2)
         output = self.w_2(F.relu(self.w_1(output)))
         output = output.transpose(-1, -2)
         output = self.dropout(output)
-        output = self.layer_norm(output + residual)
+        output = self.layer_norm(output + residual, lengths)
         return output
 
 
@@ -196,7 +240,8 @@ class AttentionLayer(nn.Module):
         - LayerNorm
     """
 
-    def __init__(self, d_model, n_heads, qkv_dim, ff_hidden_dim=128):
+    def __init__(self, d_model, n_heads, qkv_dim, ff_hidden_dim=128,
+                 dropout=0.1):
         """Attention block.
 
         Args:
@@ -207,24 +252,27 @@ class AttentionLayer(nn.Module):
         """
         super().__init__()
         self.layers = nn.ModuleList([
-            MultiHeadAttention(d_model, n_heads, qkv_dim, qkv_dim),
-            MaskedLayerNorm(d_model),
+            MultiHeadAttention(d_model, n_heads, qkv_dim, qkv_dim, dropout),
+            BatchNorm(d_model),
             PositionwiseFeedForward(d_model, ff_hidden_dim),
-            MaskedLayerNorm(d_model)
+            BatchNorm(d_model)
         ])
 
-    def forward(self, x):
+    def forward(self, x, lengths):
         """Apply this attention block to the input x."""
         out = x
         for layer in self.layers:
-            out = layer(out)
+            if isinstance(layer, (BatchNorm, PositionwiseFeedForward)):
+                out = layer(out, lengths)
+            else:
+                out = layer(out)
         return out
 
 
 class AttentionModel(nn.Module):
     """Sequence to sequence model based on MultiHeadAttention."""
 
-    def __init__(self, d_in, d_model, n_layers, n_heads, qkv_dim):
+    def __init__(self, d_in, d_model, n_layers, n_heads, qkv_dim, dropout):
         """AttentionModel.
 
         Args:
@@ -237,16 +285,19 @@ class AttentionModel(nn.Module):
         super().__init__()
         self.layers = nn.ModuleList(
             [PositionwiseLinear(d_in, d_model)]
-            + [AttentionLayer(d_model, n_heads, qkv_dim)
+            + [AttentionLayer(d_model, n_heads, qkv_dim, dropout=dropout)
                for i in range(n_layers)]
             + [PositionwiseLinear(d_model, 2)]
         )
 
-    def forward(self, x):
+    def forward(self, x, lengths):
         """Apply attention model to input x."""
         out = x
         for layer in self.layers:
-            out = layer(out)
+            if isinstance(layer, (AttentionLayer, PositionwiseFeedForward)):
+                out = layer(out, lengths)
+            else:
+                out = layer(out)
         return F.log_softmax(out, dim=-1)
 
     @classmethod
