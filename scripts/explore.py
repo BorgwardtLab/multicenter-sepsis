@@ -17,7 +17,24 @@ def check_times(df):
             print('Problem occured!')
             embed()
         print(f'Patient {pat_id} has times {time}')
-        
+
+def compute_stats(df):
+    """
+    Computes case and case timepoint frequencies
+    """
+    results = []
+    #Time point prevalence of sepsis:
+    tp_freq = X_f['SepsisLabel'].sum()/X_f['SepsisLabel'].shape    
+    results.append(tp_freq[0])
+    #Case-level prevalence:
+    case_ids = X_f[X_f['SepsisLabel'] == 1].index.unique() 
+    total_ids = X_f.index.unique()
+    freq = len(case_ids) / len(total_ids)
+    results.append(freq)
+    results.append(len(total_ids))
+    results.append(len(case_ids))
+    return results
+ 
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
@@ -38,6 +55,8 @@ if __name__ == "__main__":
     X = load_pickle(features_path)
     X_f = load_pickle(X_f_path)
 
+    stats = compute_stats(X_f) 
+    print(stats)
     embed()
-    check_times(X_f)
-    embed()
+    #check_times(X_f)
+    #embed()
