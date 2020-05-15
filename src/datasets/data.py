@@ -5,6 +5,8 @@ import math
 import os
 import pickle
 
+from sklearn.model_selection import train_test_split
+
 import numpy as np
 import pandas as pd
 
@@ -182,6 +184,20 @@ class PreprocessedDataset(Dataset):
 
     def __len__(self):
         return len(self.patients)
+
+    def get_stratified_split(self, random_state=None):
+        per_instance_labels = [
+            np.any(self.data.loc[[patient_id], self.LABEL_COLUMN])
+            for patient_id in self.patients
+        ]
+        train_indices, test_indices = train_test_split(
+            range(len(per_instance_labels)),
+            train_size=0.8,
+            stratify=per_instance_labels,
+            random_state=random_state
+        )
+        return train_indices, test_indices
+
 
     def _get_instance(self, idx):
         patient_id = self.patients[idx]

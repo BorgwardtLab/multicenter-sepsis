@@ -5,12 +5,13 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from src.datasets.data import ComposeTransformations, PositionalEncoding, \
     to_observation_tuples, LabelPropagation
 from sklearn.metrics import (
     average_precision_score, roc_auc_score, balanced_accuracy_score)
+from sklearn.model_selection import train_test_split
 from src.torch.torch_utils import variable_length_collate
 from src.torch.models import AttentionModel
 from src.evaluation import physionet2019_utility
@@ -39,6 +40,8 @@ class PlAttentionModel(pl.LightningModule):
             dropout=hparams.dropout
         )
         self.register_buffer('label_weights', torch.Tensor([1., 50.]))
+        d = self.dataset_cls(split='train')
+        self.train_indices, self.val_indices = d.get_stratified_split(87346583)
 
     def forward(self, data, lengths):
         return self.model(data, lengths)
@@ -133,7 +136,7 @@ class PlAttentionModel(pl.LightningModule):
         auroc = roc_auc_score(labels, scores)
         balanced_accuracy = balanced_accuracy_score(labels, predictions)
         data = {
-            f'{prefix}_loss': val_loss_mean,
+            f'{prefix}_loss': val_loss_mean.item(),
             f'{prefix}_physionet2019_score': physionet_score,
             f'{prefix}_average_precision': average_precision,
             f'{prefix}_auroc': auroc,
@@ -145,16 +148,16 @@ class PlAttentionModel(pl.LightningModule):
         }
 
     def validation_step(self, batch, batch_idx):
-        return self._shared_eval(batch, batch_idx, 'val')
+        return self._shared_eval(batch, batch_idx, 'online_val')
 
     def validation_epoch_end(self, outputs):
-        return self._shared_end(outputs, 'val')
+        return self._shared_end(outputs, 'online_val')
 
     def test_step(self, batch, batch_idx):
         return self._shared_eval(batch, batch_idx, prefix='val')
 
     def test_epoch_end(self, outputs):
-        return self._shared_end(outputs, 'tests')
+        return self._shared_end(outputs, 'val')
 
     def configure_optimizers(self):
         """Get optimizers."""
@@ -175,9 +178,10 @@ class PlAttentionModel(pl.LightningModule):
     def train_dataloader(self):
         """Get train data loader."""
         return DataLoader(
-            self.dataset_cls(
-                split='train',
-                transform=self.transform),
+            Subset(
+                self.dataset_cls(split='train', transform=self.transform),
+                self.train_indices
+            ),
             shuffle=True,
             collate_fn=variable_length_collate,
             batch_size=self.hparams.batch_size,
@@ -188,9 +192,10 @@ class PlAttentionModel(pl.LightningModule):
     def val_dataloader(self):
         """Get validation data loader."""
         return DataLoader(
-            self.dataset_cls(
-                split='validation',
-                transform=self.transform),
+            Subset(
+                self.dataset_cls(split='train', transform=self.transform),
+                self.val_indices
+            ),
             shuffle=False,
             collate_fn=variable_length_collate,
             batch_size=self.hparams.batch_size,
@@ -202,7 +207,7 @@ class PlAttentionModel(pl.LightningModule):
         """Get test data loader."""
         return DataLoader(
             self.dataset_cls(
-                split='test',
+                split='validation',
                 transform=self.transform),
             shuffle=False,
             collate_fn=variable_length_collate,
@@ -247,14 +252,16 @@ def main(hparams, model_cls):
     logger = pl.loggers.TestTubeLogger(
         hparams.log_path, name=hparams.exp_name)
     exp = logger.experiment
-    save_path = os.path.join(
-        exp.get_data_path(exp.name, exp.version),
-        'checkpoints', '{epoch}-{val_physionet2019_score:.2f}'
-    )
+    checkpoint_dir = os.path.join(
+        exp.get_data_path(exp.name, exp.version), 'checkpoints')
+
     model_checkpoint_cb = pl.callbacks.model_checkpoint.ModelCheckpoint(
-        save_path, monitor='val_physionet2019_score', mode='max')
+        os.path.join(checkpoint_dir, '{epoch}-{online_val_physionet2019_score:.2f}'),
+        monitor='online_val_physionet2019_score',
+        mode='max'
+    )
     early_stopping_cb = pl.callbacks.early_stopping.EarlyStopping(
-        monitor='val_physionet2019_score', patience=10, mode='max', strict=True)
+        monitor='online_val_physionet2019_score', patience=10, mode='max', strict=True)
 
     # most basic trainer, uses good defaults
     trainer = pl.Trainer(
@@ -265,6 +272,13 @@ def main(hparams, model_cls):
         gpus=hparams.gpus
     )
     trainer.fit(model)
+    trainer.logger.save()
+    print('Loading model with best physionet score...')
+    checkpoints = os.listdir(checkpoint_dir)
+    assert len(checkpoints) == 1
+    loaded_model = model_cls.load_from_checkpoint(
+        os.path.join(checkpoint_dir, checkpoints[0]))
+    trainer.test(loaded_model)
     trainer.logger.save()
 
 
