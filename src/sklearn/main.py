@@ -118,8 +118,17 @@ def main():
         '--cv_n_jobs', type=int, default=10,
         help='n_jobs for cross-validation'
     )
+    parser.add_argument(
+        '--dask', action='store_true', default=False,
+        help='use dask backend for grid search parallelism'
+    )
+
     args = parser.parse_args()
 
+    if args.dask:
+        from dask.distributed import Client
+        client = Client(n_workers=args.cv_n_jobs, memory_limit='999GB', local_directory='/local0/tmp/dask')
+    
     X_train, X_val, y_train, y_val = load_data_from_input_path(
         args.input_path, args.dataset)
     
@@ -150,7 +159,12 @@ def main():
         n_jobs=args.cv_n_jobs
     )
     start = time()
-    random_search.fit(X_train, y_train)
+    if args.dask:
+        from joblib import Parallel, parallel_backend
+        with parallel_backend('dask'):
+            random_search.fit(X_train, y_train)
+    else:
+        random_search.fit(X_train, y_train)
     elapsed = time() - start
     print(
         "RandomizedSearchCV took %.2f seconds for %d candidates"
