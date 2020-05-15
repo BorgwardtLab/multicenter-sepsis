@@ -321,7 +321,7 @@ class LabelPropagation():
         self.hours_shift = hours_shift
 
     def __call__(self, instance):
-        label = instance['label']
+        label = instance['labels']
         is_case = np.any(label)
         assert not np.any(np.isnan(label))
         if is_case:
@@ -336,7 +336,7 @@ class LabelPropagation():
             # NaNs should stay NaNs
             new_label = np.concatenate(
                 [label[:new_onset], new_onset_segment], axis=0)
-            instance['label'] = new_label
+            instance['labels'] = new_label
         return instance
 
 
