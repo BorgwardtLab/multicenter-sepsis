@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.datasets.data import ComposeTransformations, PositionalEncoding, \
-    to_observation_tuples
+    to_observation_tuples, LabelPropagation
 from sklearn.metrics import (
     average_precision_score, roc_auc_score, balanced_accuracy_score)
 from src.torch.torch_utils import variable_length_collate
@@ -18,11 +18,6 @@ import src.datasets
 
 
 class PlAttentionModel(pl.LightningModule):
-    transform = ComposeTransformations([
-        PositionalEncoding(1, 500, 10),     # apply positional encoding
-        to_observation_tuples               # mask nan with zero add indicators
-    ])
-
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
@@ -47,6 +42,15 @@ class PlAttentionModel(pl.LightningModule):
 
     def forward(self, data, lengths):
         return self.model(data, lengths)
+
+    @property
+    def transform(self):
+        transform = ComposeTransformations([
+            LabelPropagation(-self.hparams.label_propagation),
+            PositionalEncoding(1, 500, 10),     # apply positional encoding
+            to_observation_tuples               # mask nan with zero add indicators
+        ])
+        return transform
 
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
@@ -120,7 +124,8 @@ class PlAttentionModel(pl.LightningModule):
                 predictions.append(pred[selection])
                 scores.append(score[selection][:, 1])
 
-        physionet_score = physionet2019_utility(labels, predictions)
+        physionet_score = physionet2019_utility(
+            labels, predictions, shift_labels=self.hparams.label_propagation)
         labels = np.concatenate(labels, axis=0)
         predictions = np.concatenate(predictions, axis=0)
         scores = np.concatenate(scores, axis=0)
@@ -213,9 +218,10 @@ class PlAttentionModel(pl.LightningModule):
             '--dataset', type=str, choices=src.datasets.__all__,
             default='PreprocessedDemoDataset'
         )
-        parser.add_argument('--learning_rate', default=0.01, type=float)
-        parser.add_argument('--batch_size', default=32, type=int)
+        parser.add_argument('--learning-rate', default=0.01, type=float)
+        parser.add_argument('--batch-size', default=32, type=int)
         parser.add_argument('--dropout', default=0.1, type=float)
+        parser.add_argument('--label-propagation', default=6, type=int)
 
         # MODEL specific
         parser.add_argument('--d-model', type=int, default=64)
@@ -264,11 +270,11 @@ def main(hparams, model_cls):
 
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
-    parser.add_argument('--log_path', default='logs')
-    parser.add_argument('--exp_name', default='train_attention_model')
+    parser.add_argument('--log-path', default='logs')
+    parser.add_argument('--exp-name', default='train_attention_model')
     parser.add_argument('--model', choices=['AttentionModel'], type=str,
                         default='AttentionModel')
-    parser.add_argument('--max_epochs', default=100, type=int)
+    parser.add_argument('--max-epochs', default=100, type=int)
     parser.add_argument(
         '--gpus', type=int, nargs='+', default=None)
     # figure out which model to use

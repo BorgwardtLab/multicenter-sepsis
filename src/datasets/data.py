@@ -316,6 +316,30 @@ def to_observation_tuples(instance_dict):
     return instance_dict
 
 
+class LabelPropagation():
+    def __init__(self, hours_shift):
+        self.hours_shift = hours_shift
+
+    def __call__(self, instance):
+        label = instance['label']
+        is_case = np.any(label)
+        assert not np.any(np.isnan(label))
+        if is_case:
+            onset = np.argmax(label)
+            # Check if label is a onset
+            if not np.all(label[onset:]):
+                raise ValueError('Did not get an onset label.')
+
+            new_onset = onset + self.hours_shift
+            new_onset = min(max(0, new_onset), len(label))
+            new_onset_segment = np.ones(len(label) - new_onset)
+            # NaNs should stay NaNs
+            new_label = np.concatenate(
+                [label[:new_onset], new_onset_segment], axis=0)
+            instance['label'] = new_label
+        return instance
+
+
 # pylint: disable=R0903
 class ComposeTransformations():
     """Chain multiple transformations together."""

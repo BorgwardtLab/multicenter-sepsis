@@ -16,8 +16,6 @@ def nanany(array: np.ndarray):
     return np.any(array[~np.isnan(array)])
 
 
-
-
 class NotAlignedError(Exception):
     """Error for non-aligned predictions and labels."""
 
