@@ -22,6 +22,7 @@ pytest = "*"
 dask = {extras = ["dataframe"],version = "*"}
 distributed = "*"
 bokeh = "*"
+dask-ml = "*"
 
 [requires]
 python_version = "3.7"
