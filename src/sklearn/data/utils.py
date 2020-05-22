@@ -33,9 +33,9 @@ def index_check(full_data):
         full_data.set_index(['id', 'time'], inplace=True) 
     return full_data
 
-def load_data(path='datasets/physionet2019/data/sklearn/processed', label='SepsisLabel'):
+def load_data(path='datasets/physionet2019/data/sklearn/processed', label='SepsisLabel', index='multi'):
     """ 
-    Load preprocessed Data in sklearn format from pickle
+    Load preprocessed Data in sklearn format from pickle, depending on index type reformat properly.
     """
     splits = ['train', 'validation'] 
     data = defaultdict()
@@ -44,7 +44,13 @@ def load_data(path='datasets/physionet2019/data/sklearn/processed', label='Sepsi
     for split, filename in zip(splits, files):
         filepath = os.path.join(path, filename + '.pkl')
         full_data = load_pickle(filepath)
-        full_data = index_check(full_data)        
+        if index == 'multi':
+            full_data = index_check(full_data)
+            print('Multi-index check finished')
+        elif index == 'single':
+            print('Single-index is used')
+        else:
+            raise NotImplementedError(f'{index} not among valid index types [multi, single]')        
         y = full_data[label]
         X = full_data.drop(label, axis=1)
         data[f'X_{split}'] = X

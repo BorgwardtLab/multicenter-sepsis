@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import RandomizedSearchCV
+
 from sklearn.metrics import SCORERS
 from sklearn.metrics._scorer import _cached_call
 from sklearn.externals import joblib
@@ -17,15 +17,15 @@ from src.sklearn.data.utils import load_data
 from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 
-def load_data_from_input_path(input_path, dataset_name):
-    """Load the data according to dataset_name.
+def load_data_from_input_path(input_path, dataset_name, index):
+    """Load the data according to dataset_name, and index-handling
 
     Returns:
         X_train, X_test, y_train, y_test similar to sklearn train_test_split
 
     """
     input_path = os.path.join('datasets', dataset_name, input_path)
-    data = load_data(path=os.path.join(input_path, 'processed'))
+    data = load_data(path=os.path.join(input_path, 'processed'), index=index)
     return (
         data['X_train'],
         data['X_validation'],
@@ -40,7 +40,7 @@ def get_pipeline_and_grid(method_name, clf_params):
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
         import lightgbm as lgb
-        parameters = {'n_jobs': 10}
+        parameters = {'n_jobs': 1}
         parameters.update(clf_params)
         est = lgb.LGBMClassifier(**parameters)
         pipe = Pipeline(steps=[('est', est)])
@@ -122,6 +122,10 @@ def main():
         '--dask', action='store_true', default=False,
         help='use dask backend for grid search parallelism'
     )
+    parser.add_argument(
+        '--index', default='multi',
+        help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
+    )
 
     args = parser.parse_args()
 
@@ -130,29 +134,35 @@ def main():
         client = Client(n_workers=args.cv_n_jobs, memory_limit='999GB', local_directory='/local0/tmp/dask')
     
     X_train, X_val, y_train, y_val = load_data_from_input_path(
-        args.input_path, args.dataset)
+        args.input_path, args.dataset, args.index)
     
     if args.label_propagation != 0:
         # Label shift is normally assumed to be in the direction of the future.
         # For label propagation we should thus take the negative of the
         # provided label propagation parameter
+        start = time()
         y_train = apply_label_shift(y_train, -args.label_propagation)
         y_val = apply_label_shift(y_val, -args.label_propagation)
-
+        elapsed = time() - start
+        print(f'Label shift took {elapsed:.2f} seconds')
     pipeline, hparam_grid = get_pipeline_and_grid(args.method, args.clf_params)
 
     scores = {
-        'physionet_utility': get_physionet2019_scorer(args.label_propagation),
+        #'physionet_utility': get_physionet2019_scorer(args.label_propagation),
         'roc_auc': SCORERS['roc_auc'],
         'average_precision': SCORERS['average_precision'],
         'balanced_accuracy': SCORERS['balanced_accuracy'],
     }
-
+    if args.dask:
+        from dask_ml.model_selection import RandomizedSearchCV
+    else:
+        from sklearn.model_selection import RandomizedSearchCV
+        
     random_search = RandomizedSearchCV(
         pipeline,
         param_distributions=hparam_grid,
         scoring=scores,
-        refit='physionet_utility',
+        refit='average_precision', #'physionet_utility',
         n_iter=args.n_iter_search,
         cv=StratifiedPatientKFold(n_splits=5),
         iid=False,
@@ -160,9 +170,12 @@ def main():
     )
     start = time()
     if args.dask:
-        from joblib import Parallel, parallel_backend
-        with parallel_backend('dask'):
-            random_search.fit(X_train, y_train)
+        #dask dataframe:
+        import dask.dataframe as dd
+        X_train = dd.from_pandas(X_train, npartitions=1000, sort=True)
+        y_train = dd.from_pandas(y_train, npartitions=1000, sort=True)
+        random_search.fit(X_train, y_train)
+        # TODO:try out dask df here too 
     else:
         random_search.fit(X_train, y_train)
     elapsed = time() - start
