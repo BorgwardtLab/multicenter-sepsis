@@ -40,7 +40,7 @@ def get_pipeline_and_grid(method_name, clf_params):
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
         import lightgbm as lgb
-        parameters = {'n_jobs': 1}
+        parameters = {'n_jobs': 20}
         parameters.update(clf_params)
         est = lgb.LGBMClassifier(**parameters)
         pipe = Pipeline(steps=[('est', est)])
