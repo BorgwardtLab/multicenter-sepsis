@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from src.torch.models.base_model import BaseModel
+from src.torch.torch_utils import PositionalEncoding, to_observation_tuples
 
 
 def get_subsequent_mask(seq):
@@ -269,10 +271,10 @@ class AttentionLayer(nn.Module):
         return out
 
 
-class AttentionModel(nn.Module):
+class AttentionModel(BaseModel):
     """Sequence to sequence model based on MultiHeadAttention."""
 
-    def __init__(self, d_in, d_model, n_layers, n_heads, qkv_dim, dropout):
+    def __init__(self, hparams):
         """AttentionModel.
 
         Args:
@@ -282,13 +284,29 @@ class AttentionModel(nn.Module):
             n_heads: Number of attention heads
             qkd_v: Dimensionality of the q, k and v vectors
         """
-        super().__init__()
+        super().__init__(hparams)
+        d_model = hparams.d_model
+        n_layers = hparams.n_layers
+        n_heads = hparams.n_heads
+        qkv_dim = hparams.qkv_dim
+        dropout = hparams.dropout
+        d_in = self._get_input_dim()
         self.layers = nn.ModuleList(
             [PositionwiseLinear(d_in, d_model)]
             + [AttentionLayer(d_model, n_heads, qkv_dim, dropout=dropout)
                for i in range(n_layers)]
-            + [PositionwiseLinear(d_model, 2)]
+            + [PositionwiseLinear(d_model, 1)]
         )
+
+    @property
+    def transforms(self):
+        parent_transforms = super().transforms
+        parent_transforms.extend([
+            PositionalEncoding(1, 500, 10),  # apply positional encoding
+            to_observation_tuples            # mask nan with zero add indicator
+        ])
+        return parent_transforms
+
 
     def forward(self, x, lengths):
         """Apply attention model to input x."""
@@ -298,19 +316,25 @@ class AttentionModel(nn.Module):
                 out = layer(out, lengths)
             else:
                 out = layer(out)
-        return F.log_softmax(out, dim=-1)
+        return out
+
+    def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, opt_closure):
+        n_warmup = 1000.
+        if self.trainer.global_step < n_warmup:
+            lr_scale = min(1., float(self.trainer.global_step + 1) / n_warmup)
+            for pg in optimizer.param_groups:
+                pg['lr'] = lr_scale * self.hparams.learning_rate
+
+        optimizer.step()
+        optimizer.zero_grad()
 
     @classmethod
-    def set_hyperparams(cls, kwargs={}):
-        if kwargs['hypersearch']:
-            raise NotImplementedError('Hyperparameter search not yet implemented!')
-        else:
-            defaults = {
-                'd_model': 64,
-                'n_layers': 1,
-                'n_heads': 8,
-                'qkv_dim': 32
-            }
-            kwargs.update(defaults)
-            kwargs.pop('hypersearch')
-            return cls(**kwargs)
+    def add_model_specific_args(cls, parent_parser):
+        parser = super().add_model_specific_args(parent_parser)
+        # MODEL specific
+        parser.add_argument('--d-model', type=int, default=64)
+        parser.add_argument('--n-layers', type=int, default=1)
+        parser.add_argument('--n-heads', type=int, default=8)
+        parser.add_argument('--qkv-dim', type=int, default=32)
+        parser.add_argument('--dropout', default=0.1, type=float)
+        return parser
