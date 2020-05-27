@@ -23,6 +23,9 @@ dask = {extras = ["dataframe"],version = "*"}
 distributed = "*"
 bokeh = "*"
 dask-ml = "*"
+dask-lightgbm = "*"
+dask-xgboost = "*"
+pyarrow = "*"
 
 [requires]
 python_version = "3.7"
