@@ -41,7 +41,7 @@ def get_pipeline_and_grid(method_name, clf_params):
     if method_name == 'lgbm':
         import lightgbm as lgb
         #from dask_ml.xgboost import XGBClassifier #problematic as this predict method requires additional client as argument!
-        parameters = {'n_jobs': 5}
+        parameters = {'n_jobs': -1}
         parameters.update(clf_params)
         est = lgb.LGBMClassifier(**parameters)
 
@@ -73,8 +73,8 @@ def get_pipeline_and_grid(method_name, clf_params):
         }
         return pipe, param_dist        
     elif method_name == 'lr':
-        from dask_ml.linear_model import LogisticRegression as LR
-        #from sklearn.linear_model import LogisticRegression as LR
+        #from dask_ml.linear_model import LogisticRegression as LR
+        from sklearn.linear_model import LogisticRegression as LR
         parameters = {'n_jobs': 10}
         parameters.update(clf_params)
         est = LR(**parameters)
@@ -83,8 +83,8 @@ def get_pipeline_and_grid(method_name, clf_params):
         param_dist = {
             'est__penalty': ['l2','none'],
             'est__C': np.logspace(-2,2,50),
-            'est__solver': ['gradient_descent','admm'] 
-            #'est__solver': ['sag', 'saga'], 
+            #'est__solver': ['gradient_descent','admm'] 
+            'est__solver': ['sag', 'saga'], 
         }
         return pipe, param_dist
     else:
@@ -174,31 +174,31 @@ def main():
         'average_precision': SCORERS['average_precision'],
         'balanced_accuracy': SCORERS['balanced_accuracy'],
     }
-    #if args.dask:
-    #    from dask_ml.model_selection import RandomizedSearchCV
-    #    random_search = RandomizedSearchCV(
-    #        pipeline,
-    #        param_distributions=hparam_grid,
-    #        scoring=scores,
-    #        refit='average_precision', #'physionet_utility',
-    #        n_iter=args.n_iter_search,
-    #        cv=StratifiedPatientKFold(n_splits=5),
-    #        iid=False,
-    #        n_jobs=args.cv_n_jobs,
-    #        scheduler=client
-    #    )
-    #else:
-    from sklearn.model_selection import RandomizedSearchCV
-    random_search = RandomizedSearchCV(
-        pipeline,
-        param_distributions=hparam_grid,
-        scoring=scores,
-        refit='average_precision', #'physionet_utility',
-        n_iter=args.n_iter_search,
-        cv=StratifiedPatientKFold(n_splits=5),
-        iid=False,
-        n_jobs=args.cv_n_jobs
-    )
+    if args.dask:
+        from dask_ml.model_selection import RandomizedSearchCV
+        random_search = RandomizedSearchCV(
+            pipeline,
+            param_distributions=hparam_grid,
+            scoring=scores,
+            refit='average_precision', #'physionet_utility',
+            n_iter=args.n_iter_search,
+            cv=StratifiedPatientKFold(n_splits=5),
+            iid=False,
+            n_jobs=args.cv_n_jobs,
+            scheduler=client
+        )
+    else:
+        from sklearn.model_selection import RandomizedSearchCV
+        random_search = RandomizedSearchCV(
+            pipeline,
+            param_distributions=hparam_grid,
+            scoring=scores,
+            refit='average_precision', #'physionet_utility',
+            n_iter=args.n_iter_search,
+            cv=StratifiedPatientKFold(n_splits=5),
+            iid=False,
+            n_jobs=args.cv_n_jobs
+        )
     start = time()
     if args.dask:
         #dask dataframe:
