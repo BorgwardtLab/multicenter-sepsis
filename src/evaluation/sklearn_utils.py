@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import dask.dataframe as dd
 from sklearn.model_selection import StratifiedKFold
-
+from IPython import embed
 
 def nanany(array: np.ndarray):
     """Any operation which ignores NaNs.
@@ -185,11 +185,11 @@ class StratifiedPatientKFold(StratifiedKFold):
             unique_patient_ids = patient_ids.unique()
             y = y.compute()
             patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
-            from IPython import embed; embed()
         else: 
             patient_ids = X.index.get_level_values('id')
             unique_patient_ids = patient_ids.unique()
             patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
+        print('Using StratifiedPatientKFold!')
         for train, test in super().split(unique_patient_ids, patient_labels):
             train_patients = unique_patient_ids[train]
             test_patients = unique_patient_ids[test]
