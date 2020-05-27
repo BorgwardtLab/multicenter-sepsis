@@ -1,7 +1,7 @@
 """Module containing wrappers for scikit-learn online predictors."""
 import pandas as pd
 import numpy as np
-
+import dask.dataframe as dd
 from sklearn.model_selection import StratifiedKFold
 
 
@@ -178,9 +178,18 @@ class StratifiedPatientKFold(StratifiedKFold):
 
     def split(self, X, y, groups=None):
         """Split X and y into stratified folds based on patient ids."""
-        patient_ids = X.index.get_level_values('id')
-        unique_patient_ids = patient_ids.unique()
-        patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
+        #determine if data is a dask dataframe:
+        if type(X) == dd.DataFrame:
+            #using dask:
+            patient_ids = X.index.compute().get_level_values('id')
+            unique_patient_ids = patient_ids.unique()
+            y = y.compute()
+            patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
+            from IPython import embed; embed()
+        else: 
+            patient_ids = X.index.get_level_values('id')
+            unique_patient_ids = patient_ids.unique()
+            patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
         for train, test in super().split(unique_patient_ids, patient_labels):
             train_patients = unique_patient_ids[train]
             test_patients = unique_patient_ids[test]
