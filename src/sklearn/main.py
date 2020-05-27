@@ -40,11 +40,13 @@ def get_pipeline_and_grid(method_name, clf_params):
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
         import lightgbm as lgb
-        parameters = {'n_jobs': 20}
+        #from dask_ml.xgboost import XGBClassifier #problematic as this predict method requires additional client as argument!
+        parameters = {'n_jobs': 5}
         parameters.update(clf_params)
         est = lgb.LGBMClassifier(**parameters)
+
         pipe = Pipeline(steps=[('est', est)])
-        # hyper-parameter grid:
+        #hyper-parameter grid lgbm:
         param_dist = {
             'est__n_estimators': [50, 100, 300, 500, 1000],
             'est__boosting_type': ['gbdt', 'dart'],
@@ -53,8 +55,26 @@ def get_pipeline_and_grid(method_name, clf_params):
             'est__scale_pos_weight': [1, 10, 20, 50, 100]
         }
         return pipe, param_dist
+    elif method_name == 'xgb':
+        from dask_ml.xgboost import XGBClassifier
+        parameters = {'n_jobs': 30}
+        parameters.update(clf_params)
+        est = XGBClassifier(**parameters)
+
+        pipe = Pipeline(steps=[('est', est)])
+        
+        param_dist = {
+            'est__n_estimators': [50, 100, 300, 500, 1000],
+            'est__booster': ['gbtree', 'dart'],
+            'est__learning_rate': [0.001, 0.01, 0.1, 0.5],
+            'est__subsampling': [0.3,0.5,0.9,1],
+            'est__scale_pos_weight': [1, 10, 20, 50, 100],
+            'est__grow_policy': ['depthwise', 'lossguide']
+        }
+        return pipe, param_dist        
     elif method_name == 'lr':
-        from sklearn.linear_model import LogisticRegression as LR
+        from dask_ml.linear_model import LogisticRegression as LR
+        #from sklearn.linear_model import LogisticRegression as LR
         parameters = {'n_jobs': 10}
         parameters.update(clf_params)
         est = LR(**parameters)
@@ -63,7 +83,8 @@ def get_pipeline_and_grid(method_name, clf_params):
         param_dist = {
             'est__penalty': ['l2','none'],
             'est__C': np.logspace(-2,2,50),
-            'est__solver': ['sag', 'saga'], 
+            'est__solver': ['gradient_descent','admm'] 
+            #'est__solver': ['sag', 'saga'], 
         }
         return pipe, param_dist
     else:
@@ -153,11 +174,21 @@ def main():
         'average_precision': SCORERS['average_precision'],
         'balanced_accuracy': SCORERS['balanced_accuracy'],
     }
-    if args.dask:
-        from dask_ml.model_selection import RandomizedSearchCV
-    else:
-        from sklearn.model_selection import RandomizedSearchCV
-        
+    #if args.dask:
+    #    from dask_ml.model_selection import RandomizedSearchCV
+    #    random_search = RandomizedSearchCV(
+    #        pipeline,
+    #        param_distributions=hparam_grid,
+    #        scoring=scores,
+    #        refit='average_precision', #'physionet_utility',
+    #        n_iter=args.n_iter_search,
+    #        cv=StratifiedPatientKFold(n_splits=5),
+    #        iid=False,
+    #        n_jobs=args.cv_n_jobs,
+    #        scheduler=client
+    #    )
+    #else:
+    from sklearn.model_selection import RandomizedSearchCV
     random_search = RandomizedSearchCV(
         pipeline,
         param_distributions=hparam_grid,
