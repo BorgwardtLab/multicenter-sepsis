@@ -30,6 +30,10 @@ For additional arguments, use ```--help```.
  
 
 
+## Training a LGBM on e-ICU:  
+```>python -m src.sklearn.main --result_path=internal_validation/ --dataset eicu --method=lgbm --n_iter_search=100 --cv_n_jobs=1 ```
+
+
 ## R-code:
 To set up a dataset, run the Rscript in `r/bin` for example as
 
