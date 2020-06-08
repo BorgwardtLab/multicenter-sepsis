@@ -40,13 +40,11 @@ def get_pipeline_and_grid(method_name, clf_params):
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
         import lightgbm as lgb
-        #from dask_ml.xgboost import XGBClassifier #problematic as this predict method requires additional client as argument!
         parameters = {'n_jobs': -1}
         parameters.update(clf_params)
         est = lgb.LGBMClassifier(**parameters)
 
         pipe = Pipeline(steps=[('est', est)])
-        #hyper-parameter grid lgbm:
         param_dist = {
             'est__n_estimators': [50, 100, 300, 500, 1000],
             'est__boosting_type': ['gbdt', 'dart'],
@@ -83,7 +81,7 @@ def get_pipeline_and_grid(method_name, clf_params):
         param_dist = {
             'est__penalty': ['l2','none'],
             'est__C': np.logspace(-2,2,50),
-            #'est__solver': ['gradient_descent','admm'] 
+            #'est__solver': ['gradient_descent','admm'] #when using dask LR 
             'est__solver': ['sag', 'saga'], 
         }
         return pipe, param_dist
@@ -152,7 +150,6 @@ def main():
 
     if args.dask:
         from dask.distributed import Client
-        #client = Client(n_workers=args.cv_n_jobs, memory_limit='999GB', local_directory='/local0/tmp/dask')
         client = Client(n_workers=args.cv_n_jobs, memory_limit='999GB', local_directory='/local0/tmp/dask')
  
     X_train, X_val, y_train, y_val = load_data_from_input_path(
@@ -198,7 +195,7 @@ def main():
             pipeline,
             param_distributions=hparam_grid,
             scoring=scores,
-            refit='average_precision', #'physionet_utility',
+            refit='physionet_utility', 
             n_iter=args.n_iter_search,
             cv=StratifiedPatientKFold(n_splits=5),
             iid=False,
