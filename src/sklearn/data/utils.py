@@ -33,20 +33,30 @@ def index_check(full_data):
         full_data.set_index(['id', 'time'], inplace=True) 
     return full_data
 
-def load_data(path='datasets/physionet2019/data/sklearn/processed', label='SepsisLabel'):
+def load_data(path='datasets/physionet2019/data/sklearn/processed', label='SepsisLabel', index='multi'):
     """ 
-    Load preprocessed Data in sklearn format from pickle
+    Load preprocessed Data in sklearn format from pickle, depending on index type reformat properly.
     """
-    splits = ['train', 'validation'] 
+    splits = ['train', 'validation']
+    drop_col = 'Gender_Other' #only 5 patients in eicu have this, dropping this col as its still encoded in male female both zero. 
     data = defaultdict()
     files = ['X_features_' + split for split in splits]
     
     for split, filename in zip(splits, files):
         filepath = os.path.join(path, filename + '.pkl')
         full_data = load_pickle(filepath)
-        full_data = index_check(full_data)        
+        if index == 'multi':
+            full_data = index_check(full_data)
+            print('Multi-index check finished')
+        elif index == 'single':
+            print('Single-index is used')
+        else:
+            raise NotImplementedError(f'{index} not among valid index types [multi, single]')        
         y = full_data[label]
         X = full_data.drop(label, axis=1)
+        if drop_col in X.columns:
+            X = X.drop(columns=drop_col, axis=1)
+            print(f'Shape after dropping {drop_col}: {X.shape}')    
         data[f'X_{split}'] = X
         data[f'y_{split}'] = y
     return data

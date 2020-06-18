@@ -8,24 +8,24 @@ import numpy as np
 import pandas as pd
 
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import RandomizedSearchCV
+
 from sklearn.metrics import SCORERS
 from sklearn.metrics._scorer import _cached_call
 from sklearn.externals import joblib
 
-from src.sklearn.data.utils import load_data
+from src.sklearn.data.utils import load_data, load_pickle, save_pickle
 from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 
-def load_data_from_input_path(input_path, dataset_name):
-    """Load the data according to dataset_name.
+def load_data_from_input_path(input_path, dataset_name, index):
+    """Load the data according to dataset_name, and index-handling
 
     Returns:
         X_train, X_test, y_train, y_test similar to sklearn train_test_split
 
     """
     input_path = os.path.join('datasets', dataset_name, input_path)
-    data = load_data(path=os.path.join(input_path, 'processed'))
+    data = load_data(path=os.path.join(input_path, 'processed'), index=index)
     return (
         data['X_train'],
         data['X_validation'],
@@ -40,11 +40,11 @@ def get_pipeline_and_grid(method_name, clf_params):
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
         import lightgbm as lgb
-        parameters = {'n_jobs': 10}
+        parameters = {'n_jobs': -1}
         parameters.update(clf_params)
         est = lgb.LGBMClassifier(**parameters)
+
         pipe = Pipeline(steps=[('est', est)])
-        # hyper-parameter grid:
         param_dist = {
             'est__n_estimators': [50, 100, 300, 500, 1000],
             'est__boosting_type': ['gbdt', 'dart'],
@@ -53,7 +53,25 @@ def get_pipeline_and_grid(method_name, clf_params):
             'est__scale_pos_weight': [1, 10, 20, 50, 100]
         }
         return pipe, param_dist
+    elif method_name == 'xgb':
+        from dask_ml.xgboost import XGBClassifier
+        parameters = {'n_jobs': 30}
+        parameters.update(clf_params)
+        est = XGBClassifier(**parameters)
+
+        pipe = Pipeline(steps=[('est', est)])
+        
+        param_dist = {
+            'est__n_estimators': [50, 100, 300, 500, 1000],
+            'est__booster': ['gbtree', 'dart'],
+            'est__learning_rate': [0.001, 0.01, 0.1, 0.5],
+            'est__subsampling': [0.3,0.5,0.9,1],
+            'est__scale_pos_weight': [1, 10, 20, 50, 100],
+            'est__grow_policy': ['depthwise', 'lossguide']
+        }
+        return pipe, param_dist        
     elif method_name == 'lr':
+        #from dask_ml.linear_model import LogisticRegression as LR
         from sklearn.linear_model import LogisticRegression as LR
         parameters = {'n_jobs': 10}
         parameters.update(clf_params)
@@ -63,6 +81,7 @@ def get_pipeline_and_grid(method_name, clf_params):
         param_dist = {
             'est__penalty': ['l2','none'],
             'est__C': np.logspace(-2,2,50),
+            #'est__solver': ['gradient_descent','admm'] #when using dask LR 
             'est__solver': ['sag', 'saga'], 
         }
         return pipe, param_dist
@@ -100,8 +119,8 @@ def main():
         help='By how many hours to shift label into the past. Default: 6'
     )
     parser.add_argument(
-        '--overwrite', action='store_true', default=True,
-        help='<Currently inactive> To overwrite existing preprocessed files'
+        '--overwrite', action='store_true', default=False,
+        help='<Currently inactive> To overwrite existing cached data'
     )
     parser.add_argument(
         '--method', default='lgbm', type=str,
@@ -122,22 +141,45 @@ def main():
         '--dask', action='store_true', default=False,
         help='use dask backend for grid search parallelism'
     )
+    parser.add_argument(
+        '--index', default='multi',
+        help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
+    )
 
     args = parser.parse_args()
 
     if args.dask:
         from dask.distributed import Client
         client = Client(n_workers=args.cv_n_jobs, memory_limit='999GB', local_directory='/local0/tmp/dask')
-    
+ 
     X_train, X_val, y_train, y_val = load_data_from_input_path(
-        args.input_path, args.dataset)
+        args.input_path, args.dataset, args.index)
     
     if args.label_propagation != 0:
         # Label shift is normally assumed to be in the direction of the future.
         # For label propagation we should thus take the negative of the
         # provided label propagation parameter
-        y_train = apply_label_shift(y_train, -args.label_propagation)
-        y_val = apply_label_shift(y_val, -args.label_propagation)
+        cached_path = os.path.join('dataset', args.dataset, 'data', 'cached')
+        cached_file = os.path.join(cached_path, f'y_shifted_{args.label_propagation}'+'_{}.pkl')
+        cached_train = cached_file.format('train')
+        cached_validation = cached_file.format('validation')
+  
+        if os.path.exists(cached_train) and not args.overwrite:
+            # read label-shifted data from json:
+            print('Loading cached labels shifted by {args.label_propagation} hours')
+            y_train = load_pickle(cached_train)
+            y_val = load_pickle(cached_validation)
+        else:
+            # do label-shifting here: 
+            start = time()
+            y_train = apply_label_shift(y_train, -args.label_propagation)
+            y_val = apply_label_shift(y_val, -args.label_propagation)
+            elapsed = time() - start
+            print(f'Label shift took {elapsed:.2f} seconds')
+            #and cache data to quickly reuse from now:
+            print('Caching shifted labels..')
+            save_pickle(y_train, cached_train) #save pickle also creates folder if needed 
+            save_pickle(y_val, cached_validation)
 
     pipeline, hparam_grid = get_pipeline_and_grid(args.method, args.clf_params)
 
@@ -147,22 +189,44 @@ def main():
         'average_precision': SCORERS['average_precision'],
         'balanced_accuracy': SCORERS['balanced_accuracy'],
     }
-
-    random_search = RandomizedSearchCV(
-        pipeline,
-        param_distributions=hparam_grid,
-        scoring=scores,
-        refit='physionet_utility',
-        n_iter=args.n_iter_search,
-        cv=StratifiedPatientKFold(n_splits=5),
-        iid=False,
-        n_jobs=args.cv_n_jobs
-    )
+    if args.dask:
+        from dask_ml.model_selection import RandomizedSearchCV
+        random_search = RandomizedSearchCV(
+            pipeline,
+            param_distributions=hparam_grid,
+            scoring=scores,
+            refit='physionet_utility', 
+            n_iter=args.n_iter_search,
+            cv=StratifiedPatientKFold(n_splits=5),
+            iid=False,
+            n_jobs=args.cv_n_jobs,
+            scheduler=client
+        )
+        scores = {
+            'roc_auc': SCORERS['roc_auc'],
+            'average_precision': SCORERS['average_precision'],
+            'balanced_accuracy': SCORERS['balanced_accuracy'],
+        }
+    else:
+        from sklearn.model_selection import RandomizedSearchCV
+        random_search = RandomizedSearchCV(
+            pipeline,
+            param_distributions=hparam_grid,
+            scoring=scores,
+            refit='physionet_utility', #'average_precision'
+            n_iter=args.n_iter_search,
+            cv=StratifiedPatientKFold(n_splits=5),
+            iid=False,
+            n_jobs=args.cv_n_jobs
+        )
     start = time()
     if args.dask:
-        from joblib import Parallel, parallel_backend
-        with parallel_backend('dask'):
-            random_search.fit(X_train, y_train)
+        #dask dataframe:
+        import dask.dataframe as dd
+        X_train = dd.from_pandas(X_train, npartitions=1000, sort=True)
+        y_train = dd.from_pandas(y_train, npartitions=1000, sort=True)
+        random_search.fit(X_train, y_train)
+        # TODO:try out dask df here too 
     else:
         random_search.fit(X_train, y_train)
     elapsed = time() - start
