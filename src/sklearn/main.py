@@ -159,7 +159,7 @@ def main():
         # Label shift is normally assumed to be in the direction of the future.
         # For label propagation we should thus take the negative of the
         # provided label propagation parameter
-        cached_path = os.path.join('dataset', args.dataset, 'data', 'cached')
+        cached_path = os.path.join('datasets', args.dataset, 'data', 'cached')
         cached_file = os.path.join(cached_path, f'y_shifted_{args.label_propagation}'+'_{}.pkl')
         cached_train = cached_file.format('train')
         cached_validation = cached_file.format('validation')
