@@ -90,7 +90,6 @@ class Physionet2019Dataset(Dataset):
         times = instance_data[cls.TIME_COLUMN].values
         ts_data = instance_data[cls.TS_COLUMNS].values
         labels = instance_data[cls.LABEL_COLUMN].values
-
         return {
             # Statics are repeated, only take first entry
             'statics': static_variables[0],
@@ -206,7 +205,7 @@ class PreprocessedDataset(Dataset):
         return {
             'times': time,
             'ts': ts_data,
-            'labels': labels
+            'labels': labels.astype(float)
         }
 
     def __getitem__(self, idx):
