@@ -1,11 +1,7 @@
 """Training routines for models."""
 from argparse import ArgumentParser, Namespace
 import os
-import numpy as np
 import pytorch_lightning as pl
-import torch
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, Subset
 
 import src.torch.models
 
