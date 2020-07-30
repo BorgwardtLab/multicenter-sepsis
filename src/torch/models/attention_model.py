@@ -332,9 +332,24 @@ class AttentionModel(BaseModel):
     def add_model_specific_args(cls, parent_parser):
         parser = super().add_model_specific_args(parent_parser)
         # MODEL specific
-        parser.add_argument('--d-model', type=int, default=64)
-        parser.add_argument('--n-layers', type=int, default=1)
-        parser.add_argument('--n-heads', type=int, default=8)
-        parser.add_argument('--qkv-dim', type=int, default=32)
-        parser.add_argument('--dropout', default=0.1, type=float)
+        parser.opt_list(
+            '--d-model', type=int, default=64,
+            tunable=True, options=[64, 128, 256, 512]
+        )
+        parser.opt_list(
+            '--n-layers', type=int, default=1,
+            tunable=True, options=[1, 2, 3, 4, 5]
+        )
+        parser.opt_list(
+            '--n-heads', type=int, default=8,
+            tunable=True, options=[4, 8, 16, 32]
+        )
+        parser.opt_list(
+            '--qkv-dim', type=int, default=32,
+            tunable=True, options=[32, 64, 128]
+        )
+        parser.opt_list(
+            '--dropout', default=0.1, type=float,
+            tunable=True, options=[0., 0.1, 0.2, 0.3, 0.4]
+        )
         return parser

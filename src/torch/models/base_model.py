@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 
 from sklearn.metrics import (
     average_precision_score, roc_auc_score, balanced_accuracy_score)
+from test_tube import HyperOptArgumentParser
 
 import src.datasets
 from src.evaluation import physionet2019_utility
@@ -192,14 +193,21 @@ class BaseModel(pl.LightningModule):
     @classmethod
     def add_model_specific_args(cls, parent_parser):
         """Specify the hyperparams."""
-        parser = ArgumentParser(parents=[parent_parser])
+        parser = HyperOptArgumentParser(
+            strategy='random_search', parents=[parent_parser])
         # training specific
         parser.add_argument(
             '--dataset', type=str, choices=src.datasets.__all__,
             default='PreprocessedDemoDataset'
         )
-        parser.add_argument('--learning-rate', default=0.01, type=float)
-        parser.add_argument('--batch-size', default=32, type=int)
+        parser.opt_range(
+            '--learning-rate', default=0.01, type=float,
+            tunable=True, log_base=10., low=0.0001, high=0.01
+        )
+        parser.opt_list(
+            '--batch-size', default=32, type=int,
+            options=[16, 32, 64, 128, 256]
+        )
         parser.add_argument('--label-propagation', default=6, type=int)
         parser.add_argument('--pos-weight', type=float, default=50.)
         return parser

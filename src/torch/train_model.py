@@ -9,7 +9,10 @@ import src.torch.models
 def namespace_without_none(namespace):
     new_namespace = Namespace()
     for key, value in vars(namespace).items():
-        if value is not None and value != [] and type(value) != type:
+        if value is not None and type(value) != type:
+            if hasattr(value, '__len__'):
+                if len(value) == 0:
+                    continue
             setattr(new_namespace, key, value)
     return new_namespace
 
@@ -60,6 +63,7 @@ if __name__ == '__main__':
                         default='AttentionModel')
     parser.add_argument('--max-epochs', default=100, type=int)
     parser.add_argument('--gpus', type=int, nargs='+', default=None)
+    parser.add_argument('--hyperparam-draws', default=0, type=int)
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
 
@@ -68,4 +72,9 @@ if __name__ == '__main__':
 
     parser = model_cls.add_model_specific_args(parser)
     hparams = parser.parse_args()
-    main(hparams, model_cls)
+    if hparams.hyperparam_draws > 0:
+        for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
+            print(hyperparam_draw)
+            main(hyperparam_draw, model_cls)
+    else:
+        main(hparams, model_cls)
