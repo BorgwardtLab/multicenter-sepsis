@@ -62,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', choices=src.torch.models.__all__, type=str,
                         default='AttentionModel')
     parser.add_argument('--max-epochs', default=100, type=int)
-    parser.add_argument('--gpus', type=int, nargs='+', default=None)
+    parser.add_argument('--gpus', type=int, default=None)
     parser.add_argument('--hyperparam-draws', default=0, type=int)
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
