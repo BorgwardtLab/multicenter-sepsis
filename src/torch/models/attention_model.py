@@ -12,7 +12,7 @@ def get_subsequent_mask(seq):
     ''' For masking out the subsequent info. '''
     sz_b, len_s, n_features = seq.size()
     subsequent_mask = (1 - torch.triu(
-        torch.ones((1, len_s, len_s), device=seq.device), diagonal=1)).bool()
+        torch.ones((len_s, len_s), device=seq.device), diagonal=1)).bool()
     return subsequent_mask
 
 
@@ -187,6 +187,7 @@ class TransformerEncoderLayer(nn.Module):
         src = self.norm2(src)
         return src
 
+
 class AttentionModel(BaseModel):
     """Sequence to sequence model based on MultiHeadAttention."""
 
@@ -227,14 +228,18 @@ class AttentionModel(BaseModel):
         ])
         return parent_transforms
 
-
     def forward(self, x, lengths):
         """Apply attention model to input x."""
         # Invert mask as multi head attention ignores values which are true
         mask = ~length_to_mask(lengths)
+        future_mask = ~get_subsequent_mask(x)
         out = x.permute(1, 0, 2)
         for layer in self.layers:
-            out = layer(out)
+            if isinstance(layer, TransformerEncoderLayer):
+                out = layer(
+                    out, src_key_padding_mask=mask, src_mask=future_mask)
+            else:
+                out = layer(out)
         return out.permute(1, 0, 2)
 
     def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, opt_closure):
