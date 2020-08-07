@@ -11,11 +11,12 @@ from test_tube import HyperOptArgumentParser
 
 import src.datasets
 from src.evaluation import physionet2019_utility
+from src.torch.models.fixed_lightning import FixedLightningModule
 from src.torch.torch_utils import (
     variable_length_collate, ComposeTransformations, LabelPropagation)
 
 
-class BaseModel(pl.LightningModule):
+class BaseModel(FixedLightningModule):
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
