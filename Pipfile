@@ -31,6 +31,7 @@ pyarrow = "*"
 python_version = "3.7"
 
 [scripts]
-torch = "python -m src.torch.train_model"
-sklearn = "python -m src.sklearn.main"
+eval_torch = "python -m src.torch.eval_model"
+train_torch = "python -m src.torch.train_model"
+train_sklearn = "python -m src.sklearn.main"
 tests = "python -m pytest tests"
