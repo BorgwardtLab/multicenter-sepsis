@@ -1,9 +1,9 @@
 """Dataset processing functionality."""
 import abc
-import glob
-import math
 import os
 import pickle
+
+from sklearn.model_selection import train_test_split
 
 import numpy as np
 import pandas as pd
@@ -41,20 +41,25 @@ class Physionet2019Dataset(Dataset):
         'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine',
         'Bilirubin_direct', 'Glucose', 'Lactate', 'Magnesium', 'Phosphate',
         'Potassium', 'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT',
-        'WBC', 'Fibrinogen', 'Platelets' 
+        'WBC', 'Fibrinogen', 'Platelets'
     ] #SaO2
     LABEL_COLUMN = 'SepsisLabel'
 
     def __init__(self, root_dir='datasets/physionet2019/data/extracted',
                  split_file='datasets/physionet2019/data/split_info.pkl',
                  split='train', split_repetition=0, as_dict=True,
-                 transform=None):
+                 transform=None, custom_path=None):
         """Physionet 2019 Dataset.
 
         Args:
-            root_dir: Path to patient files as provided by physionet
+            root_dir: Path to extracted patient files as provided by physionet
+            split_file: Path to split file
             transform: Tranformation that should be applied to each instance
+            custom_path: when working from a different repo, custom path can be used to replace the root of the other paths
         """
+        if custom_path is not None:
+           root_dir = os.path.join(custom_path, os.path.split(root_dir)[1])
+           split_file = os.path.join(custom_path, os.path.split(split_file)[1]) 
         self.root_dir = root_dir
         self.as_dict = as_dict
 
@@ -85,7 +90,6 @@ class Physionet2019Dataset(Dataset):
         times = instance_data[cls.TIME_COLUMN].values
         ts_data = instance_data[cls.TS_COLUMNS].values
         labels = instance_data[cls.LABEL_COLUMN].values
-
         return {
             # Statics are repeated, only take first entry
             'statics': static_variables[0],
@@ -108,139 +112,139 @@ class Physionet2019Dataset(Dataset):
 
         return instance_data
 
+
 class DemoDataset(Physionet2019Dataset):
     """
     Demo dataset (based on subset of MIMIC) for quick testing of pipeline steps.
     """
-    
+
     def __init__(self, root_dir='datasets/demo/data/extracted',
-                 split_file='datasets/demo/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None):
+                 split_file='datasets/demo/data/split_info.pkl', split='train',
+                 split_repetition=0, as_dict=True, transform=None,
+                 custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
-            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
         )
 
 
 class MIMIC3Dataset(Physionet2019Dataset):
-    
     def __init__(self, root_dir='datasets/mimic3/data/extracted',
                  split_file='datasets/mimic3/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None):
+                 split='train', split_repetition=0, as_dict=True,
+                 transform=None, custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
-            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
         )
+
 
 class HiridDataset(Physionet2019Dataset):
-    
     def __init__(self, root_dir='datasets/hirid/data/extracted',
                  split_file='datasets/hirid/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None):
+                 split='train', split_repetition=0, as_dict=True,
+                 transform=None, custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
-            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
         )
+
 
 class EICUDataset(Physionet2019Dataset):
-    
     def __init__(self, root_dir='datasets/eicu/data/extracted',
-                 split_file='datasets/eicu/data/split_info.pkl',
-                 split='train', split_repetition=0, as_dict=True, transform=None):
+                 split_file='datasets/eicu/data/split_info.pkl', split='train',
+                 split_repetition=0, as_dict=True, transform=None,
+                 custom_path=None):
         super().__init__(
             root_dir=root_dir, split_file=split_file, split=split,
-            split_repetition=split_repetition, as_dict=as_dict, transform=transform
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
         )
 
-# pylint: disable=R0903
-class PositionalEncoding():
-    """Apply positional encoding to instances."""
 
-    def __init__(self, min_timescale, max_timescale, n_channels,
-                 positions_key='times'):
-        """PositionalEncoding.
+class PreprocessedDataset(Dataset):
+    LABEL_COLUMN = 'SepsisLabel'
+    TIME_COLUMN = 'time'
 
-        Args:
-            min_timescale: minimal scale of values
-            max_timescale: maximal scale of values
-            n_channels: number of channels to use to encode position
-        """
-        self.min_timescale = min_timescale
-        self.max_timescale = max_timescale
-        self.n_channels = n_channels
-        self.positions_key = positions_key
+    def __init__(self, prefix, split='train', drop_pre_icu=True, transform=None):
+        self.file_path = '{}_{}.pkl'.format(prefix, split)
 
-        self._num_timescales = self.n_channels // 2
-        self._inv_timescales = self._compute_inv_timescales()
+        with open(self.file_path, 'rb') as f:
+            data = pickle.load(f)
 
-    def _compute_inv_timescales(self):
-        log_timescale_increment = (
-            math.log(float(self.max_timescale) / float(self.min_timescale))
-            / (float(self._num_timescales) - 1)
+        self.patients = list(data.index.unique())
+        self.data = data
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.patients)
+
+    def get_stratified_split(self, random_state=None):
+        per_instance_labels = [
+            np.any(self.data.loc[[patient_id], self.LABEL_COLUMN])
+            for patient_id in self.patients
+        ]
+        train_indices, test_indices = train_test_split(
+            range(len(per_instance_labels)),
+            train_size=0.8,
+            stratify=per_instance_labels,
+            random_state=random_state
         )
-        inv_timescales = (
-            self.min_timescale
-            * np.exp(
-                np.arange(self._num_timescales)
-                * -log_timescale_increment
-            )
-        )
-        return inv_timescales
+        return train_indices, test_indices
 
-    def __call__(self, instance):
-        """Apply positional encoding to instances."""
-        instance = instance.copy()  # We only want a shallow copy
-        positions = instance[self.positions_key]
-        scaled_time = (
-            positions[:, np.newaxis] *
-            self._inv_timescales[np.newaxis, :]
-        )
-        signal = np.concatenate(
-            (np.sin(scaled_time), np.cos(scaled_time)),
-            axis=1
-        )
-        positional_encoding = np.reshape(signal, (-1, self.n_channels))
-        instance[self.positions_key] = positional_encoding
+    def _get_instance(self, idx):
+        patient_id = self.patients[idx]
+        patient_data = self.data.loc[[patient_id]]
+        time = patient_data[self.TIME_COLUMN].values
+        labels = patient_data[self.LABEL_COLUMN].values
+        ts_data = patient_data.drop(
+            columns=[self.LABEL_COLUMN]).values
+        return {
+            'times': time,
+            'ts': ts_data,
+            'labels': labels.astype(float)
+        }
+
+    def __getitem__(self, idx):
+        instance = self._get_instance(idx)
+        if self.transform:
+            instance = self.transform(instance)
         return instance
 
 
-def to_observation_tuples(instance_dict):
-    """Convert time series to tuple representation.
-
-    Basically replace all NaNs in the ts field with zeros, add a measurement
-    indicator vector and combine both with the time field.
-    """
-    instance_dict = instance_dict.copy()  # We only want a shallow copy
-    time = instance_dict['times']
-    if len(time.shape) != 2:
-        time = time[:, np.newaxis]
-
-    ts_data = instance_dict['ts']
-    valid_measurements = np.isfinite(ts_data)
-    ts_data = np.nan_to_num(ts_data)  # Replace NaNs with zero
-
-    # Combine into a vector
-    combined = np.concatenate((time, ts_data, valid_measurements), axis=-1)
-    # Replace time series data with new vectors
-    instance_dict['ts'] = combined
-    return instance_dict
+class PreprocessedDemoDataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/demo/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
 
 
-# pylint: disable=R0903
-class ComposeTransformations():
-    """Chain multiple transformations together."""
+class PreprocessedPhysionet2019Dataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/physionet2019/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
 
-    def __init__(self, transformations):
-        """ComposeTransformations.
 
-        Args:
-            transformations: List of transformations
-        """
-        self.transformations = transformations
+class PreprocessedMIMIC3Dataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/mimic3/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
 
-    def __call__(self, instance):
-        """Apply transformations to instance."""
-        out = instance
-        for transform in self.transformations:
-            out = transform(out)
-        return out
+
+class PreprocessedHiridDataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/hirid/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class PreprocessedEICUDataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/eicu/data/sklearn/processed/X_filtered',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)

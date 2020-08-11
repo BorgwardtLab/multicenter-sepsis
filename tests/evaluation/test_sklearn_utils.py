@@ -11,8 +11,9 @@ from sklearn.metrics import make_scorer
 from src.evaluation.sklearn_utils import (
     OnlineScoreWrapper,
     StratifiedPatientKFold,
-    NotConsecutiveError,
-    NotOnsetLabelError
+    NotOnsetLabelError,
+    NaNInEvalError,
+    NotAlignedError
 )
 import tests.evaluation.mock as mock
 
@@ -73,11 +74,30 @@ def test_with_gridsearch_cv():
     gridsearch.fit(mock.MOCK_X, mock.MOCK_Y)
 
 
-def test_consecutive_check():
-    with pytest.raises(NotConsecutiveError):
-        wrapped_scorer = OnlineScoreWrapper(mock.ALL_EQUAL_SCORE)
-        wrapped_scorer(
-            mock.MOCK_Y_CONSECUTIVE_ERROR, mock.MOCK_Y_CONSECUTIVE_ERROR)
+def test_nan_check():
+    mock_with_nan = mock.MOCK_Y.copy()
+    index = mock_with_nan.index[0]
+    mock_with_nan[index] = np.NaN
+    wrapped_scorer = OnlineScoreWrapper(mock.ALL_EQUAL_SCORE)
+    with pytest.raises(NaNInEvalError):
+        wrapped_scorer(mock_with_nan, mock.MOCK_Y)
+
+    with pytest.raises(NaNInEvalError):
+        wrapped_scorer(mock.MOCK_Y, mock_with_nan)
+
+
+def test_aligned_check():
+    unaligned_index = mock.MOCK_Y.index.values.copy()
+    unaligned_index[0] = (unaligned_index[0][0], 5)
+    unaligned_index = pd.MultiIndex.from_tuples(
+        unaligned_index, names=['id', 'time'])
+    mock_unaligned = pd.Series(
+        mock.MOCK_Y.values.copy(), index=unaligned_index)
+    wrapped_scorer = OnlineScoreWrapper(mock.ALL_EQUAL_SCORE)
+    with pytest.raises(NotAlignedError):
+        wrapped_scorer(mock_unaligned, mock.MOCK_Y)
+    with pytest.raises(NotAlignedError):
+        wrapped_scorer(mock.MOCK_Y, mock_unaligned)
 
 
 def test_onset_label_check():
@@ -97,4 +117,43 @@ def test_onset_label_shift():
     wrapped_scorer = OnlineScoreWrapper(
         mock.ALL_EQUAL_SCORE, shift_onset_label=-1)
     score = wrapped_scorer(mock_y, mock_pred)
+    assert score is True
+
+
+def test_onset_label_shift_with_gaps():
+    mock_index = pd.MultiIndex.from_arrays(
+        [[0, 0, 0, 0], [0, 1, 3, 4]],
+        names=('id', 'time')
+    )
+    mock_y = pd.DataFrame([0, 0, 0, 1], index=mock_index)
+    mock_pred = pd.DataFrame([0, 0, 1, 1], index=mock_index)
+    wrapped_scorer = OnlineScoreWrapper(
+        mock.ALL_EQUAL_SCORE, shift_onset_label=-1)
+    score = wrapped_scorer(mock_y, mock_pred)
+    assert score is True
+
+
+def test_onset_label_shift_control():
+    # No shift should take place if sample is a control
+    mock_index = pd.MultiIndex.from_arrays(
+        [[0, 0, 0, 0], [0, 1, 2, 3]],
+        names=('id', 'time')
+    )
+    mock_y = pd.DataFrame([0, 0, 0, 0], index=mock_index)
+    wrapped_scorer = OnlineScoreWrapper(
+        mock.ALL_EQUAL_SCORE, shift_onset_label=-2)
+    score = wrapped_scorer(mock_y, mock_y)
+    assert score is True
+
+
+def test_onset_label_shift_control_with_NaN():
+    # No shift should take place if sample is a control
+    mock_index = pd.MultiIndex.from_arrays(
+        [[0, 0, 0, 0], [0, 1, 6, 7]],
+        names=('id', 'time')
+    )
+    mock_y = pd.DataFrame([0, 0, 0, 0], index=mock_index)
+    wrapped_scorer = OnlineScoreWrapper(
+        mock.ALL_EQUAL_SCORE, shift_onset_label=-2)
+    score = wrapped_scorer(mock_y, mock_y)
     assert score is True

@@ -14,15 +14,24 @@ matplotlib = "*"
 ipdb = "*"
 sklearn = "*"
 numpy = "*"
-torch = "*"
-pytorch-lightning = "*"
+torch = "==1.4.0"
+pytorch-lightning = "==0.7.6"
 lightgbm = "*"
 test-tube = "*"
 pytest = "*"
+dask = {extras = ["dataframe"],version = "*"}
+distributed = "*"
+bokeh = "*"
+dask-ml = "*"
+dask-lightgbm = "*"
+dask-xgboost = "*"
+pyarrow = "*"
 
 [requires]
 python_version = "3.7"
 
 [scripts]
-sklearn = "python -m src.sklearn.main"
+eval_torch = "python -m src.torch.eval_model"
+train_torch = "python -m src.torch.train_model"
+train_sklearn = "python -m src.sklearn.main"
 tests = "python -m pytest tests"

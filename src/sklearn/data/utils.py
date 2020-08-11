@@ -24,22 +24,41 @@ def load_json(filename):
         obj = json.load(file)
     return obj
 
+def index_check(full_data):
+    #Sanity check that time index is properly set: FIXME this has to be ensured at the end of preprocessing!
+    index_cols = ['id', 'time']
+    if any([col in full_data.columns for col in index_cols]):
+        print('Formatting multi-index propery!..')
+        full_data.reset_index(inplace=True)
+        full_data.set_index(['id', 'time'], inplace=True) 
+    return full_data
 
-def load_data(path='datasets/physionet2019/data/sklearn/processed'):
+def load_data(path='datasets/physionet2019/data/sklearn/processed', label='SepsisLabel', index='multi'):
     """ 
-    Load preprocessed Data in sklearn format from pickle
-    """ 
+    Load preprocessed Data in sklearn format from pickle, depending on index type reformat properly.
+    """
+    splits = ['train', 'validation']
+    drop_col = 'Gender_Other' #only 5 patients in eicu have this, dropping this col as its still encoded in male female both zero. 
     data = defaultdict()
-    file_renaming = { 
-                'X_features_train': 'X_train',
-                'y_train': 'y_train', 
-                'X_features_validation': 'X_validation',
-                'y_validation': 'y_validation'
-    } 
+    files = ['X_features_' + split for split in splits]
     
-    for filename in file_renaming.keys():
+    for split, filename in zip(splits, files):
         filepath = os.path.join(path, filename + '.pkl')
-        data[file_renaming[filename]] = load_pickle(filepath)
+        full_data = load_pickle(filepath)
+        if index == 'multi':
+            full_data = index_check(full_data)
+            print('Multi-index check finished')
+        elif index == 'single':
+            print('Single-index is used')
+        else:
+            raise NotImplementedError(f'{index} not among valid index types [multi, single]')        
+        y = full_data[label]
+        X = full_data.drop(label, axis=1)
+        if drop_col in X.columns:
+            X = X.drop(columns=drop_col, axis=1)
+            print(f'Shape after dropping {drop_col}: {X.shape}')    
+        data[f'X_{split}'] = X
+        data[f'y_{split}'] = y
     return data
 
 def to_tsfresh_form(df, labels):
