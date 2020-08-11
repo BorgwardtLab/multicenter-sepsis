@@ -25,8 +25,9 @@ def main(hparams, model_cls):
     logger = pl.loggers.TestTubeLogger(
         hparams.log_path, name=hparams.exp_name)
     exp = logger.experiment
+    exp_path = exp.get_data_path(exp.name, exp.version)
     checkpoint_dir = os.path.join(
-        exp.get_data_path(exp.name, exp.version), 'checkpoints')
+        exp_path, 'checkpoints')
 
     model_checkpoint_cb = pl.callbacks.model_checkpoint.ModelCheckpoint(
         os.path.join(checkpoint_dir, '{epoch}-{online_val_physionet2019_score:.2f}'),
@@ -49,8 +50,8 @@ def main(hparams, model_cls):
     print('Loading model with best physionet score...')
     checkpoints = os.listdir(checkpoint_dir)
     assert len(checkpoints) == 1
-    loaded_model = model_cls.load_from_checkpoint(
-        os.path.join(checkpoint_dir, checkpoints[0]))
+    last_checkpoint = os.path.join(checkpoint_dir, checkpoints[0])
+    loaded_model = model_cls.load_from_checkpoint(last_checkpoint)
     trainer.test(loaded_model)
     trainer.logger.save()
 
@@ -58,7 +59,7 @@ def main(hparams, model_cls):
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
     parser.add_argument('--log-path', default='logs')
-    parser.add_argument('--exp-name', default='train_attention_model')
+    parser.add_argument('--exp-name', default='train_torch_model')
     parser.add_argument('--model', choices=src.torch.models.__all__, type=str,
                         default='AttentionModel')
     parser.add_argument('--max-epochs', default=100, type=int)

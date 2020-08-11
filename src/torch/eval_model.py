@@ -6,6 +6,7 @@ import json
 import numpy as np
 from sklearn.metrics import (
     average_precision_score, roc_auc_score, balanced_accuracy_score)
+from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
 
@@ -13,6 +14,14 @@ from src.evaluation import physionet2019_utility
 from src.torch.torch_utils import (
     variable_length_collate, ComposeTransformations)
 import src.torch.models
+
+
+if torch.cuda.is_available():
+    print('Running eval on GPU')
+    device = 'cuda'
+else:
+    device = 'cpu'
+
 
 
 def expand_time(instance, transform_each=lambda a: a,
@@ -109,14 +118,14 @@ def online_eval(model, dataset_cls, split):
         'balanced_accuracy': concat(scores_to_pred(balanced_accuracy_score))
     }
 
-    for batch in dataloader:
+    for batch in tqdm(dataloader, total=len(dataloader)):
         data, length, label = batch['ts'], batch['lengths'], batch['labels']
         last_index = length - 1
         batch_index = np.arange(len(label))
-        output = model(data, length)
+        output = model(data.to(device), length.to(device))
         labels.append(label[(batch_index, last_index)].numpy())
         pred = output[(batch_index, last_index)][:, 0]
-        predictions.append(torch.sigmoid(pred).detach().numpy())
+        predictions.append(torch.sigmoid(pred).detach().cpu().numpy())
 
     # Compute scores
     output = {name: fn(labels, predictions) for name, fn in scores.items()}
@@ -136,6 +145,7 @@ def main(model, checkpoint, dataset, splits, output):
             'dataset': dataset
         }
     )
+    model.to(device)
     model.eval()
     results = {}
     for split in splits:
@@ -164,7 +174,6 @@ if __name__ == '__main__':
         '--splits', default=['validation'], choices=['validation', 'testing'],
         type=str, nargs='+')
     parser.add_argument('--checkpoint-path', required=True, type=str)
-    parser.add_argument('--gpus', type=int, nargs='+', default=None)
     parser.add_argument('--output', type=str, default=None)
     params = parser.parse_args()
 
