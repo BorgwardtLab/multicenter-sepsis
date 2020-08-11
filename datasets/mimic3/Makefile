@@ -1,10 +1,9 @@
-all: data/extracted
-splits: data/split_info.pkl
+all: data/split_info.pkl
 
 .DELETE_ON_ERROR:
-.PHONY: all clean
+.PHONY: all tests
 
-data/extracted: ../downloads/mimic.zip
+data/extracted: data/downloads/mimic.zip
 	-mkdir -p data/extracted
 	unzip -q -j $< -d $@
 	cd $@ && for f in *.psv; do mv $$f p$$f; done
