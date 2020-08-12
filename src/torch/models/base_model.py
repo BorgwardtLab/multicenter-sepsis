@@ -207,7 +207,8 @@ class BaseModel(FixedLightningModule):
         )
         parser.opt_list(
             '--batch-size', default=32, type=int,
-            options=[16, 32, 64, 128, 256]
+            options=[16, 32, 64, 128, 256],
+            tunable=True
         )
         parser.add_argument('--label-propagation', default=6, type=int)
         parser.add_argument('--pos-weight', type=float, default=50.)
