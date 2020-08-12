@@ -1,7 +1,15 @@
 """Utility functions for pytorch."""
 import math
+import json
 import numpy as np
 import torch
+
+
+class JsonEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.ndarray, torch.Tensor)):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 
 def variable_length_collate(batch):

@@ -108,17 +108,18 @@ def online_eval(model, dataset_cls, split):
 
 
     scores = {
-        'physionet2019_utility':
+        'auroc': concat(roc_auc_score),
+        'average_precision': concat(average_precision_score),
+        'balanced_accuracy': concat(scores_to_pred(balanced_accuracy_score)),
+        'physionet2019_score':
             scores_to_pred(partial(
                 physionet2019_utility,
                 shift_labels=model.hparams.label_propagation
-            )),
-        'auroc': concat(roc_auc_score),
-        'average_precision': concat(average_precision_score),
-        'balanced_accuracy': concat(scores_to_pred(balanced_accuracy_score))
+            ))
     }
 
-    for batch in tqdm(dataloader, total=len(dataloader)):
+    for batch in tqdm(
+            dataloader, desc='Masked evaluation', total=len(dataloader)):
         data, length, label = batch['ts'], batch['lengths'], batch['labels']
         last_index = length - 1
         batch_index = np.arange(len(label))
