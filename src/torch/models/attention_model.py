@@ -1,5 +1,4 @@
 """Attention based model for sepsis."""
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -61,7 +60,7 @@ class BatchNorm(nn.Module):
 
 class MaskedLayerNorm(nn.LayerNorm):
     def forward(self, x):
-        # Compute cummulative summary statics along time axis
+        # Compute cumulative summary statics along time axis
         N = torch.arange(
             start=1., end=x.shape[1]+1, device=x.device)[None, :, None]
         mean_x = torch.cumsum(x, 1) / N
