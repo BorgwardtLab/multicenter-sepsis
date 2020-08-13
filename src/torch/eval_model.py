@@ -76,7 +76,7 @@ def concat(fn):
     return wrapped
 
 
-def online_eval(model, dataset_cls, split):
+def online_eval(model, dataset_cls, split, check_matching_unmasked=True):
     """Run online evaluation with future masking."""
     transforms = model.transforms
     # TODO: Make this more generic, if first transform is not label propagation
@@ -103,9 +103,20 @@ def online_eval(model, dataset_cls, split):
         pin_memory=True
     )
 
+    if check_matching_unmasked:
+        dataloader_um = DataLoader(
+            dataset_cls(
+                split=split,
+                transform=ComposeTransformations(model.transforms)
+            ),
+            batch_size=1,
+            shuffle=False,
+            collate_fn=variable_length_collate,
+            pin_memory=True
+        )
+
     labels = []
     predictions = []
-
 
     scores = {
         'auroc': concat(roc_auc_score),
@@ -118,15 +129,33 @@ def online_eval(model, dataset_cls, split):
             ))
     }
 
-    for batch in tqdm(
-            dataloader, desc='Masked evaluation', total=len(dataloader)):
-        data, length, label = batch['ts'], batch['lengths'], batch['labels']
-        last_index = length - 1
-        batch_index = np.arange(len(label))
-        output = model(data.to(device), length.to(device))
-        labels.append(label[(batch_index, last_index)].numpy())
-        pred = output[(batch_index, last_index)][:, 0]
-        predictions.append(torch.sigmoid(pred).detach().cpu().numpy())
+    model.eval()
+    with torch.no_grad():
+        if check_matching_unmasked:
+            for batch, batch_um in tqdm(
+                    zip(dataloader, dataloader_um),
+                    desc='Masked evaluation',
+                    total=len(dataloader)):
+                data, length, label = batch['ts'], batch['lengths'], batch['labels']
+                data_um, length_um, label_um = (
+                    batch_um['ts'], batch_um['lengths'], batch_um['labels'])
+                last_index = length - 1
+                batch_index = np.arange(len(label))
+                output = model(data.to(device), length.to(device))
+                output_um = model(data_um.to(device), length_um.to(device))
+                labels.append(label[(batch_index, last_index)].numpy())
+                pred = output[(batch_index, last_index)][:, 0]
+                predictions.append(torch.sigmoid(pred).detach().cpu().numpy())
+                assert np.allclose(pred.detach().cpu().numpy(), output_um[..., 0].detach().cpu().numpy(), atol=1e-6)
+        else:
+            for batch in tqdm(dataloader, desc='Masked evaluation', total=len(dataloader)):
+                data, length, label = batch['ts'], batch['lengths'], batch['labels']
+                last_index = length - 1
+                batch_index = np.arange(len(label))
+                output = model(data.to(device), length.to(device))
+                labels.append(label[(batch_index, last_index)].numpy())
+                pred = output[(batch_index, last_index)][:, 0]
+                predictions.append(torch.sigmoid(pred).detach().cpu().numpy())
 
     # Compute scores
     output = {name: fn(labels, predictions) for name, fn in scores.items()}
@@ -147,7 +176,6 @@ def main(model, checkpoint, dataset, splits, output):
         }
     )
     model.to(device)
-    model.eval()
     results = {}
     for split in splits:
         res = online_eval(model, dataset_cls, split)
