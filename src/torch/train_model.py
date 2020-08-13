@@ -1,9 +1,13 @@
 """Training routines for models."""
 from argparse import ArgumentParser, Namespace
+import json
 import os
+
 import pytorch_lightning as pl
 
 import src.torch.models
+import src.datasets
+from src.torch.torch_utils import JsonEncoder
 
 
 def namespace_without_none(namespace):
@@ -25,8 +29,9 @@ def main(hparams, model_cls):
     logger = pl.loggers.TestTubeLogger(
         hparams.log_path, name=hparams.exp_name)
     exp = logger.experiment
+    exp_path = exp.get_data_path(exp.name, exp.version)
     checkpoint_dir = os.path.join(
-        exp.get_data_path(exp.name, exp.version), 'checkpoints')
+        exp_path, 'checkpoints')
 
     model_checkpoint_cb = pl.callbacks.model_checkpoint.ModelCheckpoint(
         os.path.join(checkpoint_dir, '{epoch}-{online_val_physionet2019_score:.2f}'),
@@ -49,16 +54,44 @@ def main(hparams, model_cls):
     print('Loading model with best physionet score...')
     checkpoints = os.listdir(checkpoint_dir)
     assert len(checkpoints) == 1
-    loaded_model = model_cls.load_from_checkpoint(
-        os.path.join(checkpoint_dir, checkpoints[0]))
+    last_checkpoint = os.path.join(checkpoint_dir, checkpoints[0])
+    loaded_model = model_cls.load_from_checkpoint(last_checkpoint)
     trainer.test(loaded_model)
     trainer.logger.save()
+    last_metrics = trainer.logger.experiment.metrics[-1]
+    from src.torch.eval_model import online_eval
+    masked_result = online_eval(
+        loaded_model,
+        getattr(src.datasets, hparams.dataset, 'validation'),
+        'validation'
+    )
+    result = {}
+    result['validation'] = {
+        key.replace('val_', ''): value for key, value in last_metrics.items()}
+    result['validation_masked'] = masked_result
+    with open(os.path.join(exp_path, 'result.json'), 'w') as f:
+        json.dump(result, f, cls=JsonEncoder)
+
+    print('MASKED TEST RESULTS')
+    print({
+        key: value for key, value in result['validation_masked'].items()
+        if key not in ['labels', 'predictions']
+    })
+
+    # Filter out parts of hparams which belong to Hyperargparse
+    config = {
+        key: value
+        for key, value in vars(hparams).items()
+        if not callable(value)
+    }
+    with open(os.path.join(exp_path, 'config.json'), 'w') as f:
+        json.dump(config, f, cls=JsonEncoder)
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
     parser.add_argument('--log-path', default='logs')
-    parser.add_argument('--exp-name', default='train_attention_model')
+    parser.add_argument('--exp-name', default='train_torch_model')
     parser.add_argument('--model', choices=src.torch.models.__all__, type=str,
                         default='AttentionModel')
     parser.add_argument('--max-epochs', default=100, type=int)

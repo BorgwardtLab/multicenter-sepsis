@@ -77,7 +77,7 @@ class BaseModel(FixedLightningModule):
 
         scores = torch.sigmoid(output)
         return {
-            f'{prefix}_loss': per_instance_loss.mean(),
+            f'{prefix}_loss': per_instance_loss.detach().mean(),
             f'{prefix}_n': n_val,
             f'{prefix}_labels': labels.cpu().detach().numpy(),
             f'{prefix}_scores': scores.cpu().detach().numpy()
@@ -114,10 +114,10 @@ class BaseModel(FixedLightningModule):
         balanced_accuracy = balanced_accuracy_score(labels, predictions)
         data = {
             f'{prefix}_loss': val_loss_mean.item(),
-            f'{prefix}_physionet2019_score': physionet_score,
             f'{prefix}_average_precision': average_precision,
             f'{prefix}_auroc': auroc,
-            f'{prefix}_balanced_accuracy': balanced_accuracy
+            f'{prefix}_balanced_accuracy': balanced_accuracy,
+            f'{prefix}_physionet2019_score': torch.as_tensor(physionet_score)
         }
         return {
             'progress_bar': data,
@@ -207,7 +207,8 @@ class BaseModel(FixedLightningModule):
         )
         parser.opt_list(
             '--batch-size', default=32, type=int,
-            options=[16, 32, 64, 128, 256]
+            options=[16, 32, 64, 128, 256],
+            tunable=True
         )
         parser.add_argument('--label-propagation', default=6, type=int)
         parser.add_argument('--pos-weight', type=float, default=50.)
