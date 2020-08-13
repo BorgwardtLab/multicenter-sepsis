@@ -4,14 +4,13 @@ library(ricu)
 
 source(here("r", "utils.R"))
 
-eicu <- sepsis3_score("eicu")
-drop <- setdiff(colnames(eicu), id(eicu))
-eicu <- unique(eicu[, c("is_septic", drop) := list(TRUE, NULL, NULL)])
+eicu <- sepsis3_crit("eicu")
+eicu <- unique(eicu[, c(index_var(eicu)) := NULL])
 
-hosp <- data_id("eicu", "patient", cols = c("patientunitstayid", "hospitalid"))
+hosp <- load_id("eicu", "patient", cols = c("patientunitstayid", "hospitalid"))
 
 dat <- merge(eicu, hosp, all = TRUE)
-dat <- dat[, list(septic = sum(is_septic, na.rm = TRUE),
+dat <- dat[, list(septic = sum(sepsis_3, na.rm = TRUE),
                   total = .N), by = "hospitalid"]
 dat <- dat[, prop := septic / total]
 dat <- dat[order(prop), ]

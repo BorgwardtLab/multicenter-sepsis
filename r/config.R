@@ -1,93 +1,55 @@
 
-challenge_map <- data.frame(
-  rbind(
-      c("HR",               "heart_rate")
-    , c("O2Sat",            "o2_saturation")
-    , c("Temp",             "temperature")
-    , c("SBP",              "systolic_bp")
-    , c("MAP",              "mean_bp")
-    , c("DBP",              "diastolic_bp")
-    , c("Resp",             "respiratory_rate")
-    , c("EtCO2",            "et_co2")
-    , c("BaseExcess",       "base_excess")
-    , c("HCO3",             "bicarbonate")
-    , c("FiO2",             "fi_o2")
-    , c("pH",               "ph")
-    , c("PaCO2",            "pa_co2")
-  # , c("SaO2",             "?")
-    , c("AST",              "asparate_aminotransferase")
-    , c("BUN",              "urea_nitrogen")
-    , c("Alkalinephos",     "alkaline_phosphatase")
-    , c("Calcium",          "calcium")
-    , c("Chloride",         "chloride")
-    , c("Creatinine",       "creatinine")
-    , c("Bilirubin_direct", "bilirubin_direct")
-    , c("Glucose",          "glucose")
-    , c("Lactate",          "lactate")
-    , c("Magnesium",        "magnesium")
-    , c("Phosphate",        "phosphate")
-    , c("Potassium",        "potassium")
-    , c("Bilirubin_total",  "bilirubin_total")
-    , c("TroponinI",        "troponin_i")
-    , c("Hct",              "hematocrit")
-    , c("Hgb",              "hemoglobin")
-    , c("PTT",              "ptt")
-    , c("WBC",              "white_blood_cells")
-    , c("Fibrinogen",       "fibrinogen")
-    , c("Platelets",        "platelet_count")
-    , c("Age",              "age")
-    , c("Gender",           "sex")
-  # , c("Unit1",            "?")
-  # , c("Unit2",            "?")
-  # , c("HospAdmTime",      "?")
-  # , c("ICULOS",           "?")
-  # , c("SepsisLabel",      "?")
-  ),
-  stringsAsFactors = FALSE
+concepts <- list(
+      list("heart_rate", "HR", readr::col_double())
+    , list("o2_saturation", "O2Sat", readr::col_double())
+    , list("temperature", "Temp", readr::col_double())
+    , list("systolic_bp", "SBP", readr::col_double())
+    , list("mean_bp", "MAP", readr::col_double())
+    , list("diastolic_bp", "DBP", readr::col_double())
+    , list("respiratory_rate", "Resp", readr::col_double())
+    , list("et_co2", "EtCO2", readr::col_double())
+    , list("base_excess", "BaseExcess", readr::col_double())
+    , list("bicarbonate", "HCO3", readr::col_double())
+    , list("fi_o2", "FiO2", readr::col_double())
+    , list("ph", "pH", readr::col_double())
+    , list("pa_co2", "PaCO2", readr::col_double())
+    , list(NA_character_, "SaO2", readr::col_double())
+    , list("asparate_aminotransferase", "AST", readr::col_double())
+    , list("urea_nitrogen", "BUN", readr::col_double())
+    , list("alkaline_phosphatase", "Alkalinephos", readr::col_double())
+    , list("calcium", "Calcium", readr::col_double())
+    , list("chloride", "Chloride", readr::col_double())
+    , list("creatinine", "Creatinine", readr::col_double())
+    , list("bilirubin_direct", "Bilirubin_direct", readr::col_double())
+    , list("glucose", "Glucose", readr::col_double())
+    , list("lactate", "Lactate", readr::col_double())
+    , list("magnesium", "Magnesium", readr::col_double())
+    , list("phosphate", "Phosphate", readr::col_double())
+    , list("potassium", "Potassium", readr::col_double())
+    , list("bilirubin_total", "Bilirubin_total", readr::col_double())
+    , list("troponin_i", "TroponinI", readr::col_double())
+    , list("hematocrit", "Hct", readr::col_double())
+    , list("hemoglobin", "Hgb", readr::col_double())
+    , list("ptt", "PTT", readr::col_double())
+    , list("white_blood_cells", "WBC", readr::col_double())
+    , list("fibrinogen", "Fibrinogen", readr::col_double())
+    , list("platelet_count", "Platelets", readr::col_double())
+    , list("age", "Age", readr::col_integer())
+    , list("sex", "Gender", readr::col_integer())
+    , list(NA_character_, "Unit1", readr::col_skip())
+    , list(NA_character_, "Unit2", readr::col_skip())
+    , list(NA_character_, "HospAdmTime", readr::col_skip())
+    , list(NA_character_, "ICULOS", readr::col_integer())
+    , list(NA_character_, "SepsisLabel", readr::col_logical())
+    , list("sirs_score", NA_character_, NULL)
+    , list("news_score", NA_character_, NULL)
+    , list("mews_score", NA_character_, NULL)
 )
 
-challenge_spec <- readr::cols(
-  HR = readr::col_double(),
-  O2Sat = readr::col_double(),
-  Temp = readr::col_double(),
-  SBP = readr::col_double(),
-  MAP = readr::col_double(),
-  DBP = readr::col_double(),
-  Resp = readr::col_double(),
-  EtCO2 = readr::col_double(),
-  BaseExcess = readr::col_double(),
-  HCO3 = readr::col_double(),
-  FiO2 = readr::col_double(),
-  pH = readr::col_double(),
-  PaCO2 = readr::col_double(),
-  SaO2 = readr::col_double(),
-  AST = readr::col_double(),
-  BUN = readr::col_double(),
-  Alkalinephos = readr::col_double(),
-  Calcium = readr::col_double(),
-  Chloride = readr::col_double(),
-  Creatinine = readr::col_double(),
-  Bilirubin_direct = readr::col_double(),
-  Glucose = readr::col_double(),
-  Lactate = readr::col_double(),
-  Magnesium = readr::col_double(),
-  Phosphate = readr::col_double(),
-  Potassium = readr::col_double(),
-  Bilirubin_total = readr::col_double(),
-  TroponinI = readr::col_double(),
-  Hct = readr::col_double(),
-  Hgb = readr::col_double(),
-  PTT = readr::col_double(),
-  WBC = readr::col_double(),
-  Fibrinogen = readr::col_double(),
-  Platelets = readr::col_double(),
-  Age = readr::col_integer(),
-  Gender = readr::col_integer(),
-  Unit1 = readr::col_integer(),
-  Unit2 = readr::col_integer(),
-  HospAdmTime = readr::col_double(),
-  ICULOS = readr::col_integer(),
-  SepsisLabel = readr::col_logical()
+concepts <- data.frame(
+  concept = vapply(concepts, `[[`, character(1L), 1L),
+  callenge = vapply(concepts, `[[`, character(1L), 2L),
+  col_spec = I(lapply(concepts, `[[`, 3L))
 )
 
 eicu_hospitals <- c(
