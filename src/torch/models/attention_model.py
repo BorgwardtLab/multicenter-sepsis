@@ -73,34 +73,10 @@ class MaskedLayerNorm(nn.LayerNorm):
 class ReZero(nn.Module):
     def __init__(self):
         super().__init__()
-        self.resweight = nn.Parameter(torch.Tensor([0]))
+        self.resweight = nn.Parameter(torch.Tensor([0.]))
 
     def forward(self, x1, x2):
         return x1 + self.resweight * x2
-
-
-class PositionwiseLinear(nn.Module):
-    """Convenience function for position-wise linear projection."""
-
-    def __init__(self, d_in, d_out):
-        """Position-wise linear layer.
-
-        Applies a linear projection along the time axis. This assumes the time
-        axis to be at the second last dimension of the input. Thus the input
-        should be of shape [...x time points x features]
-
-        Args:
-            d_in: Input dimensionality
-            d_out: Output dimensionality
-        """
-        super().__init__()
-        self.w_1 = nn.Conv1d(d_in, d_out, 1)  # position-wise
-
-    def forward(self, x):
-        """Apply linear projection to axis -2 of input x."""
-        x = x.permute(1, 2, 0)
-        x = self.w_1(x).permute(2, 0, 1)
-        return x
 
 
 class TransformerEncoderLayer(nn.Module):
@@ -129,7 +105,7 @@ class TransformerEncoderLayer(nn.Module):
     """
 
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
-                 activation="relu", norm='layer'):
+                 norm='layer'):
         super(TransformerEncoderLayer, self).__init__()
         if norm == 'layer':
             def get_residual():
@@ -142,6 +118,7 @@ class TransformerEncoderLayer(nn.Module):
         elif norm == 'rezero':
             def get_residual():
                 return ReZero()
+
             def get_norm():
                 return nn.Identity()
         else:
@@ -178,10 +155,14 @@ class TransformerEncoderLayer(nn.Module):
         Shape:
             see the docs in Transformer class.
         """
-        src2 = self.self_attn(src, src, src, attn_mask=src_mask,
-                              key_padding_mask=src_key_padding_mask)[0]
+        src2 = self.self_attn(
+            src, src, src,
+            attn_mask=src_mask,
+            key_padding_mask=src_key_padding_mask
+        )[0]
         src = self.residual1(src, self.dropout1(src2))
         src = self.norm1(src)
+
         src2 = self.linear2(self.dropout(self.activation(self.linear1(src))))
         src = self.residual2(src, self.dropout2(src2))
         src = self.norm2(src)
@@ -210,13 +191,13 @@ class AttentionModel(BaseModel):
         norm = hparams.norm
         d_in = self._get_input_dim()
         self.layers = nn.ModuleList(
-            [PositionwiseLinear(d_in, d_model)]
+            [nn.Linear(d_in, d_model)]
             + [
                 TransformerEncoderLayer(
                     d_model, n_heads, ff_dim, dropout, norm=norm)
                 for n in range(n_layers)
             ]
-            + [PositionwiseLinear(d_model, 1)]
+            + [nn.Linear(d_model, 1)]
         )
 
     @property
