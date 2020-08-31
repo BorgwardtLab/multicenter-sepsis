@@ -76,7 +76,7 @@ def concat(fn):
     return wrapped
 
 
-def online_eval(model, dataset_cls, split, check_matching_unmasked=True):
+def online_eval(model, dataset_cls, split, check_matching_unmasked=False):
     """Run online evaluation with future masking."""
     transforms = model.transforms
     # TODO: Make this more generic, if first transform is not label propagation
