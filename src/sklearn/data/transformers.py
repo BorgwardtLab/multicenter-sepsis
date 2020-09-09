@@ -120,6 +120,12 @@ class CategoricalOneHotEncoder(TransformerMixin, BaseEstimator):
         df = pd.get_dummies(df)
 
         print('Done with Categorical Variable One-hot Encoder..')
+        
+        print('currently rare extra cols are removed to harmonize feature set')
+        # for gender this is still encoded as both male and female 0
+        for col in ['Gender_Other', 'Gender_Unknown']:
+            if col in df.columns:
+                df = df.drop(columns=[col])
         return df
 
 class PatientFiltration(ParallelBaseIDTransformer):
