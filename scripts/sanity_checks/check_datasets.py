@@ -27,7 +27,7 @@ def check_feature_dim_of_dataset(d):
 if __name__ == "__main__":
     outpath = 'scripts/sanity_checks' 
     datasets = src.datasets.__all__
-    splits = ['train', 'validation']
+    splits = ['train', 'validation', 'test']
     results = {}
     for dataset in datasets:
         print(f'Checking {dataset} ..')
