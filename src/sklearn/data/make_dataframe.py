@@ -39,6 +39,7 @@ def main():
     parser.add_argument('--n_partitions', type=int,
         default=50,
         help='number of df partitions in dask')
+    parser.add_argument('--splits', nargs='+', default=['train', 'validation'])
     args = parser.parse_args()
     client = Client(n_workers=args.n_jobs, memory_limit='50GB', local_directory='/local0/tmp/dask')
     n_jobs = args.n_jobs
@@ -50,8 +51,8 @@ def main():
 
     data_dir = os.path.join(base_dir, 'extracted') #only used when creating df directly from psv
     out_dir = os.path.join(base_dir, args.out_dir, 'processed')
-    splits = ['train', 'validation'] # save 'test' for later 
-    
+    splits = args.splits  
+ 
     #For verbosity, we outline preprocessing / filtering parameters here:
     cut_off = 24 #how many hours we include after a sepsis onset
     onset_bounds = (3, 168) #the included sepsis onset window (before too early, after too late)
