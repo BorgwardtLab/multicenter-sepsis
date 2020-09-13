@@ -24,7 +24,7 @@ demo <- c("mimic_demo", "eicu_demo")
 prod <- c("mimic", "eicu", "hirid")
 all  <- c(demo, prod)
 
-data_opts <- c(all, "demo", "production", "all", "challenge")
+data_opts <- c(all, "demo", "prod", "all", "challenge")
 
 if (!(length(opt$src) == 1L && opt$src %in% data_opts)) {
   cat("\nSelect a data source among the following options:\n  ",
@@ -58,5 +58,9 @@ for (src in sources) {
 
   dump_dataset(source = src, dir = ".")
 
-  zip(paste0(src, ".zip"), src, flags = "-qr9X")
+  if (!dir.exists("shared")) {
+    dir.create("shared")
+  }
+
+  zip(file.path("shared", paste0(src, ".zip")), src, flags = "-qr9X")
 }
