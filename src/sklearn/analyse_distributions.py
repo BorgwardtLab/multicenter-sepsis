@@ -12,6 +12,46 @@ from src.sklearn.data.utils import load_data
 matplotlib.use('agg')
 
 
+def analyse_time_distribution(
+    dataset_name,
+    X_train, X_val, X_test,
+):
+    """Analyse time distribution for a given data set."""
+    data_frames = [
+        ('train', X_train),
+        ('val', X_val),
+        ('test', X_test)
+    ]
+
+    fig, ax = plt.subplots(ncols=3, squeeze=True)
+    fig.suptitle('Time')
+
+    for index, (name, df) in enumerate(data_frames):
+        values = df.reset_index().groupby('id')['time'].size().values
+
+        sns.histplot(
+                values,
+                bins=50,
+                kde=True,
+                ax=ax[index]
+           )
+
+        ax[index].set_title(name)
+
+    print(f'Storing distributions of length/time...')
+
+    out_name = f'{dataset_name}_time.png'
+
+    plt.tight_layout()
+
+    plt.savefig(
+        os.path.join('/tmp', out_name),
+        dpi=300,
+    )
+
+    plt.close()
+
+
 def analyse_feature_distributions(
     dataset_name,
     X_train, X_val, X_test,
@@ -124,6 +164,11 @@ if __name__ == '__main__':
     # working with the same feature sets.
     assert (X_train.columns == X_val.columns).all()
     assert (X_train.columns == X_test.columns).all()
+
+    analyse_time_distribution(
+        args.dataset,
+        X_train, X_val, X_test
+    )
 
     analyse_feature_distributions(
         args.dataset,
