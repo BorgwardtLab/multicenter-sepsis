@@ -1,7 +1,7 @@
 
 sepsis3_crit <- function(source, pids = NULL) {
 
-  sofa <- load_concepts("sofa_score", source, id_type = "icustay",
+  sofa <- load_concepts("sofa", source, id_type = "icustay",
                         patient_ids = pids)
 
   if (grepl("eicu", source)) {
@@ -22,7 +22,7 @@ sepsis3_crit <- function(source, pids = NULL) {
                         patient_ids = pids)
   }
 
-  sepsis_3(sofa, si)
+  sep3(sofa, si)
 }
 
 cohort <- function(source, min_age = 14) {
@@ -43,7 +43,7 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
 
   if (identical(source, "challenge")) {
 
-    data_dir <- file.path(dir, "training_setB")
+    data_dir <- file.path(dir, "physionet2019", "data", "training_setB")
 
     if (!dir.exists(data_dir)) {
       stop("need directory ", data_dir, " to continue")
@@ -63,15 +63,16 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
     dat <- as_ts_tbl(dat, "stay_id", "stay_time")
 
     sep <- dat[
-      (SepsisLabel), list(stay_time = min(stay_time) + 6, sepsis_3 = TRUE),
+      (SepsisLabel), list(stay_time = min(stay_time) + 6, sep3 = TRUE),
       by = "stay_id"
     ]
+
+    dat <- rm_cols(dat, c("SaO2", "ICULOS", "SepsisLabel"), by_ref = TRUE)
 
     feats <- setNames(feat_map[["concept"]], feat_map[["callenge"]])
     feats <- feats[data_vars(dat)]
 
-    dat <- rm_cols(dat, c("ICULOS", "SepsisLabel"), by_ref = TRUE)
-    dat <- rename_cols(dat, names(feats), feats)
+    dat <- rename_cols(dat, feats, names(feats))
 
   } else {
 
@@ -98,28 +99,28 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
 
     join <- c(paste(id_vars(sep), "==", id_vars(win)), "join_time >= intime",
                                                        "join_time <= outtime")
-    new <- sep[win, on = join]
+    new <- sep[win, on = join, nomatch = NULL]
     flt <- setdiff(id_col(sep), id_col(new))
-    sep <- rm_cols(new, setdiff(data_vars(new), "sepsis_3"))
+    sep <- rm_cols(new, setdiff(data_vars(new), "sep3"))
 
     if (length(flt) > 0L) {
       dat <- dat[!get(id_var(dat)) %in% flt, ]
     }
   }
 
-  sep <- sep[, c("sepsis_3") := as.integer(get("sepsis_3"))]
+  sep <- sep[, c("sep3") := as.integer(get("sep3"))]
 
   res <- merge(dat, sep, all.x = TRUE)
-  res <- res[, c("sepsis_3") := data.table::nafill(sepsis_3, "locf"),
+  res <- res[, c("sep3") := data.table::nafill(sep3, "locf"),
              by = c(id_vars(res))]
-  res <- res[, c("sepsis_3") := data.table::nafill(sepsis_3, fill = 0L)]
+  res <- res[, c("sep3") := data.table::nafill(sep3, fill = 0L)]
 
-  res <- res[, c("sepsis_3") := as.logical(get("sepsis_3"))]
+  res <- res[, c("sep3") := as.logical(get("sep3"))]
 
   feats <- concepts[["concept"]]
   feats <- feats[!is.na(feats)]
 
-  res <- rm_cols(res, setdiff(data_vars(res), c(feats, "sepsis_3")))
+  res <- rm_cols(res, setdiff(data_vars(res), c(feats, "sep3")))
 
   miss_cols <- setdiff(feats, data_vars(res))
 

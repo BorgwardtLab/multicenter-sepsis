@@ -7,7 +7,7 @@ source(here("r", "utils.R"))
 eicu <- sepsis3_crit("eicu")
 eicu <- unique(eicu[, c(index_var(eicu)) := NULL])
 
-hosp <- load_id("eicu", "patient", cols = c("patientunitstayid", "hospitalid"))
+hosp <- load_id("patient", "eicu", cols = c("patientunitstayid", "hospitalid"))
 
 dat <- merge(eicu, hosp, all = TRUE)
 dat <- dat[, list(septic = sum(sepsis_3, na.rm = TRUE),
