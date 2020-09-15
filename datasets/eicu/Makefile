@@ -13,4 +13,4 @@ data/split_info.pkl: data/extracted
 	pipenv run python ../physionet2019/scripts/create_splits.py
 
 clean:
-	rm -r data/*
+	rm -r data

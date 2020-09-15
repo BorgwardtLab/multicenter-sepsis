@@ -26,4 +26,4 @@ data/split_info.pkl: data/extracted
 	pipenv run python scripts/create_splits.py
 
 clean:
-	rm -r data/*
+	rm -r data
