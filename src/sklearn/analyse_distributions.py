@@ -12,6 +12,46 @@ from src.sklearn.data.utils import load_data
 matplotlib.use('agg')
 
 
+def analyse_label_prevalence(
+    dataset_name,
+    y_train, y_val, y_test
+):
+    """Analyse label prevalence for a given data set."""
+    data_frames = [
+        ('train', y_train),
+        ('val', y_val),
+        ('test', y_test)
+    ]
+
+    fig, ax = plt.subplots(ncols=3, squeeze=True)
+    fig.suptitle('Prevalence')
+
+    for index, (name, df) in enumerate(data_frames):
+        values = df.reset_index().groupby('id')['time'].size().values
+
+        sns.histplot(
+                values,
+                bins=50,
+                kde=True,
+                ax=ax[index]
+           )
+
+        ax[index].set_title(name)
+
+    print(f'Storing label prevalence...')
+
+    out_name = f'{dataset_name}_prevalence.png'
+
+    plt.tight_layout()
+
+    plt.savefig(
+        os.path.join('/tmp', out_name),
+        dpi=300,
+    )
+
+    plt.close()
+
+
 def analyse_time_distribution(
     dataset_name,
     X_train, X_val, X_test,
