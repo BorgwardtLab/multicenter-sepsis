@@ -32,18 +32,20 @@ class Dataset(abc.ABC):
 class Physionet2019Dataset(Dataset):
     """Physionet 2019 Dataset for Sepsis early detection in the ICU."""
 
-    STATIC_COLUMNS = [
-        'Age', 'Gender']  #'Unit1', 'Unit2', 'HospAdmTime']
-    TIME_COLUMN = 'ICULOS'
+    STATIC_COLUMNS = ['age', 'sex']
+    TIME_COLUMN = 'stay_time'
     TS_COLUMNS = [
-        'HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
-        'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'AST', 'BUN',
-        'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine',
-        'Bilirubin_direct', 'Glucose', 'Lactate', 'Magnesium', 'Phosphate',
-        'Potassium', 'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT',
-        'WBC', 'Fibrinogen', 'Platelets'
-    ] #SaO2
-    LABEL_COLUMN = 'SepsisLabel'
+        'hr', 'o2sat', 'temp', 'sbp', 'map', 'dbp', 'resp',
+        'etco2', 'be', 'bicar', 'fio2', 'ph', 'pco2', 'ast', 
+        'bun', 'alp', 'ca', 'cl', 'crea', 'bili_dir', 'glu', 
+        'lact', 'mg', 'phos', 'k', 'bili', 'tri', 'hct', 'hgb', 
+        'ptt', 'wbc', 'fgn', 'plt', 'alb', 'alt', 'basos', 
+        'bnd', 'cai', 'ck', 'ckmb', 'crp', 'eos', 'esr', 'hbco',
+        'inr_pt', 'lymph', 'mch', 'mchc', 'mcv', 'methb', 'na', 
+        'neut', 'po2', 'pt', 'rbc', 'rdw', 'tco2', 'tnt', 'sirs', 
+        'news', 'mews'
+    ]
+    LABEL_COLUMN = 'sep3'
 
     def __init__(self, root_dir='datasets/physionet2019/data/extracted',
                  split_file='datasets/physionet2019/data/split_info.pkl',
