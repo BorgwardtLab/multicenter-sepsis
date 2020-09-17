@@ -33,7 +33,7 @@ def index_check(full_data):
         full_data.set_index(['id', 'time'], inplace=True) 
     return full_data
 
-def load_data(path='datasets/physionet2019/data/sklearn/processed', label='SepsisLabel', index='multi'):
+def load_data(path='datasets/physionet2019/data/sklearn/processed', label='sep3', index='multi'):
     """ 
     Load preprocessed Data in sklearn format from pickle, depending on index type reformat properly.
     """
