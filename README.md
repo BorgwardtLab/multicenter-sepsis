@@ -40,24 +40,23 @@ For running a hyperparameter search over all datasets using Logistic Regression,
 For running a hyperparameter search of all datasets using LightGBM, run:  
 ```source scripts/run_lgbm.sh <results_folder_name>```
 
-###Training a single dataset and classifier:     
+#### Training a single dataset and classifier:     
 ```python src/sklearn/main.py``` runs a hyperparameter search of a sklearn-based online classifier.
 For additional arguments, use ```--help```. 
 
-###Example: training a LGBM on e-ICU:   
+#### Example: training a LGBM on e-ICU:   
 ```>python -m src.sklearn.main --result_path=internal_validation/ --dataset eicu --method=lgbm --n_iter_search=100 --cv_n_jobs=1 ```
 
 ### Deep models / torch pipeline
 These jobs we currently run on bs-slurm-02.
 
-### Starting hyperparameter search for all datasets and all deep models:
+#### Starting hyperparameter search for all datasets and all deep models:
 ```source scripts/submit_jobs.sh results/hypersearch3``` where `results/hypersearch3` is an example of a result path.  
  
-### Training a single dataset and model
+#### Training a single dataset and model
 --> this should also work on bs-gpu13!   
 Fitting an attention-model on Physionet:    
 ```python -m src.torch.train_model --dataset PreprocessedPhysionet2019Dataset --model AttentionModel --max-epochs=100 --label-propagation=6 --gpus 0 ```   
-
 
 
 ## R-code pipeline
