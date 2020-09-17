@@ -2,7 +2,7 @@
 models=(AttentionModel GRUModel)
 datasets=(PreprocessedPhysionet2019Dataset PreprocessedMIMIC3Dataset PreprocessedEICUDataset PreprocessedHiridDataset)
 
-res_path=results/hypersearch2
+res_path=$1 
 mkdir -p $res_path
 
 for dataset in ${datasets[@]};
@@ -13,7 +13,7 @@ for dataset in ${datasets[@]};
     do
         out_path=${dataset_path}/${model}
         mkdir -p ${out_path}
-        for rep in {6..20};
+        for rep in {1..5};
             do
             jobname="${model}-${dataset}-${rep}"
             output_log="${out_path}/${rep}.log"
