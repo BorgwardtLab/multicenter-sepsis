@@ -168,7 +168,7 @@ class EICUDataset(Physionet2019Dataset):
 
 
 class PreprocessedDataset(Dataset):
-    LABEL_COLUMN = 'SepsisLabel'
+    LABEL_COLUMN = 'sep3'
     TIME_COLUMN = 'time'
 
     def __init__(self, prefix, split='train', drop_pre_icu=True, transform=None):
