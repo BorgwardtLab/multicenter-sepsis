@@ -51,7 +51,7 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         df.set_index(['id', 'time'], inplace=True)
         df.sort_index(ascending=True, inplace=True)
         #Sanity check: ensure that labels are binary and not bool
-        if type(df['sep3'].values[0]) == bool:
+        if pd.api.types.is_bool_dtype(df['sep3']): 
             df['sep3'] = df['sep3'].astype(float) #necessary, as ints would mess with categorical onehot encoder
         return df
 
