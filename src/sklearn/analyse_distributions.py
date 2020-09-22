@@ -27,12 +27,12 @@ def analyse_label_prevalence(
     fig.suptitle('Prevalence')
 
     for index, (name, df) in enumerate(data_frames):
-        values = df.reset_index().groupby('id')['time'].size().values
 
-        sns.histplot(
-                values,
-                bins=50,
-                kde=True,
+        # Show the raw label values; we could also think about making
+        # this more transparent and check at which point a label will
+        # be switched?
+        sns.countplot(
+                x=df.values,
                 ax=ax[index]
            )
 
@@ -204,6 +204,11 @@ if __name__ == '__main__':
     # working with the same feature sets.
     assert (X_train.columns == X_val.columns).all()
     assert (X_train.columns == X_test.columns).all()
+
+    analyse_label_prevalence(
+        args.dataset,
+        y_train, y_val, y_test
+    )
 
     analyse_time_distribution(
         args.dataset,
