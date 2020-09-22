@@ -35,7 +35,7 @@ def index_check(full_data):
 
 def load_data(
         path='datasets/physionet2019/data/sklearn/processed',
-        label='SepsisLabel',
+        label='sep3',
         index='multi',
         load_test_split=False
 ):
