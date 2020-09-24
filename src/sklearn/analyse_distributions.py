@@ -97,7 +97,7 @@ def analyse_feature_distributions(
     X_train, X_val, X_test,
 ):
     """Analyse feature distributions for a given data set."""
-    features = [c for c in X_train.columns if 'hours' not in c]
+    features = sorted([c for c in X_train.columns if 'hours' not in c])
 
     data_frames = [
         ('train', X_train),
@@ -106,11 +106,6 @@ def analyse_feature_distributions(
     ]
 
     for feature in features:
-
-        # Ensures that we do not run into any problems when storing
-        # features in files.
-        feature = feature.replace('/', '_')
-
         fig, ax = plt.subplots(nrows=2, ncols=3, squeeze=False)
         fig.suptitle(feature)
 
@@ -129,6 +124,10 @@ def analyse_feature_distributions(
                 x=df[feature],
                 ax=ax[1, index]
             )
+
+        # Ensures that we do not run into any problems when storing
+        # features in files.
+        feature = feature.replace('/', '_')
 
         print(f'Storing distributions for {feature}...')
 
