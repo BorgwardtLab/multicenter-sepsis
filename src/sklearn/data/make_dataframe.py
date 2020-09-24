@@ -51,7 +51,7 @@ def main():
 
     data_dir = os.path.join(base_dir, 'extracted') #only used when creating df directly from psv
     out_dir = os.path.join(base_dir, args.out_dir, 'processed')
-    splits = args.splits  
+    splits = ['train'] if dataset == 'demo' else args.splits  
  
     #For verbosity, we outline preprocessing / filtering parameters here:
     cut_off = 24 #how many hours we include after a sepsis onset
@@ -97,9 +97,11 @@ def main():
             filter_for_deep_pipe =  Pipeline([
             ('filter_invalid_times', InvalidTimesFiltration())
             ])
+            print('Running invalid times filtr. for deep pipeline..')
             df_deep = df.reset_index(level='time', drop=False) # invalid times filt. can't handle multi-index due to dask
             df_deep = filter_for_deep_pipe.fit_transform(df_deep) 
             save_pickle(df_deep, dump_for_deep)
+            print('Done with invalid times filtr.')
     
         #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
         #---------------------------------------------------------------------------------
@@ -113,16 +115,26 @@ def main():
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
-            ('filter_invalid_times', InvalidTimesFiltration()),
-            ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
-            #('remove_nans', FillMissing())
+            ('filter_invalid_times', InvalidTimesFiltration())
+            #('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
         ])
-        df = pipeline.fit_transform(df).compute()
-        # df.to_hdf(os.path.join(out_dir, f'X_features_{split}.h5'), '/data')
-        # consecutive = df.groupby('id').apply(lambda x: np.all(np.diff(x['time']) >= 0))
+        df_deep2 = pipeline.fit_transform(df).compute()
+        
+        # Test how deep models perform with lookback features:
+        # For sklearn pipe, we need proper multi index format once again      
+        df_deep2.reset_index(inplace=True)
+        df_deep2.set_index(['id', 'time'], inplace=True)
+ 
+        sklearn_pipe =  Pipeline([
+            ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)) 
+            ])
+        df_sklearn = sklearn_pipe.fit_transform(df_deep2)
+
         print(f'.. finished. Took {time() - start} seconds.')
         # Save
-        save_pickle(df, os.path.join(out_dir, f'X_features_{split}.pkl'))
+        save_pickle(df_sklearn, os.path.join(out_dir, f'X_features_{split}.pkl'))
+        save_pickle(df_deep2, os.path.join(out_dir, f'X_features_no_imp{split}.pkl'))
+
     client.close()
 
 if __name__ == '__main__':

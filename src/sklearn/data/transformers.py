@@ -51,8 +51,7 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         df.set_index(['id', 'time'], inplace=True)
         df.sort_index(ascending=True, inplace=True)
         #Sanity check: ensure that labels are binary and not bool
-        if pd.api.types.is_bool_dtype(df['sep3']): 
-            df['sep3'] = df['sep3'].astype(float) #necessary, as ints would mess with categorical onehot encoder
+        df['sep3'] = df['sep3'].astype(float) #necessary, as ints would mess with categorical onehot encoder
         return df
 
     def transform(self, df):
@@ -203,7 +202,7 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         """
         ind_to_keep = (~df[ts_columns].isnull()).sum(axis=1) >= thres
         ind_labels = (~df[self.label].isnull()) #sanity check to prevent lookbackfeatures 0s to mess up nan rows
-        ind_to_keep = np.logical_and(ind_to_keep, ind_labels) 
+        ind_to_keep = np.logical_and(ind_to_keep, ind_labels)
         return df[ind_to_keep]
 
     def _transform_id(self, df):
@@ -249,13 +248,13 @@ class IndicatorImputation(ParallelBaseIDTransformer):
     Adds indicator dimension for every channel to indicate if there was a nan
     IndicatorImputation still requires FillMissing afterwards!
     """
-    def __init__(self, n_jobs=4):
-        super().__init__(n_jobs=n_jobs)
+    def __init__(self, n_jobs=4, **kwargs):
+        super().__init__(n_jobs=n_jobs, **kwargs)
 
     def transform_id(self, df):
         cols = ts_columns #we consider all time-series columns (for consistency with pytorch approach)
-        valid_indicators = (~df[cols].isnull()).astype(int).add_suffix('_indicator') 
-        df = pd.concat([df, valid_indicators], axis=1)
+        invalid_indicators = (df[cols].isnull()).astype(int).add_suffix('_indicator') 
+        df = pd.concat([df, invalid_indicators], axis=1)
         return df
 
 class FillMissing(TransformerMixin, BaseEstimator):
@@ -614,11 +613,3 @@ def make_eventual_labels(labels):
 
     return labels.groupby('id').apply(make_one)
 
-
-if __name__ == '__main__':
-    CreateDataframe()  
-
-#    df = load_pickle(DATA_DIR + '/interim/munged/df.pickle')
-#    labels_binary = load_pickle(DATA_DIR + '/processed/labels/original.pickle')
-#    evn = make_eventual_labels(labels_binary)
-#    save_pickle(evn, DATA_DIR + '/processed/labels/eventual_sepsis.pickle')
