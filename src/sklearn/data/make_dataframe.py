@@ -143,7 +143,7 @@ def main():
 
         # Save
         save_pickle(df_sklearn, os.path.join(out_dir, f'X_features_{split}.pkl'))
-        save_pickle(df_deep2, os.path.join(out_dir, f'X_features_no_imp{split}.pkl'))
+        save_pickle(df_deep2, os.path.join(out_dir, f'X_features_no_imp_{split}.pkl'))
 
     client.close()
 
