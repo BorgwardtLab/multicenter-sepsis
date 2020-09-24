@@ -7,18 +7,29 @@ To set up python libraries run:
 ```>pipenv install --skip-lock```  
 ```>pipenv shell```  
 
-## 1. Datasets  
-All raw datasets can be found under ```datasets/downloads/<dataset>.zip```  
-To extract the datasets and create train/val/test splits, simply go run:   
-```>cd datasets/; make all_data```  
-Alternatively, if only a specific dataset should be processed, enter its directory, e.g. ```datasets/mimic3``` and run  
- ```>make```
+`datasets`: (code for downloading and extracting this dataset)
+- `physionet2019`
+--> inside the dataset folder, to download and extract the dataset, simply run:  
+ ```make```  
 
-## 2. Preprocessing Pipeline
-- src/sklearn/data: Preprocessing pipeline (following sklearn transformer API) based on dask parallelism 
+for the other datasets: mimic3, eicu, hirid: first download the zip files from polybox (internal for now),
+then move the zips to the following path (example with e-ICU):  
+```datasets/eicu/data/downloads/eicu.zip```  
 
-For preprocessing all datasets, run:    
-```>source scripts/run_preprocessing.sh``` 
+`src`:
+- `torch`: pytorch-based pipeline and models (currently an attention model)  
+    TODO: add docu for training a  model  
+- `sklearn`: sklearn-based pipeline for boosted trees baselines
+    
+To set up python libraries run:  
+```pipenv install --skip-lock```  
+```pipenv shell```  
+  
+For the sklearn pipeline:  
+```python src/sklearn/data/make_dataframe.py``` to run online and parallelized preprocessing, feature extraction  
+```python src/sklearn/main.py``` to run a hyperparameter search of a sklearn-based online classifier  
+  
+For additional arguments, use ```--help```.  
  
 For preprocessing a single dataset, e.g. "hirid", simply run   
 ```>python src/sklearn/data/make_dataframe.py --dataset hirid```  
