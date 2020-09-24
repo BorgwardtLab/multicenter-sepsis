@@ -1,3 +1,3 @@
 from .attention_model import AttentionModel
-from .gru_model import GRUModel
-__all__ = ['AttentionModel', 'GRUModel']
+from .recurrent_model import GRUModel, LSTMModel, RNNModel
+__all__ = ['AttentionModel', 'GRUModel', 'LSTMModel', 'RNNModel']
