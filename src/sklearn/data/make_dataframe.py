@@ -19,6 +19,11 @@ dataset_class_mapping = {
     'demo': 'DemoDataset'
 }
 
+def ensure_single_index(df):
+    df.reset_index(inplace=True)
+    df.set_index(['id'], inplace=True)
+    return df 
+
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', 
@@ -131,6 +136,11 @@ def main():
         df_sklearn = sklearn_pipe.fit_transform(df_deep2)
 
         print(f'.. finished. Took {time() - start} seconds.')
+        
+        #All models assume time as column and only id as index (multi-index would cause problem with dask models)
+        df_deep2 = ensure_single_index(df_deep2)
+        df_sklearn = ensure_single_index(df_sklearn) 
+
         # Save
         save_pickle(df_sklearn, os.path.join(out_dir, f'X_features_{split}.pkl'))
         save_pickle(df_deep2, os.path.join(out_dir, f'X_features_no_imp{split}.pkl'))
