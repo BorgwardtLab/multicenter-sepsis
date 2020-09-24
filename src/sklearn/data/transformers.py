@@ -254,7 +254,7 @@ class IndicatorImputation(ParallelBaseIDTransformer):
     def transform_id(self, df):
         cols = ts_columns #we consider all time-series columns (for consistency with pytorch approach)
         invalid_indicators = (df[cols].isnull()).astype(int).add_suffix('_indicator') 
-        df = pd.concat([df, invalid_indicators], axis=1)
+        df = pd.concat([df.fillna(0), invalid_indicators], axis=1)
         return df
 
 class FillMissing(TransformerMixin, BaseEstimator):
