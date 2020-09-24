@@ -106,7 +106,6 @@ def analyse_feature_distributions(
     ]
 
     for feature in features:
-        
         fig, ax = plt.subplots(nrows=2, ncols=3, squeeze=False)
         fig.suptitle(feature)
 
