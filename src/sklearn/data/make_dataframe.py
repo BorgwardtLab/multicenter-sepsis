@@ -56,7 +56,7 @@ def main():
 
     data_dir = os.path.join(base_dir, 'extracted') #only used when creating df directly from psv
     out_dir = os.path.join(base_dir, args.out_dir, 'processed')
-    splits = ['train'] if dataset == 'demo' else args.splits  
+    splits = args.splits  
  
     #For verbosity, we outline preprocessing / filtering parameters here:
     cut_off = 24 #how many hours we include after a sepsis onset
