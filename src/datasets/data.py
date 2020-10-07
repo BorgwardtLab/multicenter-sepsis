@@ -233,7 +233,7 @@ class PreprocessedPhysionet2019Dataset(PreprocessedDataset):
 
 class PreprocessedMIMIC3Dataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/mimic3/data/sklearn/processed/X_filtered',
+                 prefix='datasets/mimic3/data/sklearn/processed/X_features_no_imp', #X_filtered , X_features_no_imp
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 

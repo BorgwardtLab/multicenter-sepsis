@@ -140,6 +140,7 @@ def to_observation_tuples(instance_dict):
     ts_data = np.nan_to_num(ts_data)  # Replace NaNs with zero
 
     # Combine into a vector
+    ###combined = np.concatenate((time, ts_data), axis=-1)
     combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1)
     # Replace time series data with new vectors
     instance_dict['ts'] = combined

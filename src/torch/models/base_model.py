@@ -195,7 +195,7 @@ class BaseModel(FixedLightningModule):
     def add_model_specific_args(cls, parent_parser):
         """Specify the hyperparams."""
         parser = HyperOptArgumentParser(
-            strategy='random_search', parents=[parent_parser])
+            strategy='grid_search', parents=[parent_parser]) #for quick testing, use 1 grid search step, otherwise random_search
         # training specific
         parser.add_argument(
             '--dataset', type=str, choices=src.datasets.__all__,
@@ -203,7 +203,7 @@ class BaseModel(FixedLightningModule):
         )
         parser.opt_range(
             '--learning-rate', default=0.01, type=float,
-            tunable=True, log_base=10., low=0.0001, high=0.01
+            tunable=True, log_base=10., low=0.01, high=0.01 #low=0.0001,
         )
         parser.opt_list(
             '--batch-size', default=32, type=int,

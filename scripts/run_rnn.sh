@@ -1,5 +1,5 @@
-dataset=PreprocessedDemoDataset
-model=RNNModel
+dataset=PreprocessedMIMIC3Dataset
+model=GRUModel # LSTMModel, RNNModel, GRUModel
 
 res_path=$1 
 mkdir -p $res_path
@@ -7,4 +7,4 @@ mkdir -p $res_path
 dataset_path=$res_path/${dataset}
 mkdir -p ${dataset_path}
 
-python -m src.torch.train_model --dataset $dataset --model $model --hyperparam-draws 1 --gpus -1 --log-path $dataset_path --exp-name $model
+pipenv run train_torch --dataset $dataset --model $model --hyperparam-draws 1 --gpus -1 --log-path $dataset_path --exp-name $model

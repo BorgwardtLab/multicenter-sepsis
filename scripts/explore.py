@@ -34,6 +34,21 @@ def compute_stats(df):
     results.append(len(total_ids))
     results.append(len(case_ids))
     return results
+
+def check_nans(df, name):
+    n_nans = df.isnull().sum().sum()
+    if n_nans > 0:
+        print(f'{name} has {n_nans}')
+        print(df.isnull().sum())
+    else:
+        print(f'No nans found in {name}') 
+
+def print_shape(df, name):
+    print(f'Shape of {name}: {df.shape}') 
+
+def check_df(df, name):
+    check_nans(df, name)
+    print_shape(df, name)
  
 if __name__ == "__main__":
     
@@ -50,13 +65,18 @@ if __name__ == "__main__":
     path = os.path.join('datasets', args.dataset, args.path)
     #normalized_path = os.path.join(path, f'X_normalized_{split}.pkl')
     features_path = os.path.join(path, f'X_features_{split}.pkl')
-    X_f_path = os.path.join(path, f'X_filtered_{split}.pkl')
+    X_f_path = os.path.join(path, f'X_features_no_imp_{split}.pkl')
     #df_n = load_pickle(normalized_path)
     X = load_pickle(features_path)
-    X_f = load_pickle(X_f_path)
-
-    stats = compute_stats(X_f) 
-    print(stats)
+    Xf = load_pickle(X_f_path)
+    
+    dfs = [X, Xf]
+    names = ['X_features', 'X_features_no_imp']
+    for df, name in zip(dfs, names):
+        check_df(df, name)
+ 
+    #stats = compute_stats(X_f) 
+    #print(stats)
     embed()
     #check_times(X_f)
     #embed()
