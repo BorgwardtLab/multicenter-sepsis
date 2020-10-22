@@ -1,4 +1,4 @@
-dataset=PreprocessedMIMIC3Dataset
+dataset=IBPhysionet2019Dataset #IBMIMIC3Dataset #PreprocessedEICUDataset #PreprocessedMIMIC3Dataset
 model=GRUModel # LSTMModel, RNNModel, GRUModel
 
 res_path=$1 
