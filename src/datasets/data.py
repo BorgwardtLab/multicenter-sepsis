@@ -223,35 +223,35 @@ class PreprocessedDataset(Dataset):
 
 class PreprocessedDemoDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/demo/data/sklearn/processed/X_filtered',
+                 prefix='datasets/demo/data/sklearn/processed/X_features',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedPhysionet2019Dataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/physionet2019/data/sklearn/processed/X_filtered',
+                 prefix='datasets/physionet2019/data/sklearn/processed/X_features',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedMIMIC3Dataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/mimic3/data/sklearn/processed/X_features_no_imp', #X_filtered , X_features_no_imp, X_features
+                 prefix='datasets/mimic3/data/sklearn/processed/X_features', #X_filtered , X_features_no_imp, X_features
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedHiridDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/hirid/data/sklearn/processed/X_filtered',
+                 prefix='datasets/hirid/data/sklearn/processed/X_features',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedEICUDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/eicu/data/sklearn/processed/X_features_no_imp', #X_filtered
+                 prefix='datasets/eicu/data/sklearn/processed/X_features', #X_filtered
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
