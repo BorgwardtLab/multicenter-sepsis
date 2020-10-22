@@ -26,7 +26,7 @@ class InstanceWriter():
         sanity check, that it works properly
         """
         files = os.listdir(filepath)
-        files = [f for f in files if '.pkl' in f]
+        files = [f for f in files if ('.pkl' in f) and not ('info' in f) ]
         result = pd.DataFrame()
         for f in files:
             df = load_pickle(os.path.join(filepath, f))
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     parser.add_argument('--path', type=str, help='path from dataset to pickled df file to use as input', 
         default='data/sklearn/processed')
     parser.add_argument('--dataset', type=str, help='dataset to use', 
-        default='physionet2019')
+        default='demo')
     parser.add_argument('--split', type=str, help='which split to use from [train, validation, test], if not set we loop over all', 
         default=None)
     
@@ -72,5 +72,14 @@ if __name__ == "__main__":
         # if demo dataset is used, reconstruct the df and check that it is the same:
         if dataset == 'demo': 
             X_r = iw.from_instance_files(outpath)
-            assert X.equals(X_r) 
+            try: 
+                assert X.equals(X_r)
+            except:
+                print('assert failed')
+                embed() 
     
+        # add small df of all patients for easier down-stream handling (e.g. of additional splitting for hyperparam tuning)
+        # including id and label
+        info_file = os.path.join(outpath, 'info.pkl')
+        info_df = X[['time', 'sep3']]
+        save_pickle(info_df, info_file) 
