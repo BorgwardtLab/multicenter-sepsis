@@ -123,8 +123,7 @@ class PositionalEncoding():
 def to_observation_tuples(instance_dict):
     """Convert time series to tuple representation.
 
-    Basically replace all NaNs in the ts field with zeros, add a measurement
-    indicator vector and combine both with the time field.
+    Also, replace remaining NaNs in the ts field with zeros. 
     """
     instance_dict = instance_dict.copy()  # We only want a shallow copy
     time = instance_dict['times']
@@ -142,6 +141,32 @@ def to_observation_tuples(instance_dict):
     instance_dict['ts'] = combined
     return instance_dict
 
+
+def to_observation_tuples_with_indicators(instance_dict):
+    """Convert time series to tuple representation.
+
+    Basically replace all NaNs in the ts field with zeros, add a measurement
+    indicator vector and combine both with the time field.
+    """
+    instance_dict = instance_dict.copy()  # We only want a shallow copy
+    time = instance_dict['times']
+    if len(time.shape) != 2:
+        time = time[:, np.newaxis]
+
+    ts_data = instance_dict['ts']
+    # Inspired by "Why not to use Zero Imputation"
+    # https://arxiv.org/abs/1906.00150
+    # We augment "absence indicators", which should reduce distribution shift
+    # and bias induced by measurements with low number of observations.
+    invalid_measurements = ~np.isfinite(ts_data)
+    ts_data = np.nan_to_num(ts_data)  # Replace NaNs with zero
+
+    # Combine into a vector
+    combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1)
+    
+    # Replace time series data with new vectors
+    instance_dict['ts'] = combined
+    return instance_dict
 
 class LabelPropagation():
     def __init__(self, hours_shift):
