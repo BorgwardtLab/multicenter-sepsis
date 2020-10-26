@@ -123,7 +123,8 @@ def main():
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
             ('filter_invalid_times', InvalidTimesFiltration()),
             #drop and save baseline scores after filtering invalid (which ignored baselines)
-            ('drop_cols', DropColumns(save=True, data_dir=out_dir, split=split)) 
+            ('drop_cols', DropColumns(save=False, #### TODO: this must be set to True! it's just temporarily false until we receive sofa column (was forgotten in last dump) 
+                data_dir=out_dir, split=split)) 
         ])
         df_deep2 = pipeline.fit_transform(df).compute()
         
