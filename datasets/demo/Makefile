@@ -1,4 +1,4 @@
-all: data/extracted
+all: data/extracted data/split_info.pkl
 splits: data/split_info.pkl
 
 .DELETE_ON_ERROR:
