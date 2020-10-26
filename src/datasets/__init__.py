@@ -8,7 +8,12 @@ from .data import (
     PreprocessedMIMIC3Dataset,
     PreprocessedEICUDataset,
     PreprocessedHiridDataset,
-    PreprocessedDemoDataset
+    PreprocessedDemoDataset,
+    IBPhysionet2019Dataset,
+    IBMIMIC3Dataset,
+    IBEICUDataset,
+    IBHiridDataset,
+    IBDemoDataset 
 )
 
 __all__ = [
@@ -22,4 +27,9 @@ __all__ = [
     'PreprocessedEICUDataset',
     'PreprocessedHiridDataset',
     'PreprocessedDemoDataset',
+    'IBPhysionet2019Dataset',
+    'IBMIMIC3Dataset',
+    'IBEICUDataset',
+    'IBHiridDataset',
+    'IBDemoDataset' 
 ]

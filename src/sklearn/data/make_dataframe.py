@@ -100,15 +100,16 @@ def main():
             # consistently apply the same final invalid times filtration steps as in sklearn pipe
             # while skipping the manual feature engineering
             filter_for_deep_pipe =  Pipeline([
-            ('filter_invalid_times', InvalidTimesFiltration())
-            ])
+            ('filter_invalid_times', InvalidTimesFiltration()),
+            ('drop_cols', DropColumns()), #drop baseline scores after filtering invalid
+             ])
             print('Running invalid times filtr. for deep pipeline..')
             df_deep = df.reset_index(level='time', drop=False) # invalid times filt. can't handle multi-index due to dask
             df_deep = filter_for_deep_pipe.fit_transform(df_deep) 
             save_pickle(df_deep, dump_for_deep)
             print('Done with invalid times filtr.')
     
-        #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
+        #2. Tunable Pipeline: Feature Extraction, further Preprocessing
         #---------------------------------------------------------------------------------
         # We need to sort the index by ourselves to ensure the time axis is
         # correctly ordered. Dask would not take this into account.
@@ -120,8 +121,9 @@ def main():
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
-            ('filter_invalid_times', InvalidTimesFiltration())
-            #('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
+            ('filter_invalid_times', InvalidTimesFiltration()),
+            #drop and save baseline scores after filtering invalid (which ignored baselines)
+            ('drop_cols', DropColumns(save=True, data_dir=out_dir, split=split)) 
         ])
         df_deep2 = pipeline.fit_transform(df).compute()
         

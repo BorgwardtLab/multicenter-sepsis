@@ -10,7 +10,8 @@ from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
-from extracted import ts_columns, columns_not_to_normalize, extended_ts_columns 
+from extracted import ts_columns, columns_not_to_normalize, extended_ts_columns, \ 
+    colums_to_drop, baseline_cols 
 
 from IPython import embed
 
@@ -50,8 +51,12 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         df.reset_index(drop=True, inplace=True)
         df.set_index(['id', 'time'], inplace=True)
         df.sort_index(ascending=True, inplace=True)
+
         #Sanity check: ensure that labels are binary and not bool
         df['sep3'] = df['sep3'].astype(float) #necessary, as ints would mess with categorical onehot encoder
+        
+        #Remove few columns which are not used at all (e.g. interventions)
+        df = df.drop(columns = colums_to_drop)
         return df
 
     def transform(self, df):
@@ -94,6 +99,31 @@ class DropLabels(TransformerMixin, BaseEstimator):
         print('Done with DropLabels')
         return df
 
+class DropColumns(TransformerMixin, BaseEstimator):
+    """
+    Drop and potentially save columns. By default we drop all baseline scores.
+    """
+    def __init__(self, columns=baseline_cols, label='sep3', save=False, 
+                 data_dir=None, split=None):
+        self.columns = columns
+        self.label = label
+        self.save = save
+        self.data_dir = data_dir
+        self.split = split
+        
+    def fit(self, df, labels=None):
+        return self
+
+    def transform(self, df):
+        if self.save:
+            cols_to_save = self.columns + [self.label]
+            save_pickle(df[cols_to_save], os.path.join(self.data_dir, f'baselines_{self.split}.pkl'))
+        df = df.drop(self.label, axis=1)
+
+        print('Done with DropLabels')
+        return df
+
+
 class CategoricalOneHotEncoder(TransformerMixin, BaseEstimator):
     """
     Categorical variables are one-hot encoded. 
@@ -115,7 +145,7 @@ class CategoricalOneHotEncoder(TransformerMixin, BaseEstimator):
 
         print('Done with Categorical Variable One-hot Encoder..')
         
-        print('currently rare extra cols are removed to harmonize feature set')
+        print('currently very rare extra cols are removed to harmonize feature set')
         # for gender this is still encoded as both male and female 0
         for col in ['sex_Other', 'sex_Unknown']:
             if col in df.columns:
@@ -392,38 +422,6 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         return self
 
     @staticmethod
-    def hepatic_sofa(df):
-        """ Updates a hepatic sofa score """
-        hepatic = np.zeros(shape=df.shape[0])
-
-        # Bili
-        bilirubin = df['bili'].values
-        hepatic[bilirubin < 1.2] += 0
-        hepatic[(bilirubin >= 1.2) & (bilirubin < 1.9)] += 1
-        hepatic[(df['bili'] >= 1.9) & (bilirubin < 5.9)] += 2
-        hepatic[(bilirubin >= 5.9) & (bilirubin < 11.9)] += 3
-        hepatic[(bilirubin >= 11.9)] += 4
-
-        # map
-        hepatic[df['map'].values < 70] += 1
-
-        # crea
-        creatinine = df['crea'].values
-        hepatic[(creatinine >= 1.2) & (creatinine < 1.9)] += 1
-        hepatic[(creatinine >= 1.9) & (creatinine < 3.4)] += 2
-        hepatic[(creatinine >= 3.5) & (creatinine < 4.9)] += 3
-        hepatic[(creatinine >= 4.9)] += 4
-
-        # plt
-        platelets = df['plt'].values
-        hepatic[(platelets >= 100) & (platelets < 150)] += 1
-        hepatic[(platelets >= 50) & (platelets < 100)] += 2
-        hepatic[(platelets >= 20) & (platelets < 49)] += 3
-        hepatic[(platelets < 20)] += 4
-
-        return hepatic
-
-    @staticmethod
     def sirs_criteria(df):
         # Create a dataframe that stores true false for each category
         df_sirs = pd.DataFrame(index=df.index, columns=['temp', 'hr', 'rr.paco2', 'wbc_'])
@@ -468,6 +466,12 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         mews[(20 < resp) & (resp < 30)] += 2
         mews[resp >= 30] += 3
 
+        # temp
+        temp = df['temp'].values
+        mews[temp < 35] += 2
+        mews[(temp >= 35) & (temp < 38.5 ) ] += 0
+        mews[temp >= 38.5] += 2
+        
         return mews
 
     @staticmethod

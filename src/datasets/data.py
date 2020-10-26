@@ -32,7 +32,7 @@ class Dataset(abc.ABC):
 class Physionet2019Dataset(Dataset):
     """Physionet 2019 Dataset for Sepsis early detection in the ICU."""
 
-    STATIC_COLUMNS = ['age', 'sex']
+    STATIC_COLUMNS = ['age', 'sex', 'weight', 'height']
     TIME_COLUMN = 'stay_time'
     TS_COLUMNS = [
         'hr', 'o2sat', 'temp', 'sbp', 'map', 'dbp', 'resp',
@@ -42,8 +42,12 @@ class Physionet2019Dataset(Dataset):
         'ptt', 'wbc', 'fgn', 'plt', 'alb', 'alt', 'basos', 
         'bnd', 'cai', 'ck', 'ckmb', 'crp', 'eos', 'esr', 'hbco',
         'inr_pt', 'lymph', 'mch', 'mchc', 'mcv', 'methb', 'na', 
-        'neut', 'po2', 'pt', 'rbc', 'rdw', 'tco2', 'tnt', 'sirs', 
-        'news', 'mews'
+        'neut', 'po2', 'pt', 'rbc', 'rdw', 'tco2', 'tnt', 
+        'vaso_ind', 'vent_ind', 'urine24',
+        #those we exlude from input variables: 
+        'sirs', 'news', 'mews', 'abx', 'gcs', 'ins', 'qsofa', 'rass',
+        'sofa_cardio', 'sofa_cns', 'sofa_coag', 'sofa_liver',
+        'sofa_renal', 'sofa_resp'
     ]
     LABEL_COLUMN = 'sep3'
 
@@ -168,6 +172,10 @@ class EICUDataset(Physionet2019Dataset):
 
 
 class PreprocessedDataset(Dataset):
+    """
+    Iterable Dataset class which depends on a single pickle file (prefix)
+    which is loaded and the iterated patients are directly extracted from the loaded pickle.
+    """
     LABEL_COLUMN = 'sep3'
     TIME_COLUMN = 'time'
 
@@ -219,34 +227,154 @@ class PreprocessedDataset(Dataset):
 
 class PreprocessedDemoDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/demo/data/sklearn/processed/X_filtered',
+                 prefix='datasets/demo/data/sklearn/processed/X_features',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedPhysionet2019Dataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/physionet2019/data/sklearn/processed/X_filtered',
+                 prefix='datasets/physionet2019/data/sklearn/processed/X_features',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedMIMIC3Dataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/mimic3/data/sklearn/processed/X_filtered',
+                 prefix='datasets/mimic3/data/sklearn/processed/X_features', #X_filtered , X_features_no_imp, X_features
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedHiridDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/hirid/data/sklearn/processed/X_filtered',
+                 prefix='datasets/hirid/data/sklearn/processed/X_features',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedEICUDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/eicu/data/sklearn/processed/X_filtered',
+                 prefix='datasets/eicu/data/sklearn/processed/X_features', #X_filtered
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
+
+
+
+class InstanceBasedDataset(Dataset):
+    """
+    Iterable Dataset class which depends on preprocessed pickled 
+    patient (instance) files (as created in scripts/run_preprocessing.sh)
+    This serves to save memory when running multiple workers in a dataloader
+    """
+    LABEL_COLUMN = 'sep3'
+    TIME_COLUMN = 'time'
+
+    def __init__(   self, 
+                    split='train', 
+                    prefix='datasets/demo/data/sklearn/processed/instances/X_features_{}/', 
+                    transform=None  ):
+
+        self.prefix = prefix.format(split) # path to preprocessed instance files 
+        info_file = os.path.join(self.prefix, 'info.pkl') #contains ids, labels and times for all patients after preprocessing
+
+        # read info df which contains meta information (pat id, label, times) as created in the create instance files script 
+        with open(info_file, 'rb') as f:
+            self.info = pickle.load(f)
+        self.patients = list(self.info.index.unique())
+
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.patients)
+
+    def get_stratified_split(self, random_state=None):
+        per_instance_labels = [
+            np.any(self.info.loc[[patient_id], self.LABEL_COLUMN])
+            for patient_id in self.patients
+        ]
+        train_indices, test_indices = train_test_split(
+            range(len(per_instance_labels)),
+            train_size=0.8,
+            stratify=per_instance_labels,
+            random_state=random_state
+        )
+        return train_indices, test_indices
+
+    def _read_patient_file(self, patient_id):
+        fpath = os.path.join(self.prefix, str(patient_id) + '.pkl')
+        with open(fpath, 'rb') as f:
+            return pickle.load(f)
+
+    def _get_instance(self, idx):
+        patient_id = self.patients[idx]
+        patient_data = self._read_patient_file(patient_id) #self.data.loc[[patient_id]]
+        time = patient_data[self.TIME_COLUMN].values
+        labels = patient_data[self.LABEL_COLUMN].values
+        ts_data = patient_data.drop(
+            columns=[self.LABEL_COLUMN]).values
+        return {
+            'times': time,
+            'ts': ts_data,
+            'labels': labels.astype(float)
+        }
+
+    def __getitem__(self, idx):
+        instance = self._get_instance(idx)
+        if self.transform:
+            instance = self.transform(instance)
+        return instance
+
+
+# Instance based Dataset classes:
+
+class IBDemoDataset(InstanceBasedDataset):
+    """
+    Iterable Dataset with instance files for saving memory overheads
+    """
+    def __init__(self,
+                 prefix='datasets/demo/data/sklearn/processed/instances/X_features_{}/',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class IBPhysionet2019Dataset(InstanceBasedDataset):
+    """
+    Iterable Dataset with instance files for saving memory overheads
+    """
+    def __init__(self,
+                 prefix='datasets/physionet2019/data/sklearn/processed/instances/X_features_{}/',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class IBMIMIC3Dataset(InstanceBasedDataset):
+    """
+    Iterable Dataset with instance files for saving memory overheads
+    """
+    def __init__(self,
+                 prefix='datasets/mimic3/data/sklearn/processed/instances/X_features_{}/',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class IBHiridDataset(InstanceBasedDataset):
+    """
+    Iterable Dataset with instance files for saving memory overheads
+    """
+    def __init__(self,
+                 prefix='datasets/hirid/data/sklearn/processed/instances/X_features_{}/',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+class IBEICUDataset(InstanceBasedDataset):
+    """
+    Iterable Dataset with instance files for saving memory overheads
+    """
+    def __init__(self,
+                 prefix='datasets/eicu/data/sklearn/processed/instances/X_features_{}/',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
