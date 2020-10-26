@@ -10,8 +10,8 @@ from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
-from extracted import ts_columns, columns_not_to_normalize, extended_ts_columns, \ 
-    colums_to_drop, baseline_cols 
+from extracted import (ts_columns, columns_not_to_normalize, extended_ts_columns, 
+    colums_to_drop, baseline_cols) 
 
 from IPython import embed
 
@@ -52,8 +52,9 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         df.set_index(['id', 'time'], inplace=True)
         df.sort_index(ascending=True, inplace=True)
 
-        #Sanity check: ensure that labels are binary and not bool
-        df['sep3'] = df['sep3'].astype(float) #necessary, as ints would mess with categorical onehot encoder
+        #Sanity check: ensure that bool cols are floats (checking all columns each time is costly, so wrote out the identified few)
+        bool_cols = ['sep3', 'vaso_ind', 'vent_ind'] 
+        df[bool_cols] = df[bool_cols].astype(float) #necessary, as ints would mess with categorical onehot encoder
         
         #Remove few columns which are not used at all (e.g. interventions)
         df = df.drop(columns = colums_to_drop)
@@ -118,9 +119,9 @@ class DropColumns(TransformerMixin, BaseEstimator):
         if self.save:
             cols_to_save = self.columns + [self.label]
             save_pickle(df[cols_to_save], os.path.join(self.data_dir, f'baselines_{self.split}.pkl'))
-        df = df.drop(self.label, axis=1)
+        df = df.drop(self.columns, axis=1, errors='ignore')
 
-        print('Done with DropLabels')
+        print('Done with DropColumns')
         return df
 
 
