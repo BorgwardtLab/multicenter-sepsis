@@ -5,7 +5,6 @@ import sys
 sys.path.append(os.getcwd())
 
 from src.sklearn.data.utils import load_pickle
-from IPython import embed
 import numpy as np
  
 if __name__ == "__main__":

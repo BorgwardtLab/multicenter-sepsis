@@ -5,7 +5,6 @@ import sys
 sys.path.append(os.getcwd())
 
 from src.sklearn.data.utils import load_pickle, save_pickle
-from IPython import embed
 import pandas as pd
 
 
@@ -19,7 +18,7 @@ class InstanceWriter():
         save_pickle(df, fpath) 
 
     def to_instance_files(self, df):
-        df = df.groupby('id', ).apply(self._write_instance) #group_keys=False
+        df = df.groupby('id').apply(self._write_instance) #group_keys=False
 
     def from_instance_files(self, filepath):
         """
