@@ -1,6 +1,6 @@
 #!/bin/bash
-models=(AttentionModel GRUModel)
-datasets=(PreprocessedPhysionet2019Dataset PreprocessedMIMIC3Dataset PreprocessedEICUDataset PreprocessedHiridDataset)
+models=(AttentionModel GRUModel LSTMModel RNNModel)
+datasets=(IBPhysionet2019Dataset IBMIMIC3Dataset IBEICUDataset IBHiridDataset)
 
 res_path=$1 
 mkdir -p $res_path
