@@ -26,7 +26,7 @@ mimic3/data:
 physionet2019/data: 
 	cd physionet2019; make 
 
-all_data: eicu/data hirid/data mimic3/data physionet2019/data
+all_data: demo/data eicu/data hirid/data mimic3/data physionet2019/data 
 
 clean:
 	cd demo; make clean; cd ../
