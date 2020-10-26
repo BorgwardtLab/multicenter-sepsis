@@ -1,3 +1,4 @@
+all: demo/data eicu/data hirid/data mimic3/data physionet2019/data 
 MAKEFLAGS += --no-builtin-rules
 .SUFFIXES:
 .DELETE_ON_ERROR:
@@ -25,8 +26,6 @@ mimic3/data:
 	cd mimic3; make 
 physionet2019/data: 
 	cd physionet2019; make 
-
-all_data: demo/data eicu/data hirid/data mimic3/data physionet2019/data 
 
 clean:
 	cd demo; make clean; cd ../
