@@ -32,7 +32,7 @@ class Dataset(abc.ABC):
 class Physionet2019Dataset(Dataset):
     """Physionet 2019 Dataset for Sepsis early detection in the ICU."""
 
-    STATIC_COLUMNS = ['age', 'sex']
+    STATIC_COLUMNS = ['age', 'sex', 'weight', 'height']
     TIME_COLUMN = 'stay_time'
     TS_COLUMNS = [
         'hr', 'o2sat', 'temp', 'sbp', 'map', 'dbp', 'resp',
@@ -42,8 +42,12 @@ class Physionet2019Dataset(Dataset):
         'ptt', 'wbc', 'fgn', 'plt', 'alb', 'alt', 'basos', 
         'bnd', 'cai', 'ck', 'ckmb', 'crp', 'eos', 'esr', 'hbco',
         'inr_pt', 'lymph', 'mch', 'mchc', 'mcv', 'methb', 'na', 
-        'neut', 'po2', 'pt', 'rbc', 'rdw', 'tco2', 'tnt', 'sirs', 
-        'news', 'mews'
+        'neut', 'po2', 'pt', 'rbc', 'rdw', 'tco2', 'tnt', 
+        'vaso_ind', 'vent_ind', 'urine24',
+        #those we exlude from input variables: 
+        'sirs', 'news', 'mews', 'abx', 'gcs', 'ins', 'qsofa', 'rass',
+        'sofa_cardio', 'sofa_cns', 'sofa_coag', 'sofa_liver',
+        'sofa_renal', 'sofa_resp'
     ]
     LABEL_COLUMN = 'sep3'
 
