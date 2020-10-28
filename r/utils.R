@@ -1,8 +1,5 @@
 
-sepsis3_crit <- function(source, pids = NULL) {
-
-  sofa <- load_concepts("sofa", source, id_type = "icustay",
-                        patient_ids = pids)
+sepsis3_crit <- function(source, dat, win, pids = NULL) {
 
   if (grepl("eicu", source)) {
 
@@ -22,7 +19,7 @@ sepsis3_crit <- function(source, pids = NULL) {
                         patient_ids = pids)
   }
 
-  sep3(sofa, si)
+  sep3(data.table::copy(dat[["sofa"]]), si)
 }
 
 cohort <- function(source, min_age = 14) {
@@ -39,7 +36,45 @@ cohort <- function(source, min_age = 14) {
   id_col(res)
 }
 
+truncate_dat <- function(dat, win, flt) {
+
+  if (is_ts_tbl(dat)) {
+    repl_meta <- c("stay_id", "stay_time")
+  } else {
+    repl_meta <- "stay_id"
+  }
+
+  dat <- rename_cols(dat, repl_meta, meta_vars(dat), by_ref = TRUE)
+
+  if (is_ts_tbl(dat)) {
+
+    dat  <- dat[, c("join_time") := list(get("stay_time"))]
+
+    join <- c(paste("stay_id ==", id_vars(win)), "join_time <= outtime")
+    dat <- dat[win, on = join, nomatch = NULL]
+    dat <- rm_cols(dat, c("join_time", "intime"), by_ref = TRUE)
+  }
+
+  if (length(flt) > 0L) {
+    dat <- dat[!get(id_var(dat)) %in% flt, ]
+  }
+
+  dat
+}
+
 dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
+
+  merge_all <- function(x, y) merge(x, y, all = TRUE)
+
+  merge_tbl <- function(x) {
+
+    ts <- vapply(x, is_ts_tbl, logical(1L))
+    id <- vapply(x, is_id_tbl, logical(1L)) & ! ts
+
+    ind <- c(which(ts), which(id))
+
+    Reduce(merge_all, x[ind])
+  }
 
   if (identical(source, "challenge")) {
 
@@ -81,54 +116,58 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
     feats <- concepts[["concept"]]
     feats <- feats[!is.na(feats)]
 
-    dat <- load_concepts(feats, source, id_type = "icustay",
-                         patient_ids = pid)
-    dat <- rename_cols(dat, c("stay_id", "stay_time"), meta_vars(dat))
-
     win <- stay_windows(source, id_type = "icustay", win_type = "icustay",
                         in_time = "intime", out_time = "outtime")
 
-    dat  <- dat[, c("join_time") := list(get("stay_time"))]
+    dat <- load_concepts(feats, source, merge_data = FALSE,
+                         id_type = "icustay", patient_ids = pid)
+    sep <- sepsis3_crit(source, dat, pid)
 
-    join <- c(paste("stay_id ==", id_vars(win)), "join_time <= outtime")
-    dat <- dat[win, on = join]
-    dat <- rm_cols(dat, c("join_time", "intime"), by_ref = TRUE)
-
-    sep <- sepsis3_crit(source, pid)
     sep  <- sep[, c("join_time") := list(get(index_var(sep)))]
 
     join <- c(paste(id_vars(sep), "==", id_vars(win)), "join_time >= intime",
                                                        "join_time <= outtime")
     new <- sep[win, on = join, nomatch = NULL]
     flt <- setdiff(id_col(sep), id_col(new))
-    sep <- rm_cols(new, setdiff(data_vars(new), "sep3"))
+    sep <- rm_cols(new, setdiff(data_vars(new), "sep3"), by_ref = TRUE)
 
-    if (length(flt) > 0L) {
-      dat <- dat[!get(id_var(dat)) %in% flt, ]
+    dat <- lapply(dat, truncate_dat, win, flt)
+
+    is_ts <- vapply(dat, is_ts_tbl, logical(1L))
+    is_id <- vapply(dat, is_id_tbl, logical(1L)) & ! is_ts
+
+    dat <- dat[c(which(is_ts), which(is_id))]
+
+    while(length(dat) > 1L) {
+      dat[[1L]] <- merge(dat[[1L]], dat[[2L]], all = TRUE)
+      dat[[2L]] <- NULL
     }
+
+    dat <- dat[[1L]]
   }
 
   sep <- sep[, c("sep3") := as.integer(get("sep3"))]
 
-  res <- merge(dat, sep, all.x = TRUE)
-  res <- res[, c("sep3") := data.table::nafill(sep3, "locf"),
-             by = c(id_vars(res))]
-  res <- res[, c("sep3") := data.table::nafill(sep3, fill = 0L)]
+  dat <- merge(dat, sep, all.x = TRUE)
+  dat <- dat[, c("sep3") := data.table::nafill(sep3, "locf"),
+             by = c(id_vars(dat))]
+  dat <- dat[, c("sep3") := data.table::nafill(sep3, fill = 0L)]
 
-  res <- res[, c("sep3") := as.logical(get("sep3"))]
+  dat <- dat[, c("sep3") := as.logical(get("sep3"))]
 
   feats <- concepts[["concept"]]
   feats <- feats[!is.na(feats)]
 
-  res <- rm_cols(res, setdiff(data_vars(res), c(feats, "sep3")))
+  dat <- rm_cols(dat, setdiff(data_vars(dat), c(feats, "sep3")),
+                 by_ref = TRUE)
 
-  miss_cols <- setdiff(feats, data_vars(res))
+  miss_cols <- setdiff(feats, data_vars(dat))
 
   if (length(miss_cols)) {
-    res <- data.table::set(res, j = miss_cols, value = NA_real_)
+    dat <- data.table::set(dat, j = miss_cols, value = NA_real_)
   }
 
-  res <- data.table::setcolorder(res, c(meta_vars(res), feats))
+  dat <- data.table::setcolorder(dat, c(meta_vars(dat), feats))
 
   dir <- file.path(dir, source)
 
@@ -136,5 +175,5 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
 
   dir.create(dir, recursive = TRUE)
 
-  write_psv(res, dir, na_rows = TRUE)
+  write_psv(dat, dir, na_rows = TRUE)
 }

@@ -62,5 +62,11 @@ for (src in sources) {
     dir.create("shared")
   }
 
-  zip(file.path("shared", paste0(src, ".zip")), src, flags = "-qr9X")
+  zip_file <- file.path("shared", paste0(src, ".zip"))
+
+  if (file.exists(zip_file)) {
+    unlink(zip_file)
+  }
+
+  zip(zip_file, src, flags = "-qr9X")
 }

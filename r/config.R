@@ -81,6 +81,7 @@ concepts <- list(
     , list("sofa_cardio", NA_character_, NULL)
     , list("sofa_cns", NA_character_, NULL)
     , list("sofa_renal", NA_character_, NULL)
+    , list("sofa", NA_character_, NULL)
     , list("qsofa", NA_character_, NULL)
     , list("sirs", NA_character_, NULL)
     , list("news", NA_character_, NULL)
