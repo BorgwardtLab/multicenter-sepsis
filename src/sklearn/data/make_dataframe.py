@@ -101,7 +101,8 @@ def main():
             # while skipping the manual feature engineering
             filter_for_deep_pipe =  Pipeline([
             ('filter_invalid_times', InvalidTimesFiltration()),
-            ('drop_cols', DropColumns()), #drop baseline scores after filtering invalid
+            ('drop_cols', DropColumns( save=True,  
+                data_dir=out_dir, split=split)), #save baselines here, as its not a dask df
              ])
             print('Running invalid times filtr. for deep pipeline..')
             df_deep = df.reset_index(level='time', drop=False) # invalid times filt. can't handle multi-index due to dask
@@ -121,10 +122,10 @@ def main():
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
-            ('filter_invalid_times', InvalidTimesFiltration()),
+            ('filter_invalid_times', InvalidTimesFiltration())
             #drop and save baseline scores after filtering invalid (which ignored baselines)
-            ('drop_cols', DropColumns(save=False, #### TODO: this must be set to True! it's just temporarily false until we receive sofa column (was forgotten in last dump) 
-                data_dir=out_dir, split=split)) 
+            #('drop_cols', DropColumns(save=True,   # don't save here, as still delayed dask obj 
+            #    data_dir=out_dir, split=split)) 
         ])
         df_deep2 = pipeline.fit_transform(df).compute()
         
