@@ -3,7 +3,6 @@ import pickle
 import argparse
 import sys
 sys.path.append(os.getcwd())
-
 from src.sklearn.data.utils import load_pickle
 from IPython import embed
 
@@ -66,14 +65,17 @@ if __name__ == "__main__":
     #normalized_path = os.path.join(path, f'X_normalized_{split}.pkl')
     features_path = os.path.join(path, f'X_features_{split}.pkl')
     X_f_path = os.path.join(path, f'X_features_no_imp_{split}.pkl')
+    baseline_path = os.path.join(path, f'baselines_{split}.pkl')
+ 
     #df_n = load_pickle(normalized_path)
     X = load_pickle(features_path)
     Xf = load_pickle(X_f_path)
-    
-    dfs = [X, Xf]
-    names = ['X_features', 'X_features_no_imp']
-    for df, name in zip(dfs, names):
-        check_df(df, name)
+    b = load_pickle(baseline_path)
+ 
+    #dfs = [X, Xf]
+    #names = ['X_features', 'X_features_no_imp']
+    #for df, name in zip(dfs, names):
+    #    check_df(df, name)
  
     #stats = compute_stats(X_f) 
     #print(stats)
