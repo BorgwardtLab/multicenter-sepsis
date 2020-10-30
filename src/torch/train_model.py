@@ -41,8 +41,11 @@ def main(hparams, model_cls):
         monitor=monitor_score,
         mode=monitor_mode
     )
+    # TODO: This is effectively a patience of 10 due to a bug in pytorch
+    # lighting version 0.7.6
+    # https://github.com/PyTorchLightning/pytorch-lightning/issues/1751
     early_stopping_cb = pl.callbacks.early_stopping.EarlyStopping(
-        monitor=monitor_score, patience=10, mode=monitor_mode, strict=True,
+        monitor=monitor_score, patience=20, mode=monitor_mode, strict=True,
         verbose=1)
 
     # most basic trainer, uses good defaults
