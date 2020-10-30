@@ -122,10 +122,9 @@ def main():
         start = time()
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
-            ('filter_invalid_times', InvalidTimesFiltration())
+            ('filter_invalid_times', InvalidTimesFiltration()),
             #drop and save baseline scores after filtering invalid (which ignored baselines)
-            #('drop_cols', DropColumns(save=True,   # don't save here, as still delayed dask obj 
-            #    data_dir=out_dir, split=split)) 
+            ('drop_cols', DropColumns(save=False))   # don't save here, as still delayed dask obj 
         ])
         df_deep2 = pipeline.fit_transform(df).compute()
         
