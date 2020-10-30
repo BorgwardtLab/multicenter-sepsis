@@ -43,18 +43,24 @@ class BaseModel(FixedLightningModule):
         loss[invalid_indices] = 0.
         # Aggregate first over time then over instances
         n_tp = labels.shape[-1] - invalid_indices.sum(-1, keepdim=True)
-        per_instance_loss = loss.sum(-1) / n_tp.float()
-        return {'loss': per_instance_loss.mean(), 'n_samples': data.shape[0]}
+        # per_instance_loss = loss.sum(-1) / n_tp.float()
+        n_tp = n_tp.sum()
+        per_tp_loss = loss.sum() / n_tp.float()
+        return {
+            'loss': per_tp_loss,
+            'n_tp': n_tp,
+            'log': {'loss': per_tp_loss}
+        }
 
     def training_epoch_end(self, outputs):
-        total_samples = 0
+        total_tp = 0
         total_loss = 0
         for x in outputs:
-            n_samples = x['n_samples']
-            total_samples += n_samples
-            total_loss += n_samples * x['loss']
+            n_tp = x['n_tp']
+            total_tp += n_tp
+            total_loss += n_tp * x['loss']
 
-        average_loss = total_loss / total_samples
+        average_loss = total_loss / total_tp
         return {
             'log': {'train_loss': average_loss},
             'progress_bar': {'train_loss': average_loss}
@@ -65,7 +71,6 @@ class BaseModel(FixedLightningModule):
         output = self.forward(data, lengths).squeeze(-1)
 
         # Flatten outputs to support nll_loss
-        n_val = labels.shape[0]
         invalid_indices = torch.isnan(labels)
         cloned_labels = labels.clone()
         cloned_labels[invalid_indices] = 0.
@@ -73,23 +78,28 @@ class BaseModel(FixedLightningModule):
         loss[invalid_indices] = 0.
         # Aggregate first over time then over instances
         n_tp = labels.shape[-1] - invalid_indices.sum(-1, keepdim=True)
-        per_instance_loss = loss.sum(-1) / n_tp.float()
+        # per_instance_loss = loss.sum(-1) / n_tp.float()
+        n_tp = n_tp.sum()
+        per_tp_loss = loss.sum() / n_tp.float()
 
         scores = torch.sigmoid(output)
         return {
-            f'{prefix}_loss': per_instance_loss.detach().mean(),
-            f'{prefix}_n': n_val,
+            f'{prefix}_loss': per_tp_loss.detach().mean(),
+            f'{prefix}_n_tp': n_tp,
             f'{prefix}_labels': labels.cpu().detach().numpy(),
             f'{prefix}_scores': scores.cpu().detach().numpy()
         }
 
     def _shared_end(self, outputs, prefix):
-        total_samples = sum(x[f'{prefix}_n'] for x in outputs)
-        val_loss_mean = (
-            torch.stack([
-                x[f'{prefix}_loss'] * x[f'{prefix}_n'] for x in outputs
-            ]).sum() / total_samples
-        )
+        total_tp = 0
+        total_loss = 0
+        n_tp_key = f'{prefix}_n_tp'
+        loss_key = f'{prefix}_loss'
+        for x in outputs:
+            n_tp = x[n_tp_key]
+            total_tp += n_tp
+            total_loss += n_tp * x[loss_key]
+        average_loss = total_loss / total_tp
 
         labels = []
         predictions = []
@@ -100,23 +110,30 @@ class BaseModel(FixedLightningModule):
             cur_preds = (cur_scores >= 0.5).astype(float)
             for label, pred, score in zip(cur_labels, cur_preds, cur_scores):
                 selection = ~np.isnan(label)
-                labels.append(label[selection])
-                predictions.append(pred[selection])
-                scores.append(score[selection])
+                # Get index of first invalid label, this allows the labels to
+                # have gaps with NaN in between.
+                first_invalid_label = (
+                    len(selection) - np.argmax(selection[::-1]))
+                labels.append(label[:first_invalid_label])
+                predictions.append(pred[:first_invalid_label])
+                scores.append(score[:first_invalid_label])
 
         physionet_score = physionet2019_utility(
             labels, predictions, shift_labels=self.hparams.label_propagation)
+        # Scores below require flattened predictions
         labels = np.concatenate(labels, axis=0)
-        predictions = np.concatenate(predictions, axis=0)
-        scores = np.concatenate(scores, axis=0)
+        is_valid = ~np.isnan(labels)
+        labels = labels[is_valid]
+        predictions = np.concatenate(predictions, axis=0)[is_valid]
+        scores = np.concatenate(scores, axis=0)[is_valid]
         average_precision = average_precision_score(labels, scores)
         auroc = roc_auc_score(labels, scores)
         balanced_accuracy = balanced_accuracy_score(labels, predictions)
         data = {
-            f'{prefix}_loss': val_loss_mean.item(),
-            f'{prefix}_average_precision': average_precision,
-            f'{prefix}_auroc': auroc,
-            f'{prefix}_balanced_accuracy': balanced_accuracy,
+            f'{prefix}_loss': average_loss.cpu().detach(),
+            f'{prefix}_average_precision': torch.as_tensor(average_precision),
+            f'{prefix}_auroc': torch.as_tensor(auroc),
+            f'{prefix}_balanced_accuracy': torch.as_tensor(balanced_accuracy),
             f'{prefix}_physionet2019_score': torch.as_tensor(physionet_score)
         }
         return {

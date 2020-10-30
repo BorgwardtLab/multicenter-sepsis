@@ -42,7 +42,8 @@ def main(hparams, model_cls):
         mode=monitor_mode
     )
     early_stopping_cb = pl.callbacks.early_stopping.EarlyStopping(
-        monitor=monitor_score, patience=10, mode=monitor_mode, strict=True)
+        monitor=monitor_score, patience=10, mode=monitor_mode, strict=True,
+        verbose=1)
 
     # most basic trainer, uses good defaults
     trainer = pl.Trainer(
@@ -101,9 +102,9 @@ if __name__ == '__main__':
     parser.add_argument('--gpus', type=int, default=None)
     parser.add_argument('--hyperparam-draws', default=0, type=int)
     parser.add_argument('--monitor', type=str,
-                        default='online_val_physionet2019_score')
+                        default='online_val_loss')
     parser.add_argument('--monitor-mode', type=str, choices=['max', 'min'],
-                        default='max')
+                        default='min')
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
 
