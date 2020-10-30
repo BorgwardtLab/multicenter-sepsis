@@ -100,23 +100,30 @@ class BaseModel(FixedLightningModule):
             cur_preds = (cur_scores >= 0.5).astype(float)
             for label, pred, score in zip(cur_labels, cur_preds, cur_scores):
                 selection = ~np.isnan(label)
-                labels.append(label[selection])
-                predictions.append(pred[selection])
-                scores.append(score[selection])
+                # Get index of first invalid label, this allows the labels to
+                # have gaps with NaN in between.
+                first_invalid_label = (
+                    len(selection) - np.argmax(selection[::-1]))
+                labels.append(label[:first_invalid_label])
+                predictions.append(pred[:first_invalid_label])
+                scores.append(score[:first_invalid_label])
 
         physionet_score = physionet2019_utility(
             labels, predictions, shift_labels=self.hparams.label_propagation)
+        # Scores below require flattened predictions
         labels = np.concatenate(labels, axis=0)
-        predictions = np.concatenate(predictions, axis=0)
-        scores = np.concatenate(scores, axis=0)
+        is_valid = ~np.isnan(labels)
+        labels = labels[is_valid]
+        predictions = np.concatenate(predictions, axis=0)[is_valid]
+        scores = np.concatenate(scores, axis=0)[is_valid]
         average_precision = average_precision_score(labels, scores)
         auroc = roc_auc_score(labels, scores)
         balanced_accuracy = balanced_accuracy_score(labels, predictions)
         data = {
-            f'{prefix}_loss': val_loss_mean.item(),
-            f'{prefix}_average_precision': average_precision,
-            f'{prefix}_auroc': auroc,
-            f'{prefix}_balanced_accuracy': balanced_accuracy,
+            f'{prefix}_loss': average_loss.cpu().detach(),
+            f'{prefix}_average_precision': torch.as_tensor(average_precision),
+            f'{prefix}_auroc': torch.as_tensor(auroc),
+            f'{prefix}_balanced_accuracy': torch.as_tensor(balanced_accuracy),
             f'{prefix}_physionet2019_score': torch.as_tensor(physionet_score)
         }
         return {
