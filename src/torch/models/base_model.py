@@ -31,7 +31,7 @@ class BaseModel(FixedLightningModule):
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
         self.hparams = hparams
         self.loss = torch.nn.BCEWithLogitsLoss(
-            reduction='none', pos_weight=torch.Tensor([hparams.pos_weight]))
+            reduction='none', pos_weight=torch.Tensor([hparams.pos_weight * d.class_imbalance_factor]))
 
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
@@ -205,7 +205,8 @@ class BaseModel(FixedLightningModule):
                 transform=ComposeTransformations(self.transforms)),
             shuffle=False,
             collate_fn=variable_length_collate,
-            batch_size=self.hparams.batch_size
+            batch_size=self.hparams.batch_size,
+            num_workers=4
         )
 
     @classmethod
@@ -228,5 +229,5 @@ class BaseModel(FixedLightningModule):
             tunable=True
         )
         parser.add_argument('--label-propagation', default=6, type=int)
-        parser.add_argument('--pos-weight', type=float, default=50.)
+        parser.add_argument('--pos-weight', type=float, default=1.)
         return parser

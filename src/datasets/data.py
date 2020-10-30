@@ -284,6 +284,16 @@ class InstanceBasedDataset(Dataset):
         self.patients = list(self.info.index.unique())
 
         self.transform = transform
+    
+    @property
+    def class_imbalance_factor(self):
+        """
+        factor for correcting class imbalance.
+        returns (1-p)/p with p being the time-point wise ratio of the 
+        minority/positive class.
+        """
+        prev = self.info['sep3'].sum()/len(self.info)
+        return (1 - prev) / prev 
 
     def __len__(self):
         return len(self.patients)
