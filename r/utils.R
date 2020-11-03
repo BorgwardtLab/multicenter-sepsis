@@ -177,3 +177,28 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
 
   write_psv(dat, dir, na_rows = TRUE)
 }
+
+read_dataset <- function(dir) {
+
+  if (!file.info(dir)$isdir) {
+    tmp <- tempfile()
+    dir.create(tmp)
+    on.exit(unlink(tmp, recursive = TRUE))
+    unzip(dir, exdir = tmp, junkpaths = TRUE)
+    dir <- tmp
+  }
+
+  concepts <- concepts[!is.na(concepts[["concept"]]), ]
+  concepts <- setNames(concepts[["col_spec"]], concepts[["concept"]])
+  concepts[c("sex", "age", "stay_time", "sep3")] <- list(
+    readr::col_character(), readr::col_double(), readr::col_integer(),
+    readr::col_logical()
+  )
+
+  dat <- read_psv(dir, col_spec = do.call(readr::cols, concepts),
+                  id_var = "stay_id")
+  dat <- dat[, stay_time := as.difftime(stay_time, units = "hours")]
+
+  as_ts_tbl(dat, id_vars = "stay_id", index_var = "stay_time",
+            interval = hours(1L), by_ref = TRUE)
+}
