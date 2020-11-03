@@ -4,6 +4,7 @@ import json
 import os
 
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 
 import src.torch.models
 import src.datasets
@@ -36,22 +37,19 @@ def main(hparams, model_cls):
     monitor_score = hparams.monitor
     monitor_mode = hparams.monitor_mode
 
-    model_checkpoint_cb = pl.callbacks.model_checkpoint.ModelCheckpoint(
+    model_checkpoint_cb = ModelCheckpoint(
         os.path.join(checkpoint_dir, '{epoch}-{'+monitor_score+':.2f}'),
         monitor=monitor_score,
         mode=monitor_mode
     )
-    # TODO: This is effectively a patience of 10 due to a bug in pytorch
-    # lighting version 0.7.6
-    # https://github.com/PyTorchLightning/pytorch-lightning/issues/1751
-    early_stopping_cb = pl.callbacks.early_stopping.EarlyStopping(
-        monitor=monitor_score, patience=20, mode=monitor_mode, strict=True,
+    early_stopping_cb = EarlyStopping(
+        monitor=monitor_score, patience=10, mode=monitor_mode, strict=True,
         verbose=1)
 
     # most basic trainer, uses good defaults
     trainer = pl.Trainer(
+        callbacks=[early_stopping_cb],
         checkpoint_callback=model_checkpoint_cb,
-        early_stop_callback=early_stopping_cb,
         max_epochs=hparams.max_epochs,
         logger=logger,
         gpus=hparams.gpus
@@ -62,7 +60,8 @@ def main(hparams, model_cls):
     checkpoints = os.listdir(checkpoint_dir)
     assert len(checkpoints) == 1
     last_checkpoint = os.path.join(checkpoint_dir, checkpoints[0])
-    loaded_model = model_cls.load_from_checkpoint(last_checkpoint)
+    loaded_model = model_cls.load_from_checkpoint(
+        checkpoint_path=last_checkpoint)
     trainer.test(loaded_model)
     trainer.logger.save()
     last_metrics = trainer.logger.experiment.metrics[-1]
@@ -127,6 +126,9 @@ if __name__ == '__main__':
     if hparams.hyperparam_draws > 0:
         for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
             print(hyperparam_draw)
+            hyperparam_draw = Namespace(**hyperparam_draw.__getstate__())
             main(hyperparam_draw, model_cls)
     else:
+        # Need to do this in order to allow pickling
+        hparams = Namespace(**hparams.__getstate__())
         main(hparams, model_cls)

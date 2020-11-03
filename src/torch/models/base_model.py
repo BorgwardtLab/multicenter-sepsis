@@ -1,4 +1,4 @@
-from argparse import ArgumentParser
+"""Base model for all models implementing datasets and training."""
 import numpy as np
 
 import torch
@@ -11,12 +11,13 @@ from test_tube import HyperOptArgumentParser
 
 import src.datasets
 from src.evaluation import physionet2019_utility
-from src.torch.models.fixed_lightning import FixedLightningModule
 from src.torch.torch_utils import (
     variable_length_collate, ComposeTransformations, LabelPropagation)
 
 
-class BaseModel(FixedLightningModule):
+class BaseModel(pl.LightningModule):
+    """Base model for all models implementing datasets and training."""
+
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
@@ -30,8 +31,12 @@ class BaseModel(FixedLightningModule):
         d = self.dataset_cls(split='train')
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
         self.hparams = hparams
+        self.save_hyperparameters()
         self.loss = torch.nn.BCEWithLogitsLoss(
-            reduction='none', pos_weight=torch.Tensor([hparams.pos_weight * d.class_imbalance_factor]))
+            reduction='none',
+            pos_weight=torch.Tensor(
+                [hparams.pos_weight * d.class_imbalance_factor])
+        )
 
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
@@ -46,10 +51,10 @@ class BaseModel(FixedLightningModule):
         # per_instance_loss = loss.sum(-1) / n_tp.float()
         n_tp = n_tp.sum()
         per_tp_loss = loss.sum() / n_tp.float()
+        self.log('train_loss', per_tp_loss)
         return {
             'loss': per_tp_loss,
             'n_tp': n_tp,
-            'log': {'loss': per_tp_loss}
         }
 
     def training_epoch_end(self, outputs):
@@ -61,10 +66,7 @@ class BaseModel(FixedLightningModule):
             total_loss += n_tp * x['loss']
 
         average_loss = total_loss / total_tp
-        return {
-            'log': {'train_loss': average_loss},
-            'progress_bar': {'train_loss': average_loss}
-        }
+        self.log('train_loss', average_loss, prog_bar=True)
 
     def _shared_eval(self, batch, batch_idx, prefix):
         data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
@@ -129,17 +131,11 @@ class BaseModel(FixedLightningModule):
         average_precision = average_precision_score(labels, scores)
         auroc = roc_auc_score(labels, scores)
         balanced_accuracy = balanced_accuracy_score(labels, predictions)
-        data = {
-            f'{prefix}_loss': average_loss.cpu().detach(),
-            f'{prefix}_average_precision': torch.as_tensor(average_precision),
-            f'{prefix}_auroc': torch.as_tensor(auroc),
-            f'{prefix}_balanced_accuracy': torch.as_tensor(balanced_accuracy),
-            f'{prefix}_physionet2019_score': torch.as_tensor(physionet_score)
-        }
-        return {
-            'progress_bar': data,
-            'log': data
-        }
+        self.log(f'{prefix}_physionet2019_score', physionet_score)
+        self.log(f'{prefix}_average_precision', average_precision)
+        self.log(f'{prefix}_auroc', auroc)
+        self.log(f'{prefix}_balanced_accuracy', balanced_accuracy)
+        self.log(f'{prefix}_loss', average_loss)
 
     @property
     def transforms(self):
@@ -151,16 +147,19 @@ class BaseModel(FixedLightningModule):
         return self._shared_eval(batch, batch_idx, 'online_val')
 
     def validation_epoch_end(self, outputs):
-        return self._shared_end(outputs, 'online_val')
+        self._shared_end(outputs, 'online_val')
 
     def test_step(self, batch, batch_idx):
         return self._shared_eval(batch, batch_idx, prefix='val')
 
     def test_epoch_end(self, outputs):
-        return self._shared_end(outputs, 'val')
+        self._shared_end(outputs, 'val')
 
     def configure_optimizers(self):
         """Get optimizers."""
+        # TODO: We should also add a scheduler here to implement warmup. Most
+        # recent version of pytorch lightning seems to have problems with how
+        # it was implemented before.
         optimizer = torch.optim.Adam(
             self.parameters(), lr=self.hparams.learning_rate)
         return optimizer
