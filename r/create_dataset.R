@@ -21,7 +21,7 @@ opt_parser <- OptionParser(option_list = option_list)
 opt <- parse_args(opt_parser)
 
 demo <- c("mimic_demo", "eicu_demo")
-prod <- c("mimic", "eicu", "hirid")
+prod <- c("mimic", "eicu", "hirid", "aumc")
 all  <- c(demo, prod)
 
 data_opts <- c(all, "demo", "prod", "all", "challenge")
