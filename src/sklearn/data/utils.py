@@ -33,11 +33,18 @@ def index_check(full_data):
         full_data.set_index(['id', 'time'], inplace=True) 
     return full_data
 
-def load_data(path='datasets/physionet2019/data/sklearn/processed', label='SepsisLabel', index='multi'):
-    """ 
+def load_data(
+        path='datasets/physionet2019/data/sklearn/processed',
+        label='sep3',
+        index='multi',
+        load_test_split=False
+):
+    """
     Load preprocessed Data in sklearn format from pickle, depending on index type reformat properly.
     """
     splits = ['train', 'validation']
+    if load_test_split:
+        splits.append('test')
     drop_col = 'Gender_Other' #only 5 patients in eicu have this, dropping this col as its still encoded in male female both zero. 
     data = defaultdict()
     files = ['X_features_' + split for split in splits]

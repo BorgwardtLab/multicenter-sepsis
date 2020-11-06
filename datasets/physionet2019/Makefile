@@ -1,4 +1,4 @@
-all: data/extracted
+all: data/extracted data/split_info.pkl
 splits: data/split_info.pkl
 
 .DELETE_ON_ERROR:
@@ -26,4 +26,4 @@ data/split_info.pkl: data/extracted
 	pipenv run python scripts/create_splits.py
 
 clean:
-	rm -r data/*
+	rm -r data

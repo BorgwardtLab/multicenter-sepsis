@@ -1,4 +1,4 @@
-from argparse import ArgumentParser
+"""Base model for all models implementing datasets and training."""
 import numpy as np
 
 import torch
@@ -11,12 +11,13 @@ from test_tube import HyperOptArgumentParser
 
 import src.datasets
 from src.evaluation import physionet2019_utility
-from src.torch.models.fixed_lightning import FixedLightningModule
 from src.torch.torch_utils import (
     variable_length_collate, ComposeTransformations, LabelPropagation)
 
 
-class BaseModel(FixedLightningModule):
+class BaseModel(pl.LightningModule):
+    """Base model for all models implementing datasets and training."""
+
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
@@ -30,8 +31,12 @@ class BaseModel(FixedLightningModule):
         d = self.dataset_cls(split='train')
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
         self.hparams = hparams
+        self.save_hyperparameters()
         self.loss = torch.nn.BCEWithLogitsLoss(
-            reduction='none', pos_weight=torch.Tensor([hparams.pos_weight]))
+            reduction='none',
+            pos_weight=torch.Tensor(
+                [hparams.pos_weight * d.class_imbalance_factor])
+        )
 
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
@@ -43,29 +48,31 @@ class BaseModel(FixedLightningModule):
         loss[invalid_indices] = 0.
         # Aggregate first over time then over instances
         n_tp = labels.shape[-1] - invalid_indices.sum(-1, keepdim=True)
-        per_instance_loss = loss.sum(-1) / n_tp.float()
-        return {'loss': per_instance_loss.mean(), 'n_samples': data.shape[0]}
+        # per_instance_loss = loss.sum(-1) / n_tp.float()
+        n_tp = n_tp.sum()
+        per_tp_loss = loss.sum() / n_tp.float()
+        self.log('train_loss', per_tp_loss)
+        return {
+            'loss': per_tp_loss,
+            'n_tp': n_tp,
+        }
 
     def training_epoch_end(self, outputs):
-        total_samples = 0
+        total_tp = 0
         total_loss = 0
         for x in outputs:
-            n_samples = x['n_samples']
-            total_samples += n_samples
-            total_loss += n_samples * x['loss']
+            n_tp = x['n_tp']
+            total_tp += n_tp
+            total_loss += n_tp * x['loss']
 
-        average_loss = total_loss / total_samples
-        return {
-            'log': {'train_loss': average_loss},
-            'progress_bar': {'train_loss': average_loss}
-        }
+        average_loss = total_loss / total_tp
+        self.log('train_loss', average_loss, prog_bar=True)
 
     def _shared_eval(self, batch, batch_idx, prefix):
         data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
         output = self.forward(data, lengths).squeeze(-1)
 
         # Flatten outputs to support nll_loss
-        n_val = labels.shape[0]
         invalid_indices = torch.isnan(labels)
         cloned_labels = labels.clone()
         cloned_labels[invalid_indices] = 0.
@@ -73,23 +80,28 @@ class BaseModel(FixedLightningModule):
         loss[invalid_indices] = 0.
         # Aggregate first over time then over instances
         n_tp = labels.shape[-1] - invalid_indices.sum(-1, keepdim=True)
-        per_instance_loss = loss.sum(-1) / n_tp.float()
+        # per_instance_loss = loss.sum(-1) / n_tp.float()
+        n_tp = n_tp.sum()
+        per_tp_loss = loss.sum() / n_tp.float()
 
         scores = torch.sigmoid(output)
         return {
-            f'{prefix}_loss': per_instance_loss.detach().mean(),
-            f'{prefix}_n': n_val,
+            f'{prefix}_loss': per_tp_loss.detach().mean(),
+            f'{prefix}_n_tp': n_tp,
             f'{prefix}_labels': labels.cpu().detach().numpy(),
             f'{prefix}_scores': scores.cpu().detach().numpy()
         }
 
     def _shared_end(self, outputs, prefix):
-        total_samples = sum(x[f'{prefix}_n'] for x in outputs)
-        val_loss_mean = (
-            torch.stack([
-                x[f'{prefix}_loss'] * x[f'{prefix}_n'] for x in outputs
-            ]).sum() / total_samples
-        )
+        total_tp = 0
+        total_loss = 0
+        n_tp_key = f'{prefix}_n_tp'
+        loss_key = f'{prefix}_loss'
+        for x in outputs:
+            n_tp = x[n_tp_key]
+            total_tp += n_tp
+            total_loss += n_tp * x[loss_key]
+        average_loss = total_loss / total_tp
 
         labels = []
         predictions = []
@@ -100,29 +112,30 @@ class BaseModel(FixedLightningModule):
             cur_preds = (cur_scores >= 0.5).astype(float)
             for label, pred, score in zip(cur_labels, cur_preds, cur_scores):
                 selection = ~np.isnan(label)
-                labels.append(label[selection])
-                predictions.append(pred[selection])
-                scores.append(score[selection])
+                # Get index of first invalid label, this allows the labels to
+                # have gaps with NaN in between.
+                first_invalid_label = (
+                    len(selection) - np.argmax(selection[::-1]))
+                labels.append(label[:first_invalid_label])
+                predictions.append(pred[:first_invalid_label])
+                scores.append(score[:first_invalid_label])
 
         physionet_score = physionet2019_utility(
             labels, predictions, shift_labels=self.hparams.label_propagation)
+        # Scores below require flattened predictions
         labels = np.concatenate(labels, axis=0)
-        predictions = np.concatenate(predictions, axis=0)
-        scores = np.concatenate(scores, axis=0)
+        is_valid = ~np.isnan(labels)
+        labels = labels[is_valid]
+        predictions = np.concatenate(predictions, axis=0)[is_valid]
+        scores = np.concatenate(scores, axis=0)[is_valid]
         average_precision = average_precision_score(labels, scores)
         auroc = roc_auc_score(labels, scores)
         balanced_accuracy = balanced_accuracy_score(labels, predictions)
-        data = {
-            f'{prefix}_loss': val_loss_mean.item(),
-            f'{prefix}_average_precision': average_precision,
-            f'{prefix}_auroc': auroc,
-            f'{prefix}_balanced_accuracy': balanced_accuracy,
-            f'{prefix}_physionet2019_score': torch.as_tensor(physionet_score)
-        }
-        return {
-            'progress_bar': data,
-            'log': data
-        }
+        self.log(f'{prefix}_physionet2019_score', physionet_score)
+        self.log(f'{prefix}_average_precision', average_precision)
+        self.log(f'{prefix}_auroc', auroc)
+        self.log(f'{prefix}_balanced_accuracy', balanced_accuracy)
+        self.log(f'{prefix}_loss', average_loss)
 
     @property
     def transforms(self):
@@ -134,16 +147,19 @@ class BaseModel(FixedLightningModule):
         return self._shared_eval(batch, batch_idx, 'online_val')
 
     def validation_epoch_end(self, outputs):
-        return self._shared_end(outputs, 'online_val')
+        self._shared_end(outputs, 'online_val')
 
     def test_step(self, batch, batch_idx):
         return self._shared_eval(batch, batch_idx, prefix='val')
 
     def test_epoch_end(self, outputs):
-        return self._shared_end(outputs, 'val')
+        self._shared_end(outputs, 'val')
 
     def configure_optimizers(self):
         """Get optimizers."""
+        # TODO: We should also add a scheduler here to implement warmup. Most
+        # recent version of pytorch lightning seems to have problems with how
+        # it was implemented before.
         optimizer = torch.optim.Adam(
             self.parameters(), lr=self.hparams.learning_rate)
         return optimizer
@@ -188,7 +204,8 @@ class BaseModel(FixedLightningModule):
                 transform=ComposeTransformations(self.transforms)),
             shuffle=False,
             collate_fn=variable_length_collate,
-            batch_size=self.hparams.batch_size
+            batch_size=self.hparams.batch_size,
+            num_workers=4
         )
 
     @classmethod
@@ -211,5 +228,5 @@ class BaseModel(FixedLightningModule):
             tunable=True
         )
         parser.add_argument('--label-propagation', default=6, type=int)
-        parser.add_argument('--pos-weight', type=float, default=50.)
+        parser.add_argument('--pos-weight', type=float, default=1.)
         return parser

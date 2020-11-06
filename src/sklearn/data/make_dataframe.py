@@ -19,6 +19,11 @@ dataset_class_mapping = {
     'demo': 'DemoDataset'
 }
 
+def ensure_single_index(df):
+    df.reset_index(inplace=True)
+    df.set_index(['id'], inplace=True)
+    return df 
+
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', 
@@ -39,7 +44,7 @@ def main():
     parser.add_argument('--n_partitions', type=int,
         default=50,
         help='number of df partitions in dask')
-    parser.add_argument('--splits', nargs='+', default=['train', 'validation'])
+    parser.add_argument('--splits', nargs='+', default=['train', 'validation', 'test'])
     args = parser.parse_args()
     client = Client(n_workers=args.n_jobs, memory_limit='50GB', local_directory='/local0/tmp/dask')
     n_jobs = args.n_jobs
@@ -95,13 +100,17 @@ def main():
             # consistently apply the same final invalid times filtration steps as in sklearn pipe
             # while skipping the manual feature engineering
             filter_for_deep_pipe =  Pipeline([
-            ('filter_invalid_times', InvalidTimesFiltration())
-            ])
+            ('filter_invalid_times', InvalidTimesFiltration()),
+            ('drop_cols', DropColumns( save=True,  
+                data_dir=out_dir, split=split)), #save baselines here, as its not a dask df
+             ])
+            print('Running invalid times filtr. for deep pipeline..')
             df_deep = df.reset_index(level='time', drop=False) # invalid times filt. can't handle multi-index due to dask
             df_deep = filter_for_deep_pipe.fit_transform(df_deep) 
             save_pickle(df_deep, dump_for_deep)
+            print('Done with invalid times filtr.')
     
-        #2. Tunable Pipeline: Feature Extraction, further Preprocessing and Classification
+        #2. Tunable Pipeline: Feature Extraction, further Preprocessing
         #---------------------------------------------------------------------------------
         # We need to sort the index by ourselves to ensure the time axis is
         # correctly ordered. Dask would not take this into account.
@@ -114,15 +123,31 @@ def main():
         pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
             ('filter_invalid_times', InvalidTimesFiltration()),
-            ('imputation', CarryForwardImputation(n_jobs=n_jobs, concat_output=True))
-            #('remove_nans', FillMissing())
+            #drop and save baseline scores after filtering invalid (which ignored baselines)
+            ('drop_cols', DropColumns(save=False))   # don't save here, as still delayed dask obj 
         ])
-        df = pipeline.fit_transform(df).compute()
-        # df.to_hdf(os.path.join(out_dir, f'X_features_{split}.h5'), '/data')
-        # consecutive = df.groupby('id').apply(lambda x: np.all(np.diff(x['time']) >= 0))
+        df_deep2 = pipeline.fit_transform(df).compute()
+        
+        # Test how deep models perform with lookback features:
+        # For sklearn pipe, we need proper multi index format once again      
+        df_deep2.reset_index(inplace=True)
+        df_deep2.set_index(['id', 'time'], inplace=True)
+ 
+        sklearn_pipe =  Pipeline([
+            ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)) 
+            ])
+        df_sklearn = sklearn_pipe.fit_transform(df_deep2)
+
         print(f'.. finished. Took {time() - start} seconds.')
+        
+        #All models assume time as column and only id as index (multi-index would cause problem with dask models)
+        df_deep2 = ensure_single_index(df_deep2)
+        df_sklearn = ensure_single_index(df_sklearn) 
+
         # Save
-        save_pickle(df, os.path.join(out_dir, f'X_features_{split}.pkl'))
+        save_pickle(df_sklearn, os.path.join(out_dir, f'X_features_{split}.pkl'))
+        save_pickle(df_deep2, os.path.join(out_dir, f'X_features_no_imp_{split}.pkl'))
+
     client.close()
 
 if __name__ == '__main__':

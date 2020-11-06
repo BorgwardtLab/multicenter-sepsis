@@ -10,7 +10,9 @@ from sklearn.base import TransformerMixin, BaseEstimator
 
 from utils import save_pickle, load_pickle 
 from base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
-from extracted import columns_with_nans, ts_columns, extended_ts_columns ,columns_not_to_normalize
+from extracted import (ts_columns, columns_not_to_normalize, extended_ts_columns, 
+    colums_to_drop, baseline_cols) 
+
 from IPython import embed
 
 import dask.dataframe as dd
@@ -45,10 +47,17 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         patient_id, df = self.dataloader[index]
         df['id'] = patient_id
         # Idx according to id and time
-        df = df.rename(columns={'ICULOS': 'time'}) #rename for easier understanding
+        df = df.rename(columns={'stay_time': 'time'}) #rename for easier understanding
         df.reset_index(drop=True, inplace=True)
         df.set_index(['id', 'time'], inplace=True)
         df.sort_index(ascending=True, inplace=True)
+
+        #Sanity check: ensure that bool cols are floats (checking all columns each time is costly, so wrote out the identified few)
+        bool_cols = ['sep3', 'vaso_ind', 'vent_ind'] 
+        df[bool_cols] = df[bool_cols].astype(float) #necessary, as ints would mess with categorical onehot encoder
+        
+        #Remove few columns which are not used at all (e.g. interventions)
+        df = df.drop(columns = colums_to_drop)
         return df
 
     def transform(self, df):
@@ -57,36 +66,23 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         pandas dataframe which is returned
         """
         # Make the dataframe
-        output = Parallel(n_jobs=self.n_jobs, verbose=1, batch_size=1000)(
-            delayed(self._load_index_and_prepare)(i) for i in range(len(self.dataloader)))
-
+        if self.n_jobs == 1: #also use parallel when n_jobs=-1
+            #this case prevents us from adding an additional argument for batchsize when using demo dataset
+            output = [self._load_index_and_prepare(i) for i in range(len(self.dataloader))]
+        else:  
+            output = Parallel(n_jobs=self.n_jobs, verbose=1, batch_size=1000)(
+                delayed(self._load_index_and_prepare)(i) for i in range(len(self.dataloader)))
         if self.concat_output:
             output = pd.concat(output)
-        return output
-
-        # Get values and labels
-        if 'SepsisLabel' in df_idxed.columns:
-            if self.drop_label:
-                df_values, labels = df_idxed.drop('SepsisLabel', axis=1), df_idxed['SepsisLabel']
-            else:
-                df_values, labels = df_idxed, df_idxed['SepsisLabel']
-        else:
-            df_values = df_idxed
-
-        # Save if specified
-        if self.save is not False:
-            os.makedirs(self.data_dir, exist_ok=True)
-            save_pickle(labels, os.path.join(self.data_dir, f'raw_y_{self.split}.pkl'))
-            save_pickle(df_values, os.path.join(self.data_dir, f'raw_data_{self.split}.pkl')) 
-
         print('Done with DataframeFromDataloader')
-        return df_values
-
+        return output
+            
+        
 class DropLabels(TransformerMixin, BaseEstimator):
     """
     Remove label information, which was required for filtering steps.
     """
-    def __init__(self, label='SepsisLabel', save=True, data_dir=None, split=None):
+    def __init__(self, label='sep3', save=True, data_dir=None, split=None):
         self.label = label
         self.save = save
         self.data_dir = data_dir
@@ -104,6 +100,31 @@ class DropLabels(TransformerMixin, BaseEstimator):
         print('Done with DropLabels')
         return df
 
+class DropColumns(TransformerMixin, BaseEstimator):
+    """
+    Drop and potentially save columns. By default we drop all baseline scores.
+    """
+    def __init__(self, columns=baseline_cols, label='sep3', save=False, 
+                 data_dir=None, split=None):
+        self.columns = columns
+        self.label = label
+        self.save = save
+        self.data_dir = data_dir
+        self.split = split
+        
+    def fit(self, df, labels=None):
+        return self
+
+    def transform(self, df):
+        if self.save:
+            cols_to_save = self.columns + [self.label]
+            save_pickle(df[cols_to_save], os.path.join(self.data_dir, f'baselines_{self.split}.pkl'))
+        df = df.drop(self.columns, axis=1, errors='ignore')
+
+        print('Done with DropColumns')
+        return df
+
+
 class CategoricalOneHotEncoder(TransformerMixin, BaseEstimator):
     """
     Categorical variables are one-hot encoded. 
@@ -116,14 +137,18 @@ class CategoricalOneHotEncoder(TransformerMixin, BaseEstimator):
 
     def transform(self, df):
         categorical_cols = list(set(df.columns) - set(df._get_numeric_data().columns))
+        #Sanity check as labels can be boolean
+        if 'sep3' in categorical_cols:
+            categorical_cols.remove('sep3')
+
         print(f'Encoding {categorical_cols}')    
         df = pd.get_dummies(df)
 
         print('Done with Categorical Variable One-hot Encoder..')
         
-        print('currently rare extra cols are removed to harmonize feature set')
+        print('currently very rare extra cols are removed to harmonize feature set')
         # for gender this is still encoded as both male and female 0
-        for col in ['Gender_Other', 'Gender_Unknown']:
+        for col in ['sex_Other', 'sex_Unknown']:
             if col in df.columns:
                 df = df.drop(columns=[col])
         return df
@@ -136,7 +161,7 @@ class PatientFiltration(ParallelBaseIDTransformer):
         - onset after t_end hours of ICU stay 
         defaults: t_start = 3 (which corresponds to 4 hours due to rounding of the chart times), t_end = 168 (1 week)
     """
-    def __init__(self, save=False, data_dir=None, split='train', onset_bounds=(3,168), label='SepsisLabel', **kwargs):
+    def __init__(self, save=False, data_dir=None, split='train', onset_bounds=(3,168), label='sep3', **kwargs):
         self.save = save
         self.data_dir = data_dir
         self.split = split
@@ -169,7 +194,7 @@ class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
     Additionally, to ensure that controls cannot be systematically longer than cases,
     we cut controls after cut_off + onset_bounds[1] hours (i.e. after 7d + 24h) 
     """
-    def __init__(self, cut_off=24, onset_bounds=(3,168), label='SepsisLabel', **kwargs):
+    def __init__(self, cut_off=24, onset_bounds=(3,168), label='sep3', **kwargs):
         self.cut_off = cut_off
         self.label = label
         self.control_cut_off = cut_off + onset_bounds[1]
@@ -180,7 +205,7 @@ class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
         """
         if df[self.label].sum() > 0:
             #Case:
-            onset = df[self.label].argmax()
+            onset = np.argmax(df[self.label])
             return df[:onset+self.cut_off+1]
         else:
             #Control:
@@ -192,7 +217,7 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         - time steps before ICU admission (i.e. negative timestamps) 
         - time steps with less than <thres> many observations. 
     """
-    def __init__(self, thres=1, label='SepsisLabel'):
+    def __init__(self, thres=1, label='sep3'):
         self.thres = thres
         self.label = label
 
@@ -207,8 +232,8 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
             additionally drop those rows by identifying nan labels
         """
         ind_to_keep = (~df[ts_columns].isnull()).sum(axis=1) >= thres
-        ind_labels = (~df['SepsisLabel'].isnull()) #sanity check to prevent lookbackfeatures 0s to mess up nan rows
-        ind_to_keep = np.logical_and(ind_to_keep, ind_labels) 
+        ind_labels = (~df[self.label].isnull()) #sanity check to prevent lookbackfeatures 0s to mess up nan rows
+        ind_to_keep = np.logical_and(ind_to_keep, ind_labels)
         return df[ind_to_keep]
 
     def _transform_id(self, df):
@@ -223,11 +248,11 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         #labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))
         #labels.reset_index(level='time', drop=True, inplace=True)
         # labels = dd.from_pandas(
-        #     pd.DataFrame(labels, columns=['SepsisLabel']),
+        #     pd.DataFrame(labels, columns=['sep3']),
         #     npartitions=df.npartitions
         # )
         #assert len(labels) == len(df)
-        #df['SepsisLabel'] = labels
+        #df['sep3'] = labels
         # df = dd.concat([df, labels], axis=1)
 
         df = df.groupby('id', group_keys=False).apply(self._transform_id)
@@ -237,8 +262,8 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         #     df.index = df.index.droplevel(None)
  
         #if self.save:
-        #    save_pickle(df['SepsisLabel'].compute(), os.path.join(self.data_dir, f'y_{self.split}_final.pkl'))
-        #df = df.drop('SepsisLabel', axis=1) #after filtering time steps drop labels again 
+        #    save_pickle(df['sep3'].compute(), os.path.join(self.data_dir, f'y_{self.split}_final.pkl'))
+        #df = df.drop('sep3', axis=1) #after filtering time steps drop labels again 
         print('Done with InvalidTimesFiltration')
         return df
 
@@ -254,13 +279,13 @@ class IndicatorImputation(ParallelBaseIDTransformer):
     Adds indicator dimension for every channel to indicate if there was a nan
     IndicatorImputation still requires FillMissing afterwards!
     """
-    def __init__(self, n_jobs=4):
-        super().__init__(n_jobs=n_jobs)
+    def __init__(self, n_jobs=4, **kwargs):
+        super().__init__(n_jobs=n_jobs, **kwargs)
 
     def transform_id(self, df):
         cols = ts_columns #we consider all time-series columns (for consistency with pytorch approach)
-        valid_indicators = (~df[cols].isnull()).astype(int).add_suffix('_indicator') 
-        df = pd.concat([df, valid_indicators], axis=1)
+        invalid_indicators = (df[cols].isnull()).astype(int).add_suffix('_indicator') 
+        df = pd.concat([df.fillna(0), invalid_indicators], axis=1)
         return df
 
 class FillMissing(TransformerMixin, BaseEstimator):
@@ -381,12 +406,12 @@ class LookbackFeatures(DaskIDTransformer):
         df_out = pd.concat(features, axis=1)
         return df_out
 
-
+#TODO adjust variable names!
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
     Adds any derived features thought to be useful
-        - Shock Index: HR/SBP
-        - Bun/Creatinine ratio: Bun/Creatinine
+        - Shock Index: hr/sbp
+        - Bun/crea ratio: Bun/crea
         - Hepatic SOFA: Bilirubin SOFA score
 
     # Can add renal and neruologic sofa
@@ -398,45 +423,14 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         return self
 
     @staticmethod
-    def hepatic_sofa(df):
-        """ Updates a hepatic sofa score """
-        hepatic = np.zeros(shape=df.shape[0])
-
-        # Bili
-        bilirubin = df['Bilirubin_total'].values
-        hepatic[bilirubin < 1.2] += 0
-        hepatic[(bilirubin >= 1.2) & (bilirubin < 1.9)] += 1
-        hepatic[(df['Bilirubin_total'] >= 1.9) & (bilirubin < 5.9)] += 2
-        hepatic[(bilirubin >= 5.9) & (bilirubin < 11.9)] += 3
-        hepatic[(bilirubin >= 11.9)] += 4
-
-        # MAP
-        hepatic[df['MAP'].values < 70] += 1
-
-        # Creatinine
-        creatinine = df['Creatinine'].values
-        hepatic[(creatinine >= 1.2) & (creatinine < 1.9)] += 1
-        hepatic[(creatinine >= 1.9) & (creatinine < 3.4)] += 2
-        hepatic[(creatinine >= 3.5) & (creatinine < 4.9)] += 3
-        hepatic[(creatinine >= 4.9)] += 4
-
-        # Platelets
-        platelets = df['Platelets'].values
-        hepatic[(platelets >= 100) & (platelets < 150)] += 1
-        hepatic[(platelets >= 50) & (platelets < 100)] += 2
-        hepatic[(platelets >= 20) & (platelets < 49)] += 3
-        hepatic[(platelets < 20)] += 4
-
-        return hepatic
-
-    @staticmethod
     def sirs_criteria(df):
         # Create a dataframe that stores true false for each category
-        df_sirs = pd.DataFrame(index=df.index, columns=['temp', 'hr', 'rr.paco2', 'wbc'])
-        df_sirs['temp'] = ((df['Temp'] > 38) | (df['Temp'] < 36))
-        df_sirs['hr'] = df['HR'] > 90
-        df_sirs['rr.paco2'] = ((df['Resp'] > 20) | (df['PaCO2'] < 32))
-        df_sirs['wbc'] = ((df['WBC'] < 4) | (df['WBC'] > 12))
+        df_sirs = pd.DataFrame(index=df.index, columns=['temp', 'hr', 'rr.paco2', 'wbc_'])
+        df_sirs['temp'] = ((df['temp'] > 38) | (df['temp'] < 36))
+        df_sirs['hr'] = df['hr'] > 90
+        df_sirs['rr.paco2'] = ((df['resp'] > 20) | (df['pco2'] < 32))
+        #TODO: wbc is not available anymore!
+        df_sirs['wbc_'] = ((df['wbc'] < 4) | (df['wbc'] > 12))
 
         # Sum each row, if >= 2 then mar as SIRS
         sirs = pd.to_numeric((df_sirs.sum(axis=1) >= 2) * 1)
@@ -451,35 +445,41 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
     def mews_score(df):
         mews = np.zeros(shape=df.shape[0])
 
-        # SBP
-        sbp = df['SBP'].values
+        # sbp
+        sbp = df['sbp'].values
         mews[sbp <= 70] += 3
         mews[(70 < sbp) & (sbp <= 80)] += 2
         mews[(80 < sbp) & (sbp <= 100)] += 1
         mews[sbp >= 200] += 2
 
-        # HR
-        hr = df['HR'].values
+        # hr
+        hr = df['hr'].values
         mews[hr < 40] += 2
         mews[(40 < hr) & (hr <= 50)] += 1
         mews[(100 < hr) & (hr <= 110)] += 1
         mews[(110 < hr) & (hr < 130)] += 2
         mews[hr >= 130] += 3
 
-        # Resp
-        resp = df['Resp'].values
+        # resp
+        resp = df['resp'].values
         mews[resp < 9] += 2
         mews[(15 < resp) & (resp <= 20)] += 1
         mews[(20 < resp) & (resp < 30)] += 2
         mews[resp >= 30] += 3
 
+        # temp
+        temp = df['temp'].values
+        mews[temp < 35] += 2
+        mews[(temp >= 35) & (temp < 38.5 ) ] += 0
+        mews[temp >= 38.5] += 2
+        
         return mews
 
     @staticmethod
     def qSOFA(df):
         qsofa = np.zeros(shape=df.shape[0])
-        qsofa[df['Resp'].values >= 22] += 1
-        qsofa[df['SBP'].values <= 100] += 1
+        qsofa[df['resp'].values >= 22] += 1
+        qsofa[df['sbp'].values <= 100] += 1
         return qsofa
 
     @staticmethod
@@ -487,7 +487,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         sofa = np.zeros(shape=df.shape[0])
 
         # Coagulation
-        platelets = df['Platelets'].values
+        platelets = df['plt'].values
         sofa[platelets >= 150] += 0
         sofa[(100 <= platelets) & (platelets < 150)] += 1
         sofa[(50 <= platelets) & (platelets < 100)] += 2
@@ -495,7 +495,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         sofa[platelets < 20] += 4
 
         # Liver
-        bilirubin = df['Bilirubin_total'].values
+        bilirubin = df['bili'].values
         sofa[bilirubin < 1.2] += 0
         sofa[(1.2 <= bilirubin) & (bilirubin <= 1.9)] += 1
         sofa[(1.9 < bilirubin) & (bilirubin <= 5.9)] += 2
@@ -503,12 +503,12 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         sofa[bilirubin > 11.9] += 4
 
         # Cardiovascular
-        map = df['MAP'].values
+        map = df['map'].values
         sofa[map >= 70] += 0
         sofa[map < 70] += 1
 
-        # Creatinine
-        creatinine = df['Creatinine'].values
+        # crea
+        creatinine = df['crea'].values
         sofa[creatinine < 1.2] += 0
         sofa[(1.2 <= creatinine) & (creatinine <= 1.9)] += 1
         sofa[(1.9 < creatinine) & (creatinine <= 3.4)] += 2
@@ -555,18 +555,18 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
     @staticmethod
     def septic_shock(df):
         shock = np.zeros(shape=df.shape[0])
-        shock[df['MAP'].values < 65] += 1
-        shock[df['Lactate'].values > 2] += 1
+        shock[df['map'].values < 65] += 1
+        shock[df['lact'].values > 2] += 1
         return shock
 
     def transform(self, df):
         # Compute things
-        df['ShockIndex'] = df['HR'].values / df['SBP'].values
-        df['BUN/CR'] = df['BUN'].values / df['Creatinine'].values
-        df['O2Sat/FiO2'] = df['O2Sat'].values / df['FiO2'].values #shouldnt it be PaO2/Fi ratio?
+        df['ShockIndex'] = df['hr'].values / df['sbp'].values
+        df['bun/cr'] = df['bun'].values / df['crea'].values
+        df['po2/fio2'] = df['po2'].values / df['fio2'].values #shouldnt it be PaO2/Fi ratio?
 
         # SOFA
-        df['SOFA'] = self.SOFA(df[['Platelets', 'MAP', 'Creatinine', 'Bilirubin_total']])
+        df['SOFA'] = self.SOFA(df[['plt', 'map', 'crea', 'bili']])
         df['SOFA_deterioration'] = self.SOFA_deterioration(df['SOFA'])
         #df['sofa_max_24hrs'] = self.SOFA_max_24(df['SOFA'])
         df['qSOFA'] = self.qSOFA(df)
@@ -584,7 +584,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 class AddRecordingCount(BaseEstimator, TransformerMixin):
     """ Adds a count of the number of entries up to the given timepoint. """
     def __init__(self, last_only=False):
-        self.columns = columns_with_nans
+        self.columns = ts_columns
 
     def fit(self, df, labels=None):
         return self
@@ -618,11 +618,3 @@ def make_eventual_labels(labels):
 
     return labels.groupby('id').apply(make_one)
 
-
-if __name__ == '__main__':
-    CreateDataframe()  
-
-#    df = load_pickle(DATA_DIR + '/interim/munged/df.pickle')
-#    labels_binary = load_pickle(DATA_DIR + '/processed/labels/original.pickle')
-#    evn = make_eventual_labels(labels_binary)
-#    save_pickle(evn, DATA_DIR + '/processed/labels/eventual_sepsis.pickle')

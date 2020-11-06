@@ -1,28 +1,30 @@
-"""Attention based model for sepsis."""
+"""Recurrent models for sepsis prediction."""
 import torch
 import torch.nn as nn
 from src.torch.models.base_model import BaseModel
 from src.torch.torch_utils import to_observation_tuples
 
+class RecurrentModel(BaseModel):
+    """Recurrent Model."""
 
-class GRUModel(BaseModel):
-    """GRU Model."""
-
-    def __init__(self, hparams):
-        """GRUModel.
+    def __init__(self, model_name, hparams):
+        """Recurrent Model.
 
         Args:
-            d_model: Dimensionality of hidden state
-            n_layers: Number of stacked GRU layers
-            dropout: Fraction of elements that should be dropped out
+            -model_name: ['GRU', 'LSTM', 'RNN']
+            -hparams: 
+                d_model: Dimensionality of hidden state
+                n_layers: Number of stacked RNN layers
+                dropout: Fraction of elements that should be dropped out
         """
         super().__init__(hparams)
+        model_cls = getattr(torch.nn, model_name)
         d_model = hparams.d_model
         n_layers = hparams.n_layers
         dropout = hparams.dropout
         d_in = self._get_input_dim()
 
-        self.gru = nn.GRU(
+        self.model = model_cls(
             hidden_size=d_model,
             input_size=d_in,
             num_layers=n_layers,
@@ -47,7 +49,7 @@ class GRUModel(BaseModel):
         # Convert padded sequence to packed sequence for increased efficiency
         x = nn.utils.rnn.pack_padded_sequence(
             x, lengths, batch_first=True, enforce_sorted=False)
-        x, hidden_states = self.gru(x)
+        x, hidden_states = self.model(x)
         x = torch.nn.utils.rnn.PackedSequence(
             self.linear(x.data),
             x.batch_sizes,
@@ -76,3 +78,29 @@ class GRUModel(BaseModel):
             tunable=True, options=[0., 0.1, 0.2, 0.3, 0.4]
         )
         return parser
+
+
+class GRUModel(RecurrentModel):
+    """
+    GRU Model.
+    """
+    def __init__(self, hparams):
+        model_name = 'GRU'
+        super().__init__(model_name, hparams)
+
+class LSTMModel(RecurrentModel):
+    """
+    LSTM Model.
+    """
+    def __init__(self, hparams):
+        model_name = 'LSTM'
+        super().__init__(model_name, hparams)
+
+class RNNModel(RecurrentModel):
+    """
+    RNN Model.
+    """
+    def __init__(self, hparams):
+        model_name = 'RNN'
+        super().__init__(model_name, hparams)
+

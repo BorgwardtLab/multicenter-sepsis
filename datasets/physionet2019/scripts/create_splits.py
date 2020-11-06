@@ -51,7 +51,7 @@ def main(args):
         #pat_id = int(tail[1:7]) #hard-coded indexing (works for physionet)
         pat_id = int(tail.lstrip('p').rstrip('.psv') )
 
-        label = 1 if pat['SepsisLabel'].sum() > 0 else 0
+        label = 1 if pat['sep3'].sum() > 0 else 0
 
          # append current patient info to dict:
         info['pat_ids'].append(pat_id)

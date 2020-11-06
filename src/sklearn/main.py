@@ -11,7 +11,7 @@ from sklearn.pipeline import Pipeline
 
 from sklearn.metrics import SCORERS
 from sklearn.metrics._scorer import _cached_call
-from sklearn.externals import joblib
+import joblib
 
 from src.sklearn.data.utils import load_data, load_pickle, save_pickle
 from src.evaluation import (

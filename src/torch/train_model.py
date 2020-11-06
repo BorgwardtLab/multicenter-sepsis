@@ -4,6 +4,7 @@ import json
 import os
 
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 
 import src.torch.models
 import src.datasets
@@ -33,29 +34,34 @@ def main(hparams, model_cls):
     checkpoint_dir = os.path.join(
         exp_path, 'checkpoints')
 
-    model_checkpoint_cb = pl.callbacks.model_checkpoint.ModelCheckpoint(
-        os.path.join(checkpoint_dir, '{epoch}-{online_val_physionet2019_score:.2f}'),
-        monitor='online_val_physionet2019_score',
-        mode='max'
+    monitor_score = hparams.monitor
+    monitor_mode = hparams.monitor_mode
+
+    model_checkpoint_cb = ModelCheckpoint(
+        os.path.join(checkpoint_dir, '{epoch}-{'+monitor_score+':.2f}'),
+        monitor=monitor_score,
+        mode=monitor_mode
     )
-    early_stopping_cb = pl.callbacks.early_stopping.EarlyStopping(
-        monitor='online_val_physionet2019_score', patience=10, mode='max', strict=True)
+    early_stopping_cb = EarlyStopping(
+        monitor=monitor_score, patience=10, mode=monitor_mode, strict=True,
+        verbose=1)
 
     # most basic trainer, uses good defaults
     trainer = pl.Trainer(
+        callbacks=[early_stopping_cb],
         checkpoint_callback=model_checkpoint_cb,
-        early_stop_callback=early_stopping_cb,
         max_epochs=hparams.max_epochs,
         logger=logger,
         gpus=hparams.gpus
     )
     trainer.fit(model)
     trainer.logger.save()
-    print('Loading model with best physionet score...')
+    print('Loading model with', monitor_mode, monitor_score)
     checkpoints = os.listdir(checkpoint_dir)
     assert len(checkpoints) == 1
     last_checkpoint = os.path.join(checkpoint_dir, checkpoints[0])
-    loaded_model = model_cls.load_from_checkpoint(last_checkpoint)
+    loaded_model = model_cls.load_from_checkpoint(
+        checkpoint_path=last_checkpoint)
     trainer.test(loaded_model)
     trainer.logger.save()
     last_metrics = trainer.logger.experiment.metrics[-1]
@@ -97,8 +103,20 @@ if __name__ == '__main__':
     parser.add_argument('--max-epochs', default=100, type=int)
     parser.add_argument('--gpus', type=int, default=None)
     parser.add_argument('--hyperparam-draws', default=0, type=int)
+    parser.add_argument('--monitor', type=str,
+                        default='online_val_loss')
+    parser.add_argument('--monitor-mode', type=str, choices=['max', 'min'],
+                        default='min')
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
+
+    if temp_args.monitor.endswith('loss') and temp_args.monitor_mode == 'max':
+        print(
+            'It looks like you are trying to run early stopping on a loss '
+            'using the wrong monitor mode (max).')
+        print('Exiting...')
+        import sys
+        sys.exit(1)
 
     # let the model add what it wants
     model_cls = getattr(src.torch.models, temp_args.model)
@@ -108,6 +126,9 @@ if __name__ == '__main__':
     if hparams.hyperparam_draws > 0:
         for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
             print(hyperparam_draw)
+            hyperparam_draw = Namespace(**hyperparam_draw.__getstate__())
             main(hyperparam_draw, model_cls)
     else:
+        # Need to do this in order to allow pickling
+        hparams = Namespace(**hparams.__getstate__())
         main(hparams, model_cls)
