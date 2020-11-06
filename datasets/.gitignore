@@ -1,7 +1,6 @@
-mimic
-mimic_demo
-eicu
-eicu_demo
-hirid
-challenge
-training_setB
+mimic3/data/
+demo/data
+eicu/data
+hirid/data
+physionet2019/data
+downloads/
