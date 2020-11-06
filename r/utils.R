@@ -78,10 +78,11 @@ dump_dataset <- function(source = "mimic_demo", dir = tempdir()) {
 
   if (identical(source, "challenge")) {
 
-    data_dir <- file.path(dir, "physionet2019", "data", "training_setB")
+    data_dir <- Sys.getenv("CHALLENGE_DATA_DIR", unset = NA)
 
-    if (!dir.exists(data_dir)) {
-      stop("need directory ", data_dir, " to continue")
+    if (is.na(data_dir) || !dir.exists(data_dir)) {
+      stop("need directory ", data_dir,
+           " as environment variable `CHALLENGE_DATA_DIR` to continue")
     }
 
     feat_map <- concepts[!is.na(concepts[["callenge"]]), ]
