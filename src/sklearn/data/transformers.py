@@ -580,6 +580,26 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         df['SIRS'] = sirs_df['SIRS']
         return df
 
+class ChallengeFeatureSubsetter(TransformerMixin, BaseEstimator):
+    def __init__(self, prefix='datasets/physionet2019/data/sklearn/processed', 
+            split='train'):
+        imputed_path = os.path.join(prefix, f'X_features_{split}.pkl')
+        not_imputed_path = os.path.join(prefix, f'X_features_no_imp_{split}.pkl')
+        #all features including imputations
+        self.Xi = load_pickle(imputed_path)
+        self.Xn = load_pickle(not_imputed_path) 
+ 
+    def get_drop_vars(df):
+        nan_sum = df.isnull().sum()
+        max_nan = nan_sum.max()
+        #get vars with only/max nans to drop
+        return list(df.columns[nan_sum == max_nan])
+     
+    def fit(self, df, labels=None):
+        return self
+ 
+    def transform(self, df):
+        pass
 
 class AddRecordingCount(BaseEstimator, TransformerMixin):
     """ Adds a count of the number of entries up to the given timepoint. """
@@ -610,11 +630,4 @@ class AddRecordingCount(BaseEstimator, TransformerMixin):
 
         return pd.concat([df, counts], axis=1)
 
-
-def make_eventual_labels(labels):
-
-    def make_one(s):
-        return pd.Series(index=s.index, data=s.max())
-
-    return labels.groupby('id').apply(make_one)
 
