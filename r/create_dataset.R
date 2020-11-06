@@ -1,5 +1,12 @@
 #!/usr/bin/env Rscript
 
+pkgs <- c("optparse", "here", "ricu")
+miss <- pkgs %in% installed.packages()
+
+if (any(!miss)) {
+  install.packages(pkgs[!miss])
+}
+
 library(optparse)
 library(here)
 library(ricu)
@@ -12,7 +19,7 @@ option_list <- list(
               help = "data source name (e.g. \"mimic\")",
               metavar = "source", dest = "src"),
   make_option(c("-d", "--dir"), type = "character",
-              default = "datasets",
+              default = "data",
               help = "output directory [default = \"%default\"]",
               metavar = "dir", dest = "path")
 )
@@ -21,7 +28,7 @@ opt_parser <- OptionParser(option_list = option_list)
 opt <- parse_args(opt_parser)
 
 demo <- c("mimic_demo", "eicu_demo")
-prod <- c("mimic", "eicu", "hirid")
+prod <- c("mimic", "eicu", "hirid", "aumc")
 all  <- c(demo, prod)
 
 data_opts <- c(all, "demo", "prod", "all", "challenge")
@@ -52,6 +59,11 @@ if (identical(opt$src, "all")) {
   sources <- opt$src
 }
 
+if ("challenge" %in% sources) {
+  Sys.setenv(CHALLENGE_DATA_DIR = here("datasets", "physionet2019", "data",
+                                       "training_setB"))
+}
+
 for (src in sources) {
 
   message("dumping `", src, "`")
@@ -62,5 +74,12 @@ for (src in sources) {
     dir.create("shared")
   }
 
-  zip(file.path("shared", paste0(src, ".zip")), src, flags = "-qr9X")
+  zip_file <- file.path("shared",
+                        paste0(src, "_", packageVersion("ricu"), ".zip"))
+
+  if (file.exists(zip_file)) {
+    unlink(zip_file)
+  }
+
+  zip(zip_file, src, flags = "-qr9X")
 }
