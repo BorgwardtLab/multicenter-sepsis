@@ -38,7 +38,7 @@ def get_pipeline_and_grid(method_name, clf_params, feature_set):
     # first determine which feature set to use for current model:
     steps = [] #pipeline steps
     if feature_set == 'challenge':
-        from src.sklearn.data.transformers import ChallengeFeatureSubsetter
+        from src.sklearn.data.subsetters import ChallengeFeatureSubsetter
         subsetter = ChallengeFeatureSubsetter() #transform to remove all features which cannot be derived from challenge data
         steps.append(('feature_subsetter', subsetter)) 
     elif feature_set != 'all':
