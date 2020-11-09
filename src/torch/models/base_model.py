@@ -18,6 +18,12 @@ from src.torch.torch_utils import (
 class BaseModel(pl.LightningModule):
     """Base model for all models implementing datasets and training."""
 
+    @property
+    def transforms(self):
+        return [
+            LabelPropagation(-self.hparams.label_propagation)
+        ]
+
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
@@ -25,17 +31,33 @@ class BaseModel(pl.LightningModule):
         )
         return data[0]['ts'].shape[-1]
 
-    def __init__(self, hparams):
+    @property
+    def metrics_initial(self):
+        return {
+            'train/loss': float('inf'),
+            'online_val/loss': float('inf'),
+            'online_val/physionet2019_score': float('-inf'),
+            'online_val/average_precision': float('-inf'),
+            'online_val/auroc': float('-inf'),
+            'online_val/balanced_accuracy': float('-inf'),
+            'validation/loss': float('inf'),
+            'validation/physionet2019_score': float('-inf'),
+            'validation/average_precision': float('-inf'),
+            'validation/auroc': float('-inf'),
+            'validation/balanced_accuracy': float('-inf')
+        }
+
+    def __init__(self, dataset, pos_weight, label_propagation, learning_rate,
+                 batch_size, **kwargs):
         super().__init__()
-        self.dataset_cls = getattr(src.datasets, hparams.dataset)
+        self.save_hyperparameters()
+        self.dataset_cls = getattr(src.datasets, self.hparams.dataset)
         d = self.dataset_cls(split='train')
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
-        self.hparams = hparams
-        self.save_hyperparameters()
         self.loss = torch.nn.BCEWithLogitsLoss(
             reduction='none',
             pos_weight=torch.Tensor(
-                [hparams.pos_weight * d.class_imbalance_factor])
+                [self.hparams.pos_weight * d.class_imbalance_factor])
         )
 
     def training_step(self, batch, batch_idx):
@@ -51,7 +73,7 @@ class BaseModel(pl.LightningModule):
         # per_instance_loss = loss.sum(-1) / n_tp.float()
         n_tp = n_tp.sum()
         per_tp_loss = loss.sum() / n_tp.float()
-        self.log('train_loss', per_tp_loss)
+        self.log('loss', per_tp_loss)
         return {
             'loss': per_tp_loss,
             'n_tp': n_tp,
@@ -66,7 +88,7 @@ class BaseModel(pl.LightningModule):
             total_loss += n_tp * x['loss']
 
         average_loss = total_loss / total_tp
-        self.log('train_loss', average_loss, prog_bar=True)
+        self.log('train/loss', average_loss, prog_bar=True)
 
     def _shared_eval(self, batch, batch_idx, prefix):
         data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
@@ -86,7 +108,7 @@ class BaseModel(pl.LightningModule):
 
         scores = torch.sigmoid(output)
         return {
-            f'{prefix}_loss': per_tp_loss.detach().mean(),
+            f'{prefix}_loss': per_tp_loss.detach(),
             f'{prefix}_n_tp': n_tp,
             f'{prefix}_labels': labels.cpu().detach().numpy(),
             f'{prefix}_scores': scores.cpu().detach().numpy()
@@ -131,17 +153,11 @@ class BaseModel(pl.LightningModule):
         average_precision = average_precision_score(labels, scores)
         auroc = roc_auc_score(labels, scores)
         balanced_accuracy = balanced_accuracy_score(labels, predictions)
-        self.log(f'{prefix}_physionet2019_score', physionet_score)
-        self.log(f'{prefix}_average_precision', average_precision)
-        self.log(f'{prefix}_auroc', auroc)
-        self.log(f'{prefix}_balanced_accuracy', balanced_accuracy)
-        self.log(f'{prefix}_loss', average_loss)
-
-    @property
-    def transforms(self):
-        return [
-            LabelPropagation(-self.hparams.label_propagation)
-        ]
+        self.log(f'{prefix}/physionet2019_score', physionet_score)
+        self.log(f'{prefix}/average_precision', average_precision)
+        self.log(f'{prefix}/auroc', auroc)
+        self.log(f'{prefix}/balanced_accuracy', balanced_accuracy)
+        self.log(f'{prefix}/loss', average_loss)
 
     def validation_step(self, batch, batch_idx):
         return self._shared_eval(batch, batch_idx, 'online_val')
@@ -150,10 +166,10 @@ class BaseModel(pl.LightningModule):
         self._shared_end(outputs, 'online_val')
 
     def test_step(self, batch, batch_idx):
-        return self._shared_eval(batch, batch_idx, prefix='val')
+        return self._shared_eval(batch, batch_idx, prefix='validation')
 
     def test_epoch_end(self, outputs):
-        self._shared_end(outputs, 'val')
+        self._shared_end(outputs, 'validation')
 
     def configure_optimizers(self):
         """Get optimizers."""

@@ -171,23 +171,18 @@ class TransformerEncoderLayer(nn.Module):
 class AttentionModel(BaseModel):
     """Sequence to sequence model based on MultiHeadAttention."""
 
-    def __init__(self, hparams):
+    def __init__(self, d_model, ff_dim, n_layers, n_heads, dropout, norm,
+                 **kwargs):
         """AttentionModel.
 
         Args:
-            d_in: Dimensionality of a single time point
             d_model: Dimensionality of the model
             ff_dim: Dimensionality of ff layers
             n_layers: Number of MultiHeadAttention layers
             n_heads: Number of attention heads
         """
-        super().__init__(hparams)
-        d_model = hparams.d_model
-        n_layers = hparams.n_layers
-        n_heads = hparams.n_heads
-        ff_dim = hparams.ff_dim
-        dropout = hparams.dropout
-        norm = hparams.norm
+        super().__init__(**kwargs)
+        self.save_hyperparameters()
         d_in = self._get_input_dim()
         self.layers = nn.ModuleList(
             [nn.Linear(d_in, d_model)]

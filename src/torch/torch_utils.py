@@ -3,6 +3,101 @@ import math
 import json
 import numpy as np
 import torch
+from pytorch_lightning.utilities import rank_zero_only
+from pytorch_lightning.loggers import TensorBoardLogger
+
+
+class TbWithBestValueLogger(TensorBoardLogger):
+    """Tensorboard logger which also tracks the best value of metrics."""
+
+    @staticmethod
+    def __convert_metric_names(metrics: dict) -> dict:
+        def to_best(name):
+            fragments = name.split('/')
+            new_name = (
+                'best_' + fragments[0] if len(fragments) == 1
+                else fragments[0] + '/best_' + fragments[1]
+            )
+            return new_name
+
+        return {
+            to_best(name): val
+            for name, val in metrics.items()
+        }
+
+    @staticmethod
+    def __extract_direction(metrics: dict) -> dict:
+        """Compute multiplicative factor for direction of improvement.
+
+        If the initial value is +inf smaller values are considered better, thus
+        a direction of -1 is returned.  If the initial value is -inf, larger
+        values are considered better and thus a direction of 1 is returned.
+        """
+        return {
+            name: -1 if val > 0 else 1
+            for name, val in metrics.items()
+        }
+
+    def __init__(self, save_dir, initial_values, add_best=False, **kwargs):
+        super().__init__(save_dir, **kwargs)
+        self.logging_hparams = False
+        self.hparams_saved = False
+        self.initial_values = initial_values
+        self.add_best = add_best
+        self.last = {}
+        if add_best:
+            self.best = self.__convert_metric_names(initial_values)
+            self.direction = self.__extract_direction(self.best)
+
+    def log_best(self, metrics, step):
+        """Take metrics and update the recorded best value."""
+        metrics = self.__convert_metric_names(metrics)
+
+        def is_best(metric, value):
+            if metric not in self.best.keys():
+                return False
+            direction = self.direction[metric]
+            if self.best[metric] * direction < value * direction:
+                return True
+            else:
+                return False
+        best_metrics = {
+            name: value
+            for name, value in metrics.items()
+            if is_best(name, value)
+        }
+        self.best.update(best_metrics)
+        super().log_metrics(best_metrics, step)
+
+    @rank_zero_only
+    def log_hyperparams(self, params):
+        # Somehow hyperparameters are saved when a model is simply restored,
+        # catch that here so we don't add an incorrect value when restoring.
+        if self.hparams_saved:
+            return
+        # This is a not so nice hack, but required as the parent method calls
+        # log_metrics, which would otherwise add the best metrics. On the first
+        # call these are already present so we catch that.
+        self.logging_hparams = True
+        if self.add_best:
+            super().log_hyperparams(
+                params,
+                {**self.initial_values, **self.best}
+            )
+        else:
+            super().log_hyperparams(
+                params,
+                self.initial_values
+            )
+        self.logging_hparams = False
+        self.hparams_saved = True
+
+    @rank_zero_only
+    def log_metrics(self, metrics, step):
+        super().log_metrics(metrics, step)
+        self.last.update(metrics)
+        if self.add_best and not self.logging_hparams:
+            self.log_best(metrics, step)
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -123,7 +218,7 @@ class PositionalEncoding():
 def to_observation_tuples(instance_dict):
     """Convert time series to tuple representation.
 
-    Also, replace remaining NaNs in the ts field with zeros. 
+    Also, replace remaining NaNs in the ts field with zeros.
     """
     instance_dict = instance_dict.copy()  # We only want a shallow copy
     time = instance_dict['times']
