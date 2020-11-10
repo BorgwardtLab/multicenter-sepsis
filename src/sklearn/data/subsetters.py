@@ -23,7 +23,8 @@ class ChallengeFeatureSubsetter(TransformerMixin, BaseEstimator):
             
             self.drop_vars = self._get_drop_vars(self.Xn)
             self.drop_features = self._get_features_from_drop_vars(feature_suffices)
-            save_pickle(self.drop_features, drop_features_path)
+            with open(drop_features_path, 'rb') as f:
+                pickle.dump(self.drop_features, f)
         else:
             self.drop_features = load_pickle(drop_features_path)
  
