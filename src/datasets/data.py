@@ -227,35 +227,35 @@ class PreprocessedDataset(Dataset):
 
 class PreprocessedDemoDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/demo/data/sklearn/processed/X_features',
+                 prefix='datasets/demo/data/sklearn/processed/X_filtered',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedPhysionet2019Dataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/physionet2019/data/sklearn/processed/X_features',
+                 prefix='datasets/physionet2019/data/sklearn/processed/X_filtered',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedMIMIC3Dataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/mimic3/data/sklearn/processed/X_features', #X_filtered , X_features_no_imp, X_features
+                 prefix='datasets/mimic3/data/sklearn/processed/X_filtered', #X_filtered , X_features_no_imp, X_features
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedHiridDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/hirid/data/sklearn/processed/X_features',
+                 prefix='datasets/hirid/data/sklearn/processed/X_filtered',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
 
 class PreprocessedEICUDataset(PreprocessedDataset):
     def __init__(self,
-                 prefix='datasets/eicu/data/sklearn/processed/X_features', #X_filtered
+                 prefix='datasets/eicu/data/sklearn/processed/X_filtered', 
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
@@ -274,9 +274,10 @@ class InstanceBasedDataset(Dataset):
                     split='train', 
                     prefix='datasets/demo/data/sklearn/processed/instances/X_features_{}/', 
                     transform=None  ):
-
-        self.prefix = prefix.format(split) # path to preprocessed instance files 
-        info_file = os.path.join(self.prefix, 'info.pkl') #contains ids, labels and times for all patients after preprocessing
+        self.split = split
+        self.prefix = prefix
+        self.prefix_formatted = self.prefix.format(split) # path to preprocessed instance files 
+        info_file = os.path.join(self.prefix_formatted , 'info.pkl') #contains ids, labels and times for all patients after preprocessing
 
         # read info df which contains meta information (pat id, label, times) as created in the create instance files script 
         with open(info_file, 'rb') as f:
@@ -292,7 +293,15 @@ class InstanceBasedDataset(Dataset):
         returns (1-p)/p with p being the time-point wise ratio of the 
         minority/positive class.
         """
-        prev = self.info['sep3'].sum()/len(self.info)
+        if self.split != 'train':
+            # for non-train splits, we load train info for determining class imb factor
+            info_file = os.path.join( self.prefix.format('train'), 'info.pkl') 
+            with open(info_file, 'rb') as f:
+                self.imb_info = pickle.load(f)
+        else:
+            self.imb_info = self.info
+
+        prev = self.imb_info['sep3'].sum()/len(self.imb_info)
         return (1 - prev) / prev 
 
     def __len__(self):
@@ -312,7 +321,7 @@ class InstanceBasedDataset(Dataset):
         return train_indices, test_indices
 
     def _read_patient_file(self, patient_id):
-        fpath = os.path.join(self.prefix, str(patient_id) + '.pkl')
+        fpath = os.path.join(self.prefix_formatted, str(patient_id) + '.pkl')
         with open(fpath, 'rb') as f:
             return pickle.load(f)
 
