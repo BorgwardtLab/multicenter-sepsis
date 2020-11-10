@@ -186,7 +186,9 @@ class BaseModel(pl.LightningModule):
             Subset(
                 self.dataset_cls(
                     split='train',
-                    transform=ComposeTransformations(self.transforms)),
+                    transform=ComposeTransformations(self.transforms),
+                    feature_set=self.hparams.feature_set 
+                ),
                 self.train_indices
             ),
             shuffle=True,
@@ -202,7 +204,9 @@ class BaseModel(pl.LightningModule):
             Subset(
                 self.dataset_cls(
                     split='train',
-                    transform=ComposeTransformations(self.transforms)),
+                    transform=ComposeTransformations(self.transforms),
+                    feature_set=self.hparams.feature_set 
+                ),
                 self.val_indices
             ),
             shuffle=False,
@@ -217,7 +221,9 @@ class BaseModel(pl.LightningModule):
         return DataLoader(
             self.dataset_cls(
                 split='validation',
-                transform=ComposeTransformations(self.transforms)),
+                transform=ComposeTransformations(self.transforms),
+                feature_set=self.hparams.feature_set
+            ),
             shuffle=False,
             collate_fn=variable_length_collate,
             batch_size=self.hparams.batch_size,
