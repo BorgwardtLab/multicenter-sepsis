@@ -15,12 +15,17 @@ class ChallengeFeatureSubsetter(TransformerMixin, BaseEstimator):
             split='train', feature_suffices=['ind','pt', 'dir']): 
         imputed_path = os.path.join(prefix, f'X_features_{split}.pkl')
         not_imputed_path = os.path.join(prefix, f'X_features_no_imp_{split}.pkl')
-        #all features including imputations
-        self.Xi = load_pickle(imputed_path)
-        self.Xn = load_pickle(not_imputed_path) 
-        
-        self.drop_vars = self._get_drop_vars(self.Xn)
-        self.drop_features = self._get_features_from_drop_vars(feature_suffices)
+        drop_features_path = os.path.join(prefix, f'drop_features_{split}.pkl')
+        if not os.path.exists(drop_features_path): 
+            #all features including imputations
+            self.Xi = load_pickle(imputed_path)
+            self.Xn = load_pickle(not_imputed_path) 
+            
+            self.drop_vars = self._get_drop_vars(self.Xn)
+            self.drop_features = self._get_features_from_drop_vars(feature_suffices)
+            save_pickle(self.drop_features, drop_features_path)
+        else:
+            self.drop_features = load_pickle(drop_features_path)
  
     def _get_drop_vars(self, df):
         nan_sum = df.isnull().sum()
@@ -58,4 +63,23 @@ class ChallengeFeatureSubsetter(TransformerMixin, BaseEstimator):
  
     def transform(self, df):
         return df.drop(columns=self.drop_features, errors='ignore')
+
+    def __call__(self, df):
+        return self.transform(df)
+
+
+class FeatureSubsetter():
+    """ Choosing feature subset (which is available from
+        physionet challenge dataset.
+    """ 
+    def __init__(self, feature_set):
+        if feature_set == 'challenge':
+            self.transform = ChallengeFeatureSubsetter()
+        elif feature_set == 'all':
+            self.transform = lambda x: x
+        else:
+            raise ValueError(f'feature set {feature_set} not among valid feature sets: [all, challenge]')
+
+    def __call__(self, instance):
+        return self.transform(instance) 
 

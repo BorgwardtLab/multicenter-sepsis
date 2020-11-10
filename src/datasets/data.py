@@ -4,7 +4,7 @@ import os
 import pickle
 
 from sklearn.model_selection import train_test_split
-
+from src.sklearn.data.subsetters import FeatureSubsetter
 import numpy as np
 import pandas as pd
 
@@ -179,7 +179,7 @@ class PreprocessedDataset(Dataset):
     LABEL_COLUMN = 'sep3'
     TIME_COLUMN = 'time'
 
-    def __init__(self, prefix, split='train', drop_pre_icu=True, transform=None):
+    def __init__(self, prefix, split='train', drop_pre_icu=True, transform=None, feature_set='all'):
         self.file_path = '{}_{}.pkl'.format(prefix, split)
         self.prefix = prefix 
 
@@ -189,7 +189,8 @@ class PreprocessedDataset(Dataset):
         self.patients = list(data.index.unique())
         self.data = data
         self.transform = transform
-    
+        self.feature_subsetter = FeatureSubsetter(feature_set)
+
     @property
     def class_imbalance_factor(self):
         """
@@ -230,6 +231,8 @@ class PreprocessedDataset(Dataset):
         patient_data = self.data.loc[[patient_id]]
         time = patient_data[self.TIME_COLUMN].values
         labels = patient_data[self.LABEL_COLUMN].values
+        #maybe feature subsetting (e.g. for challenge feature set)
+        patient_data = self.feature_subsetter(patient_data) 
         ts_data = patient_data.drop(
             columns=[self.LABEL_COLUMN]).values
         return {
