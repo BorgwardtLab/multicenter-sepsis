@@ -181,6 +181,7 @@ class PreprocessedDataset(Dataset):
 
     def __init__(self, prefix, split='train', drop_pre_icu=True, transform=None):
         self.file_path = '{}_{}.pkl'.format(prefix, split)
+        self.prefix = prefix 
 
         with open(self.file_path, 'rb') as f:
             data = pickle.load(f)
@@ -188,6 +189,25 @@ class PreprocessedDataset(Dataset):
         self.patients = list(data.index.unique())
         self.data = data
         self.transform = transform
+    
+    @property
+    def class_imbalance_factor(self):
+        """
+        factor for correcting class imbalance.
+        returns (1-p)/p with p being the time-point wise ratio of the 
+        minority/positive class.
+        """
+        # for all splits, we load train info for determining class imb factor
+        info_path = os.path.join(
+            os.path.split(self.prefix)[0], 'instances', 'X_features_train' 
+        ) 
+        info_file = os.path.join(info_path, 'info.pkl') 
+        with open(info_file, 'rb') as f:
+            self.imb_info = pickle.load(f)
+        
+        prev = self.imb_info['sep3'].sum()/len(self.imb_info)
+        return (1 - prev) / prev 
+
 
     def __len__(self):
         return len(self.patients)
