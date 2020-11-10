@@ -82,12 +82,15 @@ if __name__ == "__main__":
             path = os.path.join('datasets', dataset, args.path)
             #normalized_path = os.path.join(path, f'X_normalized_{split}.pkl')
             features_path = os.path.join(path, f'X_features_{split}.pkl')
-            X_f_path = os.path.join(path, f'X_features_no_imp_{split}.pkl')
+            filtered_path = os.path.join(path, f'X_filtered_{split}.pkl')
+
+            X_ni_path = os.path.join(path, f'X_features_no_imp_{split}.pkl')
             baseline_path = os.path.join(path, f'baselines_{split}.pkl')
          
             #df_n = load_pickle(normalized_path)
             X = load_pickle(features_path)
-            Xf = load_pickle(X_f_path)
+            X_ni = load_pickle(X_ni_path)
+            X_f = load_pickle(filtered_path)  
             b = load_pickle(baseline_path)
          
             #dfs = [X, Xf]
