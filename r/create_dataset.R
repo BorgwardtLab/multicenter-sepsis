@@ -7,9 +7,10 @@ if (any(!miss)) {
   install.packages(pkgs[!miss])
 }
 
-library(optparse)
-library(here)
-library(ricu)
+load <- vapply(pkgs, library, logical(1L), character.only = TRUE,
+               logical.return = TRUE)
+
+stopifnot(all(load))
 
 source(here("r", "config.R"))
 source(here("r", "utils.R"))
@@ -65,6 +66,11 @@ if ("challenge" %in% sources) {
 }
 
 for (src in sources) {
+
+  if (!is_data_avail(src)) {
+    message("not all required data for `", src, "` is available")
+    setup_src_data(src)
+  }
 
   message("dumping `", src, "`")
 
