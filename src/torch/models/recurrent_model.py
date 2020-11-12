@@ -4,24 +4,22 @@ import torch.nn as nn
 from src.torch.models.base_model import BaseModel
 from src.torch.torch_utils import to_observation_tuples
 
+
 class RecurrentModel(BaseModel):
     """Recurrent Model."""
 
-    def __init__(self, model_name, hparams):
+    def __init__(self, model_name, d_model, n_layers, dropout, **kwargs):
         """Recurrent Model.
 
         Args:
             -model_name: ['GRU', 'LSTM', 'RNN']
-            -hparams: 
-                d_model: Dimensionality of hidden state
-                n_layers: Number of stacked RNN layers
-                dropout: Fraction of elements that should be dropped out
+            -d_model: Dimensionality of hidden state
+            -n_layers: Number of stacked RNN layers
+            -dropout: Fraction of elements that should be dropped out
         """
-        super().__init__(hparams)
+        super().__init__(**kwargs)
+        self.save_hyperparameters()
         model_cls = getattr(torch.nn, model_name)
-        d_model = hparams.d_model
-        n_layers = hparams.n_layers
-        dropout = hparams.dropout
         d_in = self._get_input_dim()
 
         self.model = model_cls(
@@ -84,23 +82,36 @@ class GRUModel(RecurrentModel):
     """
     GRU Model.
     """
-    def __init__(self, hparams):
+
+    def __init__(self, **kwargs):
         model_name = 'GRU'
-        super().__init__(model_name, hparams)
+        if 'model_name' in kwargs.keys():
+            del kwargs['model_name']
+        super().__init__(model_name, **kwargs)
+        self.save_hyperparameters()
+
 
 class LSTMModel(RecurrentModel):
     """
     LSTM Model.
     """
-    def __init__(self, hparams):
+
+    def __init__(self, **kwargs):
         model_name = 'LSTM'
-        super().__init__(model_name, hparams)
+        if 'model_name' in kwargs.keys():
+            del kwargs['model_name']
+        super().__init__(model_name, **kwargs)
+        self.save_hyperparameters()
+
 
 class RNNModel(RecurrentModel):
     """
     RNN Model.
     """
-    def __init__(self, hparams):
-        model_name = 'RNN'
-        super().__init__(model_name, hparams)
 
+    def __init__(self, **kwargs):
+        model_name = 'RNN'
+        if 'model_name' in kwargs.keys():
+            del kwargs['model_name']
+        super().__init__(model_name, **kwargs)
+        self.save_hyperparameters()

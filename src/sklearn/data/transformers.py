@@ -580,7 +580,6 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         df['SIRS'] = sirs_df['SIRS']
         return df
 
-
 class AddRecordingCount(BaseEstimator, TransformerMixin):
     """ Adds a count of the number of entries up to the given timepoint. """
     def __init__(self, last_only=False):
@@ -610,11 +609,4 @@ class AddRecordingCount(BaseEstimator, TransformerMixin):
 
         return pd.concat([df, counts], axis=1)
 
-
-def make_eventual_labels(labels):
-
-    def make_one(s):
-        return pd.Series(index=s.index, data=s.max())
-
-    return labels.groupby('id').apply(make_one)
 
