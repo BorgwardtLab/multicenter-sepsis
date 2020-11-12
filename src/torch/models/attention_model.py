@@ -10,8 +10,10 @@ from src.torch.torch_utils import PositionalEncoding, to_observation_tuples
 def get_subsequent_mask(seq):
     ''' For masking out the subsequent info. '''
     sz_b, len_s, n_features = seq.size()
-    subsequent_mask = (1 - torch.triu(
-        torch.ones((len_s, len_s), device=seq.device), diagonal=1)).bool()
+    subsequent_mask = ~torch.triu(
+        torch.ones((len_s, len_s), device=seq.device, dtype=bool),
+        diagonal=1
+    )
     return subsequent_mask
 
 
@@ -27,35 +29,6 @@ def length_to_mask(length, max_len=None, dtype=None):
     if dtype is not None:
         mask = torch.as_tensor(mask, dtype=dtype, device=length.device)
     return mask
-
-
-class BatchNorm(nn.Module):
-    def __init__(self, nf, mom=0.1, eps=1e-5):
-        super().__init__()
-        # NB: pytorch bn mom is opposite of what you'd expect
-        self.mom, self.eps = mom,eps
-        self.mults = nn.Parameter(torch.ones (1, 1, nf))
-        self.adds  = nn.Parameter(torch.zeros(1, 1, nf))
-        self.register_buffer('vars',  torch.ones(1, 1,nf))
-        self.register_buffer('means', torch.zeros(1, 1,nf))
-
-    def update_stats(self, x, lengths):
-        mask = length_to_mask(lengths)[:, :, None]
-        x = x.masked_fill(~mask, 0)
-        n_elements = mask.sum()
-        m = x.sum((0, 1), keepdim=True).div_(n_elements)
-        m_x_2 = (x*x).sum((0, 1), keepdim=True).div_(n_elements)
-        v = m_x_2 - m*m
-        self.means.lerp_(m, self.mom)
-        self.vars.lerp_ (v, self.mom)
-        return m,v
-
-    def forward(self, x, lengths):
-        if self.training:
-            with torch.no_grad(): m,v = self.update_stats(x, lengths)
-        else: m,v = self.means,self.vars
-        x = (x-m) / (v+self.eps).sqrt()
-        return x*self.mults + self.adds
 
 
 class MaskedLayerNorm(nn.LayerNorm):
