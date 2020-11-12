@@ -33,6 +33,7 @@ def main(hparams, model_cls):
         model.metrics_initial,
         add_best=True,
         name=hparams.exp_name,
+        version=hparams.version,
         default_hp_metric=False
     )
     checkpoint_dir = os.path.join(
@@ -106,6 +107,7 @@ if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
     parser.add_argument('--log-path', default='logs')
     parser.add_argument('--exp-name', default='train_torch_model')
+    parser.add_argument('--version', default=None, type=str)
     parser.add_argument('--model', choices=src.torch.models.__all__, type=str,
                         default='AttentionModel')
     parser.add_argument('--max-epochs', default=100, type=int)
