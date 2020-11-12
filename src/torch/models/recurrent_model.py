@@ -101,7 +101,7 @@ class LSTMModel(RecurrentModel):
         if 'model_name' in kwargs.keys():
             del kwargs['model_name']
         super().__init__(model_name, **kwargs)
-        self.save_hyperparamers()
+        self.save_hyperparameters()
 
 
 class RNNModel(RecurrentModel):
