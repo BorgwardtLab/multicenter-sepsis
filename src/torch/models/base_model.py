@@ -27,9 +27,10 @@ class BaseModel(pl.LightningModule):
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
-            transform=ComposeTransformations(self.transforms)
+            transform=ComposeTransformations(self.transforms),
+            feature_set=self.hparams.feature_set
         )
-        return data[0]['ts'].shape[-1]
+        return int(data[0]['ts'].shape[-1])
 
     @property
     def metrics_initial(self):
@@ -187,7 +188,7 @@ class BaseModel(pl.LightningModule):
                 self.dataset_cls(
                     split='train',
                     transform=ComposeTransformations(self.transforms),
-                    feature_set=self.hparams.feature_set 
+                    feature_set=self.hparams.feature_set
                 ),
                 self.train_indices
             ),
@@ -205,7 +206,7 @@ class BaseModel(pl.LightningModule):
                 self.dataset_cls(
                     split='train',
                     transform=ComposeTransformations(self.transforms),
-                    feature_set=self.hparams.feature_set 
+                    feature_set=self.hparams.feature_set
                 ),
                 self.val_indices
             ),

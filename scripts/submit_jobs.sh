@@ -48,7 +48,7 @@ for dataset in ${datasets2[@]};
             squeue --format %j | grep $jobname >> /dev/null
             retVal=$?
             if [ $retVal -ne 0 ] && [ ! -f $output_log ]; then
-                sbatch -J $jobname --cpus-per-task 2 --mem-per-cpu 5G -n 1 -p gpu -o $output_log -e $output_log --gres=gpu:1 --wrap "pipenv run train_torch --dataset $dataset --feature_set $feature_set --model $model --hyperparam-draws 1 --gpus -1 --log-path $dataset_path --exp-name $model"
+                sbatch -J $jobname --cpus-per-task 2 --mem-per-cpu 5G -n 1 -p gpu -o $output_log -e $output_log --gres=gpu:1 --wrap "pipenv run train_torch --dataset $dataset --feature-set $feature_set --model $model --hyperparam-draws 1 --gpus -1 --log-path $dataset_path --exp-name $model"
             else
                 echo Skipping $jobname
             fi
