@@ -220,7 +220,7 @@ class AttentionModel(BaseModel):
         )
         parser.opt_list(
             '--ff-dim', type=int, default=32,
-            tunable=True, options=[128, 256, 512, 1028]
+            tunable=True, options=[256, 512, 1028]
         )
         parser.add_argument(
             '--norm', type=str, default='rezero', choices=['layer', 'rezero'])

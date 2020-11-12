@@ -158,7 +158,7 @@ class BaseModel(pl.LightningModule):
         self.log(f'{prefix}/average_precision', average_precision)
         self.log(f'{prefix}/auroc', auroc)
         self.log(f'{prefix}/balanced_accuracy', balanced_accuracy)
-        self.log(f'{prefix}/loss', average_loss)
+        self.log(f'{prefix}/loss', average_loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         return self._shared_eval(batch, batch_idx, 'online_val')
