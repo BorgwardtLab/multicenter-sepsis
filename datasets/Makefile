@@ -1,4 +1,4 @@
-all: demo/data eicu/data hirid/data mimic3/data physionet2019/data 
+all: demo/data aumc/data eicu/data hirid/data mimic3/data physionet2019/data 
 MAKEFLAGS += --no-builtin-rules
 .SUFFIXES:
 .DELETE_ON_ERROR:
