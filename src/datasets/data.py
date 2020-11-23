@@ -170,6 +170,18 @@ class EICUDataset(Physionet2019Dataset):
             custom_path=custom_path
         )
 
+class AUMCDataset(Physionet2019Dataset):
+    def __init__(self, root_dir='datasets/aumc/data/extracted',
+                 split_file='datasets/aumc/data/split_info.pkl', split='train',
+                 split_repetition=0, as_dict=True, transform=None,
+                 custom_path=None):
+        super().__init__(
+            root_dir=root_dir, split_file=split_file, split=split,
+            split_repetition=split_repetition, as_dict=as_dict, transform=transform,
+            custom_path=custom_path
+        )
+
+
 
 class PreprocessedDataset(Dataset):
     """
@@ -282,6 +294,11 @@ class PreprocessedEICUDataset(PreprocessedDataset):
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
 
+class PreprocessedAUMCDataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/aumc/data/sklearn/processed/X_filtered', 
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
 
 
 class InstanceBasedDataset(Dataset):
