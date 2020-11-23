@@ -6,6 +6,7 @@ import torch
 from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning.loggers import TensorBoardLogger
 
+
 class TbWithBestValueLogger(TensorBoardLogger):
     """Tensorboard logger which also tracks the best value of metrics."""
 
@@ -114,6 +115,8 @@ def variable_length_collate(batch):
         key: list(map(lambda a: a[key], batch))
         for key in batch[0].keys()
     }
+
+    transposed_items['id'] = np.array(transposed_items['id'])
 
     lengths = np.array(list(map(len, transposed_items['labels'])))
     transposed_items['lengths'] = lengths
@@ -234,8 +237,8 @@ def to_observation_tuples(instance_dict):
     ts_data = np.nan_to_num(ts_data)  # Replace NaNs with zero
 
     # Combine into a vector
-    combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1) 
-    
+    combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1)
+
     # Replace time series data with new vectors
     instance_dict['ts'] = combined
     return instance_dict
@@ -262,10 +265,11 @@ def to_observation_tuples_with_indicators(instance_dict):
 
     # Combine into a vector
     combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1)
-    
+
     # Replace time series data with new vectors
     instance_dict['ts'] = combined
     return instance_dict
+
 
 class LabelPropagation():
     def __init__(self, hours_shift):
@@ -309,5 +313,3 @@ class ComposeTransformations():
         for transform in self.transformations:
             out = transform(out)
         return out
-
-
