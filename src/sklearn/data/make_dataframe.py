@@ -16,7 +16,8 @@ dataset_class_mapping = {
     'mimic3': 'MIMIC3Dataset',
     'eicu': 'EICUDataset',
     'hirid': 'HiridDataset',
-    'demo': 'DemoDataset'
+    'demo': 'DemoDataset',
+    'aumc': 'AUMCDataset'
 }
 
 def ensure_single_index(df):
@@ -129,7 +130,7 @@ def main():
         df_deep2 = pipeline.fit_transform(df).compute()
         
         # Test how deep models perform with lookback features:
-        # For sklearn pipe, we need proper multi index format once again      
+        # For sklearn pipe, we need proper multi index format once again 
         df_deep2.reset_index(inplace=True)
         df_deep2.set_index(['id', 'time'], inplace=True)
  
