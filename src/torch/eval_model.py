@@ -204,7 +204,7 @@ def get_model_checkpoint_path(run_folder):
 
 def extract_model_information(run_folder, checkpoint_path=None):
     with open(os.path.join(run_folder, 'hparams.yaml'), 'r') as f:
-        run_info = yaml.load(f, Loader=yaml.FullLoader)
+        run_info = yaml.load(f, Loader=yaml.BaseLoader)
 
     if checkpoint_path is None:
         checkpoint_path = get_model_checkpoint_path(run_folder)
@@ -229,9 +229,7 @@ def main(run_folder, dataset, split, checkpoint_path, output):
     dataset_cls = getattr(src.datasets, dataset)
     model = model_cls.load_from_checkpoint(
         out['model_path'],
-        hparam_overrides={
-            'dataset': dataset
-        }
+        dataset=dataset
     )
     model.to(device)
     out.update(online_eval(model, dataset_cls, split))

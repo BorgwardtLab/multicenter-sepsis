@@ -11,7 +11,7 @@ import yaml
 def extract_run_details(run_dir):
     """Extract run details."""
     with open(os.path.join(run_dir, 'hparams.yaml'), 'r') as f:
-        run_details = yaml.load(f, Loader=yaml.FullLoader)
+        run_details = yaml.load(f, Loader=yaml.BaseLoader)
     return run_details
 
 
