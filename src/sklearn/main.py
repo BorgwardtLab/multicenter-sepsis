@@ -152,7 +152,7 @@ def main():
   
         if os.path.exists(cached_train) and not args.overwrite:
             # read label-shifted data from json:
-            print('Loading cached labels shifted by {args.label_propagation} hours')
+            print(f'Loading cached labels shifted by {args.label_propagation} hours')
             y_train = load_pickle(cached_train)
             y_val = load_pickle(cached_validation)
         else:
