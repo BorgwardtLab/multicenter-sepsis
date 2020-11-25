@@ -15,9 +15,8 @@ from .extracted import (ts_columns, columns_not_to_normalize, extended_ts_column
 
 import dask.dataframe as dd
 
-#import sys
-#sys.path.append(os.getcwd())
 from src import datasets
+from src.evaluation.sklearn_utils import nanany
 
 class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     """
@@ -174,9 +173,9 @@ class PatientFiltration(ParallelBaseIDTransformer):
         """ It seems like the easiest solution is to quickly load the small label pickle (instead of breaking the pipeline API here)
         """
         label = df[self.label] #load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-        is_case = np.any(label)
+        is_case = nanany(label)
         if is_case:
-            onset = np.argmax(label)
+            onset = np.nanargmax(label)
             start, end = self.onset_bounds
             if onset <= start or onset > end:
                 return None  # This drops the patient
@@ -203,7 +202,7 @@ class CaseFiltrationAfterOnset(ParallelBaseIDTransformer):
         """
         if df[self.label].sum() > 0:
             #Case:
-            onset = np.argmax(df[self.label])
+            onset = np.nanargmax(df[self.label])
             return df[:onset+self.cut_off+1]
         else:
             #Control:
