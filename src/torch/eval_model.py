@@ -86,7 +86,7 @@ def concat(fn):
     return wrapped
 
 
-def online_eval(model, dataset_cls, split, check_matching_unmasked=False):
+def online_eval(model, dataset_cls, split, check_matching_unmasked=False, **kwargs):
     """Run online evaluation with future masking."""
     transforms = model.transforms
     # TODO: Make this more generic, if first transform is not label propagation
@@ -103,7 +103,7 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False):
     )
 
     dataloader = DataLoader(
-        dataset_cls(split=split, transform=transform_fn),
+        dataset_cls(split=split, transform=transform_fn, **kwargs),
         # This passes one instance at a time to the collate function. It could
         # be that the expanded instance requires to much memory to be
         # processed in a single pass.

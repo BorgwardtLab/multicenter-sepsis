@@ -81,7 +81,8 @@ def main(hparams, model_cls):
     masked_result = online_eval(
         loaded_model,
         getattr(src.datasets, hparams.dataset, 'validation'),
-        'validation'
+        'validation',
+        feature_set=hparams.feature_set
     )
     results['validation_masked'] = masked_result
     with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
