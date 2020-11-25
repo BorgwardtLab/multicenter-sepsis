@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import pickle
 import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 from .utils import save_pickle, load_pickle 
