@@ -20,7 +20,7 @@ def load_data_from_input_path(input_path, dataset_name, index):
     """Load the data according to dataset_name, and index-handling
 
     Returns dict with keys:
-        X_train, X_val, X_test, y_train, y_val, y_test 
+        X_train, X_validation, X_test, y_train, y_validation, y_test 
 
     """
     input_path = os.path.join('datasets', dataset_name, input_path)
@@ -77,9 +77,21 @@ def apply_label_shift(labels, shift):
     """Apply label shift to labels."""
     labels = labels.copy()
     patients = labels.index.get_level_values('id').unique()
+    # sanity check: assert that no reordering occured:
+    assert np.all(labels.index.levels[0] == patients)
+    new_labels = pd.DataFrame() 
+    
     for patient in patients:
-        labels[patient] = shift_onset_label(patient, labels[patient], shift)
-    return labels
+        #labels[patient] = shift_onset_label(patient, labels[patient], shift)
+        # the above (nice) solution lead to pandas bug in newer version.. 
+        shifted_labels = shift_onset_label(patient, labels[patient], shift)
+        df = shifted_labels.to_frame()
+        df = df.rename(columns={0: 'sep3'}) 
+        df['id'] = patient
+        new_labels = new_labels.append(df)
+    new_labels.reset_index(inplace=True)
+    new_labels.set_index(['id', 'time'], inplace=True)
+    return new_labels['sep3']
 
 def handle_label_shift(args, d):
     """Handle label shift given argparse args and data dict d"""
@@ -96,23 +108,32 @@ def handle_label_shift(args, d):
         if os.path.exists(cached_train) and not args.overwrite:
             # read label-shifted data from json:
             print(f'Loading cached labels shifted by {args.label_propagation} hours')
-            d['y_train'] = load_pickle(cached_train)
-            d['y_val'] = load_pickle(cached_validation)
-            d['y_test'] = load_pickle(cached_test)
+            y_train = load_pickle(cached_train)
+            y_val = load_pickle(cached_validation)
+            y_test = load_pickle(cached_test)
         else:
+            # unpack dict
+            y_train = d['y_train']
+            y_val = d['y_validation'] 
+            y_test = d['y_test']
+
             # do label-shifting here: 
             start = time()
-            d['y_train'] = apply_label_shift(d['y_train'], -args.label_propagation)
-            d['y_val'] = apply_label_shift(d['y_val'], -args.label_propagation)
-            d['y_test'] = apply_label_shift(d['y_test'], -args.label_propagation)
+            y_train = apply_label_shift(y_train, -args.label_propagation)
+            y_val = apply_label_shift(y_val, -args.label_propagation)
+            y_test = apply_label_shift(y_test, -args.label_propagation)
 
             elapsed = time() - start
             print(f'Label shift took {elapsed:.2f} seconds')
             #and cache data to quickly reuse from now:
             print('Caching shifted labels..')
-            save_pickle(d['y_train'], cached_train) #save pickle also creates folder if needed 
-            save_pickle(d['y_val'], cached_validation)
-            save_pickle(d['y_test'], cached_test)
+            save_pickle(y_train, cached_train) #save pickle also creates folder if needed 
+            save_pickle(y_val, cached_validation)
+            save_pickle(y_test, cached_test)
+        # update the shifted labels in data dict:
+        d['y_train'] = y_train
+        d['y_validation'] = y_val
+        d['y_test'] = y_test 
     else:
         print('No label shift applied.')
     return d
@@ -213,7 +234,7 @@ def main():
     call = partial(_cached_call, cache)
     for score_name, scorer in scores.items():
         results['val_' + score_name] = scorer._score(
-            call, best_estimator, data['X_val'], data['y_val'])
+            call, best_estimator, data['X_validation'], data['y_validation'])
     print(results)
     results['method'] = args.method
     results['best_params'] = random_search.best_params_
@@ -222,7 +243,7 @@ def main():
     for method in ['predict', 'predict_proba', 'decision_function']:
         try:
             results['val_' + method] = call(
-                best_estimator, method, data['X_val']).tolist()
+                best_estimator, method, data['X_validation']).tolist()
         except AttributeError:
             # Not all estimators support all methods
             continue
