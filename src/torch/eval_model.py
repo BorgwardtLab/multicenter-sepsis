@@ -219,11 +219,12 @@ def extract_model_information(run_folder, checkpoint_path=None):
     }
 
 
-def main(run_folder, dataset, split, checkpoint_path, output):
+def main(run_folder, dataset, split, feature_set, checkpoint_path, output):
     """Main function to evaluate a model."""
     out = extract_model_information(run_folder, checkpoint_path)
     out['dataset_eval'] = dataset
     out['split'] = split
+    out['feature_set'] = feature_set
 
     model_cls = getattr(src.torch.models, out['model'])
     dataset_cls = getattr(src.datasets, dataset)
@@ -232,7 +233,7 @@ def main(run_folder, dataset, split, checkpoint_path, output):
         dataset=dataset
     )
     model.to(device)
-    out.update(online_eval(model, dataset_cls, split))
+    out.update(online_eval(model, dataset_cls, split, feature_set=feature_set))
 
     print({
         key: value for key, value in out.items()
@@ -258,6 +259,12 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--checkpoint-path', required=False, default=None, type=str)
+    parser.add_argument(
+        '--feature-set', default='all', choices=['all', 'challenge'],
+        help='Which feature set should be used: [all, challenge], '
+             'where challenge refers to the subset as derived from physionet '
+             'challenge variables'
+    )
     parser.add_argument('--output', type=str, default=None)
     params = parser.parse_args()
 
@@ -265,6 +272,7 @@ if __name__ == '__main__':
         params.run_folder,
         params.dataset,
         params.split,
+        params.feature_set,
         params.checkpoint_path,
-        params.output
+        params.output,
     )
