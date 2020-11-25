@@ -19,19 +19,14 @@ from src.evaluation import (
 def load_data_from_input_path(input_path, dataset_name, index):
     """Load the data according to dataset_name, and index-handling
 
-    Returns:
-        X_train, X_test, y_train, y_test similar to sklearn train_test_split
+    Returns dict with keys:
+        X_train, X_val, X_test, y_train, y_val, y_test 
 
     """
     input_path = os.path.join('datasets', dataset_name, input_path)
-    data = load_data(path=os.path.join(input_path, 'processed'), index=index)
-    return (
-        data['X_train'],
-        data['X_validation'],
-        data['y_train'],
-        data['y_validation']
-    )
-
+    data = load_data(   path=os.path.join(input_path, 'processed'),
+                        index=index)
+    return data 
 
 def get_pipeline_and_grid(method_name, clf_params, feature_set):
     """Get sklearn pipeline and parameter grid."""
@@ -86,6 +81,41 @@ def apply_label_shift(labels, shift):
         labels[patient] = shift_onset_label(patient, labels[patient], shift)
     return labels
 
+def handle_label_shift(args, d):
+    """Handle label shift given argparse args and data dict d"""
+    if args.label_propagation != 0:
+        # Label shift is normally assumed to be in the direction of the future.
+        # For label propagation we should thus take the negative of the
+        # provided label propagation parameter
+        cached_path = os.path.join('datasets', args.dataset, 'data', 'cached')
+        cached_file = os.path.join(cached_path, f'y_shifted_{args.label_propagation}'+'_{}.pkl')
+        cached_train = cached_file.format('train')
+        cached_validation = cached_file.format('validation')
+        cached_test = cached_file.format('test')
+ 
+        if os.path.exists(cached_train) and not args.overwrite:
+            # read label-shifted data from json:
+            print(f'Loading cached labels shifted by {args.label_propagation} hours')
+            d['y_train'] = load_pickle(cached_train)
+            d['y_val'] = load_pickle(cached_validation)
+            d['y_test'] = load_pickle(cached_test)
+        else:
+            # do label-shifting here: 
+            start = time()
+            d['y_train'] = apply_label_shift(d['y_train'], -args.label_propagation)
+            d['y_val'] = apply_label_shift(d['y_val'], -args.label_propagation)
+            d['y_test'] = apply_label_shift(d['y_test'], -args.label_propagation)
+
+            elapsed = time() - start
+            print(f'Label shift took {elapsed:.2f} seconds')
+            #and cache data to quickly reuse from now:
+            print('Caching shifted labels..')
+            save_pickle(d['y_train'], cached_train) #save pickle also creates folder if needed 
+            save_pickle(d['y_val'], cached_validation)
+            save_pickle(d['y_test'], cached_test)
+    else:
+        print('No label shift applied.')
+    return d
 
 def main():
     """Parse arguments and launch fitting of model."""
@@ -138,35 +168,11 @@ def main():
 
     args = parser.parse_args()
 
-    X_train, X_val, y_train, y_val = load_data_from_input_path(
+    data = load_data_from_input_path(
         args.input_path, args.dataset, args.index)
-    
-    if args.label_propagation != 0:
-        # Label shift is normally assumed to be in the direction of the future.
-        # For label propagation we should thus take the negative of the
-        # provided label propagation parameter
-        cached_path = os.path.join('datasets', args.dataset, 'data', 'cached')
-        cached_file = os.path.join(cached_path, f'y_shifted_{args.label_propagation}'+'_{}.pkl')
-        cached_train = cached_file.format('train')
-        cached_validation = cached_file.format('validation')
-  
-        if os.path.exists(cached_train) and not args.overwrite:
-            # read label-shifted data from json:
-            print(f'Loading cached labels shifted by {args.label_propagation} hours')
-            y_train = load_pickle(cached_train)
-            y_val = load_pickle(cached_validation)
-        else:
-            # do label-shifting here: 
-            start = time()
-            y_train = apply_label_shift(y_train, -args.label_propagation)
-            y_val = apply_label_shift(y_val, -args.label_propagation)
-            elapsed = time() - start
-            print(f'Label shift took {elapsed:.2f} seconds')
-            #and cache data to quickly reuse from now:
-            print('Caching shifted labels..')
-            save_pickle(y_train, cached_train) #save pickle also creates folder if needed 
-            save_pickle(y_val, cached_validation)
 
+    data = handle_label_shift(args, data)
+ 
     pipeline, hparam_grid = get_pipeline_and_grid(args.method, args.clf_params, args.feature_set)
 
     scores = {
@@ -188,7 +194,7 @@ def main():
     )
     # actually run the randomized search
     start = time()
-    random_search.fit(X_train, y_train)
+    random_search.fit(data['X_train'], data['y_train'])
     elapsed = time() - start
     print(
         "RandomizedSearchCV took %.2f seconds for %d candidates"
@@ -207,7 +213,7 @@ def main():
     call = partial(_cached_call, cache)
     for score_name, scorer in scores.items():
         results['val_' + score_name] = scorer._score(
-            call, best_estimator, X_val, y_val)
+            call, best_estimator, data['X_val'], data['y_val'])
     print(results)
     results['method'] = args.method
     results['best_params'] = random_search.best_params_
@@ -216,7 +222,7 @@ def main():
     for method in ['predict', 'predict_proba', 'decision_function']:
         try:
             results['val_' + method] = call(
-                best_estimator, method, X_val).tolist()
+                best_estimator, method, data['X_val']).tolist()
         except AttributeError:
             # Not all estimators support all methods
             continue
