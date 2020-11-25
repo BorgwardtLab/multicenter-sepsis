@@ -21,6 +21,12 @@ from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 from src.sklearn.main import load_data_from_input_path, apply_label_shift
 
+def load_model(path):
+    """ function to load model via joblib and compute checksum"""
+    checksum = hashlib.md5(open(path,'rb').read()).hexdigest() 
+    with open(path, 'rb') as f:
+        model = joblib.load(f)
+    return model, checksum
 
 def main():
     """Parse arguments and launch fitting of model."""
@@ -28,11 +34,15 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         '--input_path', default='data/sklearn',
-        help='Path to input data directory (relative from dataset directory)'
+        help='Path to input data (relative from dataset directory)'
     )
     parser.add_argument(
-        '--result_path', default='results',
-        help='Relative path to experimental results (from input path)'
+        '--model_path', default='results/hypersearch4',
+        help='Relative path to experimental results including trained models'
+    )
+    parser.add_argument(
+        '--output_path', default='results/evaluation',
+        help='Relative path to evaluation results'
     )
     parser.add_argument(
         '--train_dataset', default='physionet2019',
@@ -55,12 +65,8 @@ def main():
         help='Method to use for classification [lgbm, lr]'
     )
     parser.add_argument(
-        '--clf_params', nargs='+', default=[],
-        help='Parameters passed to the classifier constructor'
-    )
-    parser.add_argument(
-        '--feature_set', default='all',
-        help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'
+        '--split', default='validation', 
+        help='on which split to evaluate [validation (default), test]'
     )
     parser.add_argument(
         '--index', default='multi',
@@ -69,40 +75,16 @@ def main():
 
     args = parser.parse_args()
 
-    X_train, X_val, y_train, y_val = load_data_from_input_path(
+    data = load_data_from_input_path(
         args.input_path, args.dataset, args.index)
-    
-    if args.label_propagation != 0:
-        # Label shift is normally assumed to be in the direction of the future.
-        # For label propagation we should thus take the negative of the
-        # provided label propagation parameter
-        cached_path = os.path.join('datasets', args.dataset, 'data', 'cached')
-        cached_file = os.path.join(cached_path, f'y_shifted_{args.label_propagation}'+'_{}.pkl')
-        cached_train = cached_file.format('train')
-        cached_validation = cached_file.format('validation')
-  
-        if os.path.exists(cached_train) and not args.overwrite:
-            # read label-shifted data from json:
-            print(f'Loading cached labels shifted by {args.label_propagation} hours')
-            y_train = load_pickle(cached_train)
-            y_val = load_pickle(cached_validation)
-        else:
-            # do label-shifting here: 
-            start = time()
-            y_train = apply_label_shift(y_train, -args.label_propagation)
-            y_val = apply_label_shift(y_val, -args.label_propagation)
-            elapsed = time() - start
-            print(f'Label shift took {elapsed:.2f} seconds')
-            #and cache data to quickly reuse from now:
-            print('Caching shifted labels..')
-            save_pickle(y_train, cached_train) #save pickle also creates folder if needed 
-            save_pickle(y_val, cached_validation)
-
+   
+    data = handle_label_shift(args, data)
+ 
     # Load pretrained model
     ##TODO: define model_path, compute checksum, load model, then eval scores on eval data
-    checksum = hashlib.md5(open(model_path + 'best_estimator.pkl','rb').read()).hexdigest() 
-    
-    pipeline, hparam_grid = get_pipeline_and_grid(args.method, args.clf_params, args.feature_set)
+    model_path = os.path.join(args.model_path, args.dataset+'_'+args.method)
+    model_path = os.path.join(model_path, 'best_estimator.pkl')
+    model, checksum = load_model(model_path) 
 
     scores = {
         'physionet_utility': get_physionet2019_scorer(args.label_propagation),
@@ -111,38 +93,27 @@ def main():
         'balanced_accuracy': SCORERS['balanced_accuracy'],
     }
     
-    random_search = RandomizedSearchCV(
-        pipeline,
-        param_distributions=hparam_grid,
-        scoring=scores,
-        refit='physionet_utility', #'average_precision'
-        n_iter=args.n_iter_search,
-        cv=StratifiedPatientKFold(n_splits=5),
-        iid=False,
-        n_jobs=args.cv_n_jobs
-    )
-    # actually run the randomized search
-    start = time()
-    random_search.fit(X_train, y_train)
-    elapsed = time() - start
-    print(
-        "RandomizedSearchCV took %.2f seconds for %d candidates"
-        " parameter settings." % ((elapsed), args.n_iter_search)
-    )
-    result_path = os.path.join(args.result_path, args.dataset+'_'+args.method)
-    os.makedirs(result_path, exist_ok=True)
+    output_path = args.output_path
+    os.makedirs(output_path, exist_ok=True)
+    
+    # Select split for evaluation:
+    split = args.split
+    if split == 'validation':
+        X_eval = data['X_val']
+        y_eval = data['y_val']
+    elif split == 'test':
+        X_eval = data['X_test']
+        y_eval = data['y_test']
+    else:
+        raise ValueError(f'{split} not among the valid eval splits: [validation, test]')
 
-    cv_results = pd.DataFrame(random_search.cv_results_)
-    cv_results.to_csv(os.path.join(result_path, 'cv_results.csv'))
-
-    # Quantify performance on validation split
-    best_estimator = random_search.best_estimator_
+    # CAME UNTIL HERE  
     results = {}
     cache = {}
     call = partial(_cached_call, cache)
     for score_name, scorer in scores.items():
         results['val_' + score_name] = scorer._score(
-            call, best_estimator, X_val, y_val)
+            call, best_estimator, X_eval, y_eval)
     print(results)
     results['method'] = args.method
     results['best_params'] = random_search.best_params_
@@ -151,7 +122,7 @@ def main():
     for method in ['predict', 'predict_proba', 'decision_function']:
         try:
             results['val_' + method] = call(
-                best_estimator, method, X_val).tolist()
+                best_estimator, method, X_eval).tolist()
         except AttributeError:
             # Not all estimators support all methods
             continue
