@@ -8,17 +8,15 @@ import pandas as pd
 from joblib import Parallel, delayed
 from sklearn.base import TransformerMixin, BaseEstimator
 
-from utils import save_pickle, load_pickle 
-from base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
-from extracted import (ts_columns, columns_not_to_normalize, extended_ts_columns, 
+from .utils import save_pickle, load_pickle 
+from .base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
+from .extracted import (ts_columns, columns_not_to_normalize, extended_ts_columns, 
     colums_to_drop, baseline_cols) 
-
-from IPython import embed
 
 import dask.dataframe as dd
 
-import sys
-sys.path.append(os.getcwd())
+#import sys
+#sys.path.append(os.getcwd())
 from src import datasets
 
 class DataframeFromDataloader(TransformerMixin, BaseEstimator):

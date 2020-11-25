@@ -9,7 +9,8 @@ from dask.distributed import Client
 import dask.dataframe as dd
 
 
-from transformers import *
+from .transformers import *
+from .subsetters import ChallengeFeatureSubsetter 
 
 dataset_class_mapping = {
     'physionet2019': 'Physionet2019Dataset',
@@ -150,6 +151,9 @@ def main():
         save_pickle(df_deep2, os.path.join(out_dir, f'X_features_no_imp_{split}.pkl'))
 
     client.close()
+    
+    # Finally, we derive which features need to be dropped for physionet variable set:
+    _ = ChallengeFeatureSubsetter(preprocessing=True)
 
 if __name__ == '__main__':
     main()
