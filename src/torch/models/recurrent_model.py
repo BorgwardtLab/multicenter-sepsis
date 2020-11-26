@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 from src.torch.models.base_model import BaseModel
-from src.torch.torch_utils import to_observation_tuples
+from src.torch.torch_utils import add_indicators
 
 
 class RecurrentModel(BaseModel):
@@ -34,7 +34,7 @@ class RecurrentModel(BaseModel):
     def transforms(self):
         parent_transforms = super().transforms
         parent_transforms.append(
-            to_observation_tuples  # mask nan with zero and add indicator
+            add_indicators  # mask nan with zero and add indicator
         )
         return parent_transforms
 
