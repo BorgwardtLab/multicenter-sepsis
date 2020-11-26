@@ -19,6 +19,7 @@ def main(dataset, label_propagation, seed):
         [LabelPropagation(-label_propagation), keep_only_labels])
 
     d = dataset_cls(split='train', transform=transform)
+    print('Positive weight (1-p)/p:', d.class_imbalance_factor)
     train_indices, online_val_indices = d.get_stratified_split(seed)
     train_dataset = Subset(d, train_indices)
     online_val_dataset = Subset(d, online_val_indices)
@@ -59,7 +60,11 @@ def main(dataset, label_propagation, seed):
         length_controls_std = np.std(all_lengths[~cases])
 
         print('Split: {}'.format(name))
-        print('    Class imbalance: {:.3f}'.format(class_imbalance))
+        print('    Instances: {}'.format(len(all_lengths)))
+        print('    Total time points: {}'.format(len(combined_labels)))
+        print('    Prevalence: {:.3f}'.format(np.sum(cases) / len(cases)))
+        print('    Prevalance (TP): {:.3f}'.format(class_imbalance))
+        print('    Ideal positive weight: {:.3f}'.format((1 - class_imbalance) / class_imbalance))
         print('    Length: {:.1f} +/- {:.1f}'.format(length_mean, length_std))
         print('    Median length: {:.1f}'.format(length_median))
         print('    Length (cases): {:.1f} +/- {:.1f}'.format(
