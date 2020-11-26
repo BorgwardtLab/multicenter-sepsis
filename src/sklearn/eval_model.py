@@ -19,11 +19,11 @@ from sklearn.model_selection import RandomizedSearchCV
 from src.sklearn.data.utils import load_data, load_pickle, save_pickle
 from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
-from src.sklearn.main import load_data_from_input_path, apply_label_shift
+from src.sklearn.main import load_data_from_input_path, handle_label_shift
 
 def load_model(path):
     """ function to load model via joblib and compute checksum"""
-    checksum = hashlib.md5(open(path,'rb').read()).hexdigest() 
+    checksum = md5(open(path,'rb').read()).hexdigest() 
     with open(path, 'rb') as f:
         model = joblib.load(f)
     return model, checksum
@@ -49,7 +49,7 @@ def main():
         help='Train Dataset Name: [physionet2019, ..]'
     )
     parser.add_argument(
-        '--eval_dataset', default='physionet2019',
+        '--eval_dataset', default='mimic3',
         help='Evaluation Dataset Name: [physionet2019, ..]'
     )
     parser.add_argument(
@@ -74,33 +74,37 @@ def main():
     )
 
     args = parser.parse_args()
+    method = args.method
+    train_dataset = args.train_dataset
+    eval_dataset = args.eval_dataset
 
     data = load_data_from_input_path(
-        args.input_path, args.dataset, args.index)
-   
+        args.input_path, eval_dataset, args.index)
+  
+    # label_shift function assumes a dataset arg:
+    args.dataset = eval_dataset 
     data = handle_label_shift(args, data)
  
     # Load pretrained model
     ##TODO: define model_path, compute checksum, load model, then eval scores on eval data
-    model_path = os.path.join(args.model_path, args.dataset+'_'+args.method)
+    model_path = os.path.join(args.model_path, train_dataset + '_' + method)
     model_path = os.path.join(model_path, 'best_estimator.pkl')
     model, checksum = load_model(model_path) 
 
     scores = {
-        'physionet_utility': get_physionet2019_scorer(args.label_propagation),
-        'roc_auc': SCORERS['roc_auc'],
+        'physionet2019_score': get_physionet2019_scorer(args.label_propagation),
+        'auroc': SCORERS['roc_auc'],
         'average_precision': SCORERS['average_precision'],
         'balanced_accuracy': SCORERS['balanced_accuracy'],
     }
     
-    output_path = args.output_path
-    os.makedirs(output_path, exist_ok=True)
+    
     
     # Select split for evaluation:
     split = args.split
     if split == 'validation':
-        X_eval = data['X_val']
-        y_eval = data['y_val']
+        X_eval = data['X_validation']
+        y_eval = data['y_validation']
     elif split == 'test':
         X_eval = data['X_test']
         y_eval = data['y_test']
@@ -112,30 +116,38 @@ def main():
     cache = {}
     call = partial(_cached_call, cache)
     for score_name, scorer in scores.items():
-        results['val_' + score_name] = scorer._score(
-            call, best_estimator, X_eval, y_eval)
+        results[score_name] = scorer._score(
+            call, model, X_eval, y_eval)
     print(results)
-    results['method'] = args.method
-    results['best_params'] = random_search.best_params_
-    results['n_iter_search'] = args.n_iter_search
-    results['runtime'] = elapsed
-    for method in ['predict', 'predict_proba', 'decision_function']:
-        try:
-            results['val_' + method] = call(
-                best_estimator, method, X_eval).tolist()
-        except AttributeError:
-            # Not all estimators support all methods
-            continue
+    results['model'] = method
+    results['model_path'] = model_path
+    results['model_checksum'] = checksum
+    results['model_params'] = model.get_params()
+    results['dataset_train'] = train_dataset
+    results['dataset_eval'] = eval_dataset
+    results['split'] = split
+    
+    results['predictions'] = model.predict(X_eval).tolist() 
+    results['scores'] = model.predict_proba(X_eval)[:,1].tolist()
+    ids = y_eval.index.get_level_values('id').unique().tolist() 
+    results['ids'] = ids
+    labels = []
+    for pid in ids:
+        labels.append(y_eval[pid].values.tolist()) 
+    results['labels'] = labels
+ 
+    output_path = args.output_path
+    os.makedirs(output_path, exist_ok=True) 
+    outfile = os.path.join(output_path, f'{method}_{train_dataset}_{eval_dataset}.json')
 
-    with open(os.path.join(result_path, 'results.json'), 'w') as f:
+    #clf obj don't go into json format, remove them:
+    for key in ['steps', 'est']:
+        results['model_params'].pop(key, None)
+
+    from IPython import embed; embed() 
+    with open(outfile, 'w') as f:
         json.dump(results, f)
-    joblib.dump(
-        best_estimator,
-        os.path.join(result_path, 'best_estimator.pkl'),
-        compress=1
-    )
-
-
+     
 if __name__ in "__main__":
     main()
 
