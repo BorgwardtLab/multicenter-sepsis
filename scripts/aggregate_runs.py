@@ -53,7 +53,7 @@ def main(path, outputs, filter_columns):
     if filter_columns is not None:
         # Only keep columns in filter_columns
         all_runs = [
-            {key: val for key, val in run.items() if val in filter_columns}
+            {key: val for key, val in run.items() if key in filter_columns}
             for run in all_runs
         ]
     df = pd.DataFrame.from_records(all_runs)
