@@ -233,7 +233,7 @@ class PreprocessedDataset(Dataset):
         ]
         train_indices, test_indices = train_test_split(
             range(len(per_instance_labels)),
-            train_size=0.8,
+            train_size=0.9,
             stratify=per_instance_labels,
             random_state=random_state
         )
@@ -360,7 +360,7 @@ class InstanceBasedDataset(Dataset):
         ]
         train_indices, test_indices = train_test_split(
             range(len(per_instance_labels)),
-            train_size=0.8,
+            train_size=0.9,
             stratify=per_instance_labels,
             random_state=random_state
         )
