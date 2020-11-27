@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 from src.torch.models.base_model import BaseModel
-from src.torch.torch_utils import add_indicators, to_observation_tuples
+from src.torch.torch_utils import add_indicators, to_observation_tuples, forward_fill
 
 
 class RecurrentModel(BaseModel):
@@ -34,15 +34,18 @@ class RecurrentModel(BaseModel):
     @property
     def transforms(self):
         parent_transforms = super().transforms
-        if self.hparams.drop_time:
-            # mask nan with zero and add indicator
-            parent_transforms.append(
-                add_indicators
-            )
-        else:
+        if self.hparams.add_time:
             # mask nan with zero and add indicator, also add time as a feature
             parent_transforms.append(
                 to_observation_tuples
+            )
+        elif self.hparams.forward_fill:
+            parent_transforms.append(
+                forward_fill
+            )
+        else:
+            parent_transforms.append(
+                add_indicators
             )
 
         return parent_transforms
@@ -84,7 +87,8 @@ class RecurrentModel(BaseModel):
             '--dropout', default=0.1, type=float,
             tunable=True, options=[0., 0.1, 0.2, 0.3, 0.4]
         )
-        parser.add_argument('--drop-time', default=False, action='store_true')
+        parser.add_argument('--add-time', default=False, action='store_true')
+        parser.add_argument('--forward-fill', default=False, action='store_true')
         return parser
 
 

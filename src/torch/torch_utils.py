@@ -290,6 +290,18 @@ def to_observation_tuples_with_indicators(instance_dict):
     return instance_dict
 
 
+def forward_fill(instance_dict):
+    instance_dict = instance_dict.copy()
+    arr = instance_dict['ts']
+    mask = np.isnan(arr)
+    idx = np.where(~mask,np.arange(mask.shape[0])[:, None],0)
+    np.maximum.accumulate(idx,axis=0, out=idx)
+    arr = arr[idx, np.arange(mask.shape[1])[None, :]]
+    arr[np.isnan(arr)] = 0.
+    instance_dict['ts'] = arr
+    return instance_dict
+
+
 class LabelPropagation():
     def __init__(self, hours_shift):
         self.hours_shift = hours_shift
