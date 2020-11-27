@@ -2,20 +2,21 @@
 import torch
 import torch.nn as nn
 from src.torch.models.base_model import BaseModel
-from src.torch.torch_utils import add_indicators
+from src.torch.torch_utils import add_indicators, to_observation_tuples
 
 
 class RecurrentModel(BaseModel):
     """Recurrent Model."""
 
-    def __init__(self, model_name, d_model, n_layers, dropout, **kwargs):
+    def __init__(self, model_name, d_model, n_layers, dropout, drop_time, **kwargs):
         """Recurrent Model.
 
         Args:
-            -model_name: ['GRU', 'LSTM', 'RNN']
-            -d_model: Dimensionality of hidden state
-            -n_layers: Number of stacked RNN layers
-            -dropout: Fraction of elements that should be dropped out
+            - model_name: ['GRU', 'LSTM', 'RNN']
+            - d_model: Dimensionality of hidden state
+            - n_layers: Number of stacked RNN layers
+            - dropout: Fraction of elements that should be dropped out
+            - drop_time: Do not feed the time as an additional input
         """
         super().__init__(**kwargs)
         self.save_hyperparameters()
@@ -33,9 +34,17 @@ class RecurrentModel(BaseModel):
     @property
     def transforms(self):
         parent_transforms = super().transforms
-        parent_transforms.append(
-            add_indicators  # mask nan with zero and add indicator
-        )
+        if self.hparams.drop_time:
+            # mask nan with zero and add indicator
+            parent_transforms.append(
+                add_indicators
+            )
+        else:
+            # mask nan with zero and add indicator, also add time as a feature
+            parent_transforms.append(
+                to_observation_tuples
+            )
+
         return parent_transforms
 
     def forward(self, x, lengths):
@@ -75,6 +84,7 @@ class RecurrentModel(BaseModel):
             '--dropout', default=0.1, type=float,
             tunable=True, options=[0., 0.1, 0.2, 0.3, 0.4]
         )
+        parser.add_argument('--drop-time', default=False, action='store_true')
         return parser
 
 
