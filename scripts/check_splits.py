@@ -12,11 +12,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--path', type=str, help='path from dataset to pickled df file to inspect', 
         default='data/sklearn/processed')
-    parser.add_argument('--dataset', type=str, help='dataset to use', 
+    parser.add_argument('--dataset', type=str, help='which dataset to use. Use [all] when looping over all', 
         default='physionet2019')
     
     args = parser.parse_args()
-    datasets = ['demo', 'physionet2019', 'mimic3', 'eicu', 'hirid']
+    if args.dataset == 'all':
+        datasets = ['demo', 'physionet2019', 'mimic3', 'eicu', 'hirid', 'aumc']
+    else:
+        datasets = [args.dataset]
     splits = ['train', 'validation', 'test'] 
     for dataset in datasets: 
         for split in splits: 
