@@ -577,18 +577,17 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         df['SIRS'] = sirs_df['SIRS']
         return df
 
-class AddRecordingCount(BaseEstimator, TransformerMixin):
-    """ Adds a count of the number of entries up to the given timepoint. """
-    def __init__(self, last_only=False):
+class MeasurementCounter(DaskIDTransformer):
+    """ Adds a count of the number of measurements up to the given timepoint. """
+    def __init__(self, n_jobs=4, **kwargs):
+        super().__init__(n_jobs=n_jobs, **kwargs)
+        # we only count raw time series measurements 
         self.columns = ts_columns
 
     def fit(self, df, labels=None):
         return self
 
     def transform_id(self, df):
-        return df.cumsum()
-
-    def transform(self, df):
         # Make a counts frame
         counts = deepcopy(df)
         counts.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
@@ -599,7 +598,7 @@ class AddRecordingCount(BaseEstimator, TransformerMixin):
         counts = counts.replace(np.nan, 0)
 
         # Get the counts for each person
-        counts = counts.groupby('id').apply(self.transform_id)
+        counts = counts.cumsum() 
 
         # Rename
         counts.columns = [x + '_count' for x in counts.columns]
