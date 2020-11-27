@@ -6,7 +6,7 @@ baseline_cols = ['sirs', 'news', 'mews', 'gcs', 'qsofa',
         'sofa_renal', 'sofa_resp', 'sofa']
 
 
-#copied from Physionet2019 Dataset Class 
+# raw measurements
 ts_columns = [
         'hr', 'o2sat', 'temp', 'sbp', 'map', 'dbp', 'resp',
         'etco2', 'be', 'bicar', 'fio2', 'ph', 'pco2', 'ast', 
