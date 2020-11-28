@@ -7,6 +7,7 @@ import os
 import pandas as pd
 from joblib import Parallel, delayed
 from sklearn.base import TransformerMixin, BaseEstimator
+from kymatio.numpy import Scattering1D
 
 from .utils import save_pickle, load_pickle 
 from .base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
@@ -242,25 +243,8 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
     def transform(self, df):
         """ As this time filtering step also affects labels, for simplicity we load and adjust them too. 
         """
-        #labels = load_pickle(os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-        #labels.reset_index(level='time', drop=True, inplace=True)
-        # labels = dd.from_pandas(
-        #     pd.DataFrame(labels, columns=['sep3']),
-        #     npartitions=df.npartitions
-        # )
-        #assert len(labels) == len(df)
-        #df['sep3'] = labels
-        # df = dd.concat([df, labels], axis=1)
-
         df = df.groupby('id', group_keys=False).apply(self._transform_id)
-        # #groupby can create None indices, drop them:
-        # if None in df.index.names:
-        #     print('None in indices, dropping it')
-        #     df.index = df.index.droplevel(None)
- 
-        #if self.save:
-        #    save_pickle(df['sep3'].compute(), os.path.join(self.data_dir, f'y_{self.split}_final.pkl'))
-        #df = df.drop('sep3', axis=1) #after filtering time steps drop labels again 
+        
         print('Done with InvalidTimesFiltration')
         return df
 
@@ -361,7 +345,7 @@ class LookbackFeatures(DaskIDTransformer):
     """
     Simple statistical features including moments over a tunable look-back window.
     """
-    def __init__(self, stats=None, **kwargs):
+    def __init__(self, stats=None, windows = [4, 8, 16],**kwargs):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values)
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
@@ -369,7 +353,6 @@ class LookbackFeatures(DaskIDTransformer):
         self.cols = extended_ts_columns #apply look-back stats to time series columns
         if stats is None:
             keys = ['min', 'max', 'mean', 'median', 'var']
-            windows = [4, 8, 16] #5
             stats = []
             for key in keys:
                 for window in windows:
@@ -605,4 +588,71 @@ class MeasurementCounter(DaskIDTransformer):
 
         return pd.concat([df, counts], axis=1)
 
+class WaveletFeatures(ParallelBaseIDTransformer):
+    """ Computes wavelet scattering up to given time per time series channel """
+    def __init__(self, n_jobs=4, T=32, J=2, Q=1, output_size=32, **kwargs):
+        """
+        Running 1D wavelet scattering.
+        Inputs:
+            - T: time steps = samples = support (needs to be power of 2)
+            - J: scale
+            - Q: number of wavelets per octave
+            - output_size: 32 (hard coded, as I didn't find an implemented way
+                to precompute it, even the docu says, that one dim is "roughly$
+                portional" to some function of the input params).
+        """
+        super().__init__(n_jobs=n_jobs, **kwargs)
+        # we process the raw time series measurements 
+        self.T = T
+        self.columns = ts_columns
+        self.scatter = Scattering1D(J, T, Q) 
+        self.output_size = output_size
 
+    def fit(self, df, labels=None):
+        return self
+
+    def transform_id(self, df):
+        """ process invididual patient """  
+        inputs = deepcopy(df)
+        inputs.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+
+        # pad time series with T-1 0s (for getting online features of fixed window size)
+        inputs = self._pad_df(inputs, n_pad=self.T-1)
+        #inputs.reset_index(drop=True, inplace=True)
+        
+        wavelets = self._compute_wavelets(inputs)
+        
+        assert df.shape[0] == wavelets.shape[0]
+        wavelets.index = df.index
+
+        return pd.concat([df, wavelets], axis=1)
+
+    def _pad_df(self, df, n_pad, value=0):
+        """ util function to pad <n_pad> zeros at the start of the df 
+        """
+        x = np.concatenate([np.zeros([n_pad,df.shape[1]]), df.values]) 
+        return pd.DataFrame(x, columns=df.columns)
+
+    def _compute_wavelets(self, df):
+        """ Loop over all columns, compute column-wise wavelet features
+             and create wavelet output columns"""
+        col_dfs = []
+        for col in df.columns:
+            col_df = self._process_column(df, col)
+            col_dfs.append(col_df)
+        return pd.concat(col_dfs, axis=1)
+        
+    def _process_column(self, df, col):
+        """ Processing a single column. """
+        out_cols = [col + f'_wavelet_{i}' for i in range(self.output_size)]
+        col_df = pd.DataFrame(columns=out_cols)
+        # we go over input column and write result to col_df, which is a 
+        # df gathering all features from the current col
+        df[col].rolling(window=self.T).apply(self._rolling_function, kwargs={'df': col_df})
+        return col_df
+
+    def _rolling_function(self, window, df):
+        """actually compute wavelet scattering in a rolling window """
+        df.loc[window.index.min()] = self.scatter(window.values).flatten()
+        return 1 # rolling funcs need to return index..  
+    

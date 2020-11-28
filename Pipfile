@@ -27,6 +27,7 @@ dask-lightgbm = "*"
 dask-xgboost = "*"
 pyarrow = "*"
 seaborn = "*"
+kymatio = "*"
 
 [requires]
 python_version = "3.7"

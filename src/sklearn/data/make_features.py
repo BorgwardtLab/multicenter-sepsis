@@ -123,7 +123,7 @@ def main():
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
-            ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
+            ('lookback_features', LookbackFeatures(n_jobs=n_jobs)), ####concat_output=True)),
             ('measurement_counts', MeasurementCounter(n_jobs=n_jobs)),
             ('filter_invalid_times', InvalidTimesFiltration()),
             #drop and save baseline scores after filtering invalid (which ignored baselines)
@@ -137,7 +137,9 @@ def main():
         df_deep2.set_index(['id', 'time'], inplace=True)
  
         sklearn_pipe =  Pipeline([
-            ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)) 
+            ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)),
+            # wavelets require imputed data! 
+            ('wavelet_features', WaveletFeatures(n_jobs=50, concat_output=True)), #n_jobs=n_jobs, concat_output=True 
             ])
         df_sklearn = sklearn_pipe.fit_transform(df_deep2)
 
