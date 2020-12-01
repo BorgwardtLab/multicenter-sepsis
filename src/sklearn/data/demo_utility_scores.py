@@ -1,6 +1,7 @@
 import argparse
 import os
 import pickle
+import plotille
 import sys
 
 import pandas as pd
@@ -54,6 +55,8 @@ if __name__ == "__main__":
 
     print(f'Processing {dataset} and splits {splits}')
 
+    mean_utility_scores = []
+
     for split in splits: 
         name = f'X_features_{split}'
         features_path = os.path.join(path, name + '.pkl')
@@ -61,4 +64,15 @@ if __name__ == "__main__":
         X = data_pipeline.fit_transform(X)
 
         print(f'Mean utility score for {split}:')
-        print(X.groupby('id')['utility'].mean())
+
+        means = X.groupby('id')['utility'].mean()
+
+        print(means)
+
+        mean_utility_scores.extend(X.groupby('id')['utility'].mean().values)
+
+    fig = plotille.Figure()
+    fig.height = 25
+    fig.width = 80
+    fig.histogram(mean_utility_scores, bins=50)
+    print(fig.show())
