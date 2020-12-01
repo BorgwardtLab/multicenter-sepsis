@@ -86,7 +86,12 @@ class CalculateUtilityScores(BaseIDTransformer):
     or as a transformer class that extends a given data frame.
     """
 
-    def __init__(self, passthrough=True, label='sep3'):
+    def __init__(
+        self,
+        passthrough=True,
+        label='sep3',
+        score_name='utility'
+    ):
         """Create new instance of class.
 
         Parameters
@@ -95,9 +100,19 @@ class CalculateUtilityScores(BaseIDTransformer):
             If set, does not modify input data. Instead, the scores are
             calculated and stored in the `scores` property of the class,
             which is a stand-alone data frame.
+
+        label : str
+            Indicates which column to use for the sepsis label.
+
+        score_name : str
+            Indicates the name of the column that will contain the
+            calculated utility score. If `passthrough` is set, the
+            column name will only be used in the result data frame
+            instead of being used as a new column for the *input*.
         """
         self.passthrough = passthrough
         self.label = label
+        self.score_name = score_name
         self.df_scores = None
 
     @property
@@ -109,12 +124,14 @@ class CalculateUtilityScores(BaseIDTransformer):
         Data frame containing information about the sample/patient ID,
         the time, and the respective utility score. Can be `None` when
         the class was not used before.
+
+        The data frame will share the same index as the original data,
+        which is used as the input.
         """
         return self.df_scores
 
     def transform_id(self, df):
         """Calculate utility score differences for each patient."""
-
         labels = df[self.label]
         n = len(labels)
 
@@ -132,9 +149,8 @@ class CalculateUtilityScores(BaseIDTransformer):
 
         scores = pd.DataFrame(
             index=labels.index,
-            data=np.column_stack(
-                [df['time'], ones - zeros],
-            )
+            data=ones - zeros,
+            columns=[self.score_name]
         )
 
         self.df_scores = scores
