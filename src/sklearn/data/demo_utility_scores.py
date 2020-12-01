@@ -46,9 +46,6 @@ if __name__ == "__main__":
         splits = [split]
 
     data_pipeline = Pipeline([
-        ('lookback_features', LookbackFeatures()),
-        ('filter_invalid_times', InvalidTimesFiltration()),
-        ('drop_cols', DropColumns(save=False)),
         ('calculate_utility_scores',
             CalculateUtilityScores(passthrough=False))]
     )
