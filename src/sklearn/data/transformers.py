@@ -155,7 +155,23 @@ class CalculateUtilityScores(BaseIDTransformer):
 
         self.df_scores = scores
 
-        # TODO: handle passthrough option more gracefully here
+        # Check whether passthrough is required. If so, there's nothing
+        # to do from our side---we just store the data frame & continue
+        # by returning the original data frame.
+        if self.passthrough:
+            pass
+
+        # Create a new column that stores the score. Some additional
+        # sanity checks ensure that we do not do make any mistakes.
+        else:
+            assert self.score_name not in df.columns, \
+                   'Score column name must not exist in data frame.'
+
+            assert df.index == self.df_scores.index, \
+                   'Index of original data frame must not deviate.'
+
+            df[self.score_name] = scores[self.score_name]
+
         return df
 
 
