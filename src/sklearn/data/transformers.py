@@ -18,6 +18,8 @@ import dask.dataframe as dd
 
 from src import datasets
 from src.evaluation.sklearn_utils import nanany
+from src.evaluation.physionet2019_score import compute_prediction_utility
+
 
 class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     """
@@ -74,8 +76,73 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
             output = pd.concat(output)
         print('Done with DataframeFromDataloader')
         return output
-            
-        
+
+
+class CalculateUtilityScores(BaseIDTransformer):
+    """Calculate utility scores from patient.
+
+    This transformer calculates the utility score of a patient. It can
+    either function as a passthrough class that stores data internally
+    or as a transformer class that extends a given data frame.
+    """
+
+    def __init__(self, passthrough=True, label='sep3'):
+        """Create new instance of class.
+
+        Parameters
+        ----------
+        passthrough : bool
+            If set, does not modify input data. Instead, the scores are
+            calculated and stored in the `scores` property of the class,
+            which is a stand-alone data frame.
+        """
+        self.passthrough = passthrough
+        self.label = label
+        self.df_scores = None
+
+    @property
+    def scores(self):
+        """Return scores calculated by the class.
+
+        Returns
+        -------
+        Data frame containing information about the sample/patient ID,
+        the time, and the respective utility score. Can be `None` when
+        the class was not used before.
+        """
+        return self.df_scores
+
+    def transform_id(self, df):
+        """Calculate utility score differences for each patient."""
+
+        labels = df[self.label]
+        n = len(labels)
+
+        zeros = compute_prediction_utility(
+            labels.values,
+            np.zeros(shape=n),
+            return_all_scores=True
+        )
+
+        ones = compute_prediction_utility(
+            labels.values,
+            np.ones(shape=n),
+            return_all_scores=True
+        )
+
+        scores = pd.DataFrame(
+            index=labels.index,
+            data=np.column_stack(
+                [df['time'], ones - zeros],
+            )
+        )
+
+        self.df_scores = scores
+
+        # TODO: handle passthrough option more gracefully here
+        return df
+
+
 class DropLabels(TransformerMixin, BaseEstimator):
     """
     Remove label information, which was required for filtering steps.
