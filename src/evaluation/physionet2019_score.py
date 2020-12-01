@@ -37,7 +37,8 @@ from .sklearn_utils import nanany
 def compute_prediction_utility(labels, predictions, dt_early=-12,
                                dt_optimal=-6, dt_late=3.0, max_u_tp=1,
                                min_u_fn=-2, u_fp=-0.05, u_tn=0,
-                               check_errors=True, shift_labels=0):
+                               check_errors=True, shift_labels=0,
+                               return_all_scores=False):
     """Compute utility score of physionet 2019 challenge."""
     # Check inputs for errors.
     if check_errors:
@@ -106,7 +107,10 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
                 pass
 
     # Find total utility for patient.
-    return np.sum(u)
+    if return_all_scores:
+        return u
+    else:
+        return np.sum(u)
 
 
 def physionet2019_utility(y_true, y_score, shift_labels=0):
