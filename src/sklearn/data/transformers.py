@@ -167,11 +167,12 @@ class CalculateUtilityScores(BaseIDTransformer):
             assert self.score_name not in df.columns, \
                    'Score column name must not exist in data frame.'
 
-            assert df.index == self.df_scores.index, \
+            assert df.index.equals(self.df_scores.index), \
                    'Index of original data frame must not deviate.'
 
             df[self.score_name] = scores[self.score_name]
 
+        print('Done with CalculateUtilityScores')
         return df
 
 

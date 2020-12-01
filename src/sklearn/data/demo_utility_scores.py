@@ -48,7 +48,8 @@ if __name__ == "__main__":
         ('lookback_features', LookbackFeatures()),
         ('filter_invalid_times', InvalidTimesFiltration()),
         ('drop_cols', DropColumns(save=False)),
-        ('calculate_utility_scores', CalculateUtilityScores())]
+        ('calculate_utility_scores',
+            CalculateUtilityScores(passthrough=False))]
     )
 
     print(f'Processing {dataset} and splits {splits}')
@@ -57,5 +58,7 @@ if __name__ == "__main__":
         name = f'X_features_{split}'
         features_path = os.path.join(path, name + '.pkl')
         X = load_pickle(features_path)
+        X = data_pipeline.fit_transform(X)
 
-        data_pipeline.fit_transform(X)
+        print(f'Mean utility score for {split}:')
+        print(X.groupby('id')['utility'].mean())
