@@ -18,6 +18,8 @@ import dask.dataframe as dd
 
 from src import datasets
 from src.evaluation.sklearn_utils import nanany
+from src.evaluation.physionet2019_score import compute_prediction_utility
+
 
 class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     """
@@ -74,8 +76,106 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
             output = pd.concat(output)
         print('Done with DataframeFromDataloader')
         return output
-            
-        
+
+
+class CalculateUtilityScores(BaseIDTransformer):
+    """Calculate utility scores from patient.
+
+    This transformer calculates the utility score of a patient. It can
+    either function as a passthrough class that stores data internally
+    or as a transformer class that extends a given data frame.
+    """
+
+    def __init__(
+        self,
+        passthrough=True,
+        label='sep3',
+        score_name='utility'
+    ):
+        """Create new instance of class.
+
+        Parameters
+        ----------
+        passthrough : bool
+            If set, does not modify input data. Instead, the scores are
+            calculated and stored in the `scores` property of the class,
+            which is a stand-alone data frame.
+
+        label : str
+            Indicates which column to use for the sepsis label.
+
+        score_name : str
+            Indicates the name of the column that will contain the
+            calculated utility score. If `passthrough` is set, the
+            column name will only be used in the result data frame
+            instead of being used as a new column for the *input*.
+        """
+        self.passthrough = passthrough
+        self.label = label
+        self.score_name = score_name
+        self.df_scores = None
+
+    @property
+    def scores(self):
+        """Return scores calculated by the class.
+
+        Returns
+        -------
+        Data frame containing information about the sample/patient ID,
+        the time, and the respective utility score. Can be `None` when
+        the class was not used before.
+
+        The data frame will share the same index as the original data,
+        which is used as the input.
+        """
+        return self.df_scores
+
+    def transform_id(self, df):
+        """Calculate utility score differences for each patient."""
+        labels = df[self.label]
+        n = len(labels)
+
+        zeros = compute_prediction_utility(
+            labels.values,
+            np.zeros(shape=n),
+            return_all_scores=True
+        )
+
+        ones = compute_prediction_utility(
+            labels.values,
+            np.ones(shape=n),
+            return_all_scores=True
+        )
+
+        scores = pd.DataFrame(
+            index=labels.index,
+            data=ones - zeros,
+            columns=[self.score_name]
+        )
+
+        self.df_scores = scores
+
+        # Check whether passthrough is required. If so, there's nothing
+        # to do from our side---we just store the data frame & continue
+        # by returning the original data frame.
+        if self.passthrough:
+            pass
+
+        # Create a new column that stores the score. Some additional
+        # sanity checks ensure that we do not do make any mistakes.
+        else:
+            assert self.score_name not in df.columns, \
+                   'Score column name must not exist in data frame.'
+
+            assert df.index.equals(self.df_scores.index), \
+                   'Index of original data frame must not deviate.'
+
+            df[self.score_name] = scores[self.score_name]
+
+        print('Done with CalculateUtilityScores')
+        return df
+
+
 class DropLabels(TransformerMixin, BaseEstimator):
     """
     Remove label information, which was required for filtering steps.

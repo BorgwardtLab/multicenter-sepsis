@@ -28,6 +28,7 @@ dask-xgboost = "*"
 pyarrow = "*"
 seaborn = "*"
 kymatio = "*"
+plotille = "*"
 
 [requires]
 python_version = "3.7"
