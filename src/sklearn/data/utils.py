@@ -37,13 +37,19 @@ def load_data(
     path='datasets/physionet2019/data/sklearn/processed',
     label='sep3',
     splits = ['train', 'validation', 'test'],
-    index='multi'):
+    index='multi', 
+    extended_features=False):
     """
     Load preprocessed Data in sklearn format from pickle, depending on index type reformat properly.
     """
     drop_col = 'Gender_Other' #only 5 patients in eicu have this, dropping this col as its still encoded in male female both zero. 
     data = defaultdict()
-    files = ['X_features_' + split for split in splits]
+    
+    if extended_features:
+        prefix = 'X_extended_features_'
+    else: 
+        prefix = 'X_features_'
+    files = [prefix + split for split in splits]
     
     for split, filename in zip(splits, files):
         filepath = os.path.join(path, filename + '.pkl')

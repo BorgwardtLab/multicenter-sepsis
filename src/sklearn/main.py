@@ -16,7 +16,7 @@ from src.sklearn.data.utils import load_data, load_pickle, save_pickle
 from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 
-def load_data_from_input_path(input_path, dataset_name, index):
+def load_data_from_input_path(input_path, dataset_name, index, extended_features=False):
     """Load the data according to dataset_name, and index-handling
 
     Returns dict with keys:
@@ -25,7 +25,7 @@ def load_data_from_input_path(input_path, dataset_name, index):
     """
     input_path = os.path.join('datasets', dataset_name, input_path)
     data = load_data(   path=os.path.join(input_path, 'processed'),
-                        index=index)
+                        index=index, extended_features=extended_features)
     return data 
 
 def get_pipeline_and_grid(method_name, clf_params, feature_set):
@@ -181,7 +181,10 @@ def main():
         '--feature_set', default='all',
         help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'
     )
-
+    parser.add_argument(
+        '--extended_features', default=False, action='store_true',
+        help='flag if extended feature set should be used (incl measurement counter, wavelets etc)'
+    )
     parser.add_argument(
         '--index', default='multi',
         help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
@@ -190,7 +193,7 @@ def main():
     args = parser.parse_args()
 
     data = load_data_from_input_path(
-        args.input_path, args.dataset, args.index)
+        args.input_path, args.dataset, args.index, args.extended_features)
 
     data = handle_label_shift(args, data)
  
