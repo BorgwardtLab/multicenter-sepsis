@@ -83,19 +83,23 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         return output
 
 
-class CalculateUtilityScores(BaseIDTransformer):
+class CalculateUtilityScores(ParallelBaseIDTransformer):
     """Calculate utility scores from patient.
-    Inspired by Morill et al. (http://www.cinc.org/archives/2019/pdf/CinC2019-014.pdf), 
-    this transformer calculates the utility target U(1) - U(0) of a patient. It can
-    either function as a passthrough class that stores data internally
-    or as a transformer class that extends a given data frame.
+
+    Inspired by Morill et al. [1], this transformer calculates the
+    utility target U(1) - U(0) of a patient.  It can either function
+    as a passthrough class that stores data internally or as a
+    transformer class that extends a given data frame.
+
+    [1]: http://www.cinc.org/archives/2019/pdf/CinC2019-014.pdf
     """
 
     def __init__(
         self,
         passthrough=True,
         label='sep3',
-        score_name='utility'
+        score_name='utility',
+        **kwargs
     ):
         """Create new instance of class.
 
@@ -114,11 +118,18 @@ class CalculateUtilityScores(BaseIDTransformer):
             calculated utility score. If `passthrough` is set, the
             column name will only be used in the result data frame
             instead of being used as a new column for the *input*.
+
+        **kwargs:
+            Optional keyword arguments that will be passed to the
+            parent class.
         """
+        super().__init__(**kwargs)
+
         self.passthrough = passthrough
         self.label = label
         self.score_name = score_name
         self.df_scores = None
+        self.concat_output = True
 
     @property
     def scores(self):
