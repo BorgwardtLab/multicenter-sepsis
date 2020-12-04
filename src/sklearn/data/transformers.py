@@ -1,5 +1,10 @@
 """
-Various data loading, filtering and feature transformers, TODO: add copyright notice here! 
+Various data loading, filtering and feature transformers. 
+
+One class, DerivedFeatures, was kindly provided by James Morrill,
+source: https://github.com/jambo6/physionet_sepsis_challenge_2019/blob/master/src/data/transformers.py
+Notably, we modified these derived features to account for our larger variable set.
+ 
 """
 from copy import deepcopy
 import numpy as np
@@ -368,27 +373,6 @@ class IndicatorImputation(ParallelBaseIDTransformer):
         invalid_indicators = (df[cols].isnull()).astype(int).add_suffix('_indicator') 
         df = pd.concat([df.fillna(0), invalid_indicators], axis=1)
         return df
-
-class FillMissing(TransformerMixin, BaseEstimator):
-    """ Method to fill nan columns, either with zeros, column mean oder median (last two leak from the future if done offline) """
-    def __init__(self, method='zero', col_vals=None):
-        self.method = method
-        self.col_vals = col_vals
-
-    def fit(self, df, labels=None):
-        if self.method == 'mean':
-            self.col_vals = df.mean().to_dict()
-        elif self.method == 'median':
-            self.col_vals = df.median().to_dict()
-        elif self.method == 'zero':
-            self.col_vals = 0
-        return self
-
-    def transform(self, df):
-        if self.col_vals is not None:
-            df = df.fillna(self.col_vals)
-        return df
-
 
 class Normalizer(TransformerMixin, BaseEstimator):
     """
