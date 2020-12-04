@@ -80,8 +80,8 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
 
 class CalculateUtilityScores(BaseIDTransformer):
     """Calculate utility scores from patient.
-
-    This transformer calculates the utility score of a patient. It can
+    Inspired by Morill et al. (http://www.cinc.org/archives/2019/pdf/CinC2019-014.pdf), 
+    this transformer calculates the utility target U(1) - U(0) of a patient. It can
     either function as a passthrough class that stores data internally
     or as a transformer class that extends a given data frame.
     """
