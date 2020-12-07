@@ -13,11 +13,13 @@ import pandas as pd
 from joblib import Parallel, delayed
 from sklearn.base import TransformerMixin, BaseEstimator
 from kymatio.numpy import Scattering1D
+import iisignature as iis 
 
 from .utils import save_pickle, load_pickle 
 from .base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
 from .extracted import (ts_columns, columns_not_to_normalize, extended_ts_columns, 
-    colums_to_drop, baseline_cols) 
+    colums_to_drop, baseline_cols, vital_columns, lab_columns_chemistry, 
+    lab_columns_organs, lab_columns_hemo, scores_and_indicators_columns ) 
 
 import dask.dataframe as dd
 
@@ -739,4 +741,119 @@ class WaveletFeatures(ParallelBaseIDTransformer):
         """actually compute wavelet scattering in a rolling window """
         df.loc[window.index.min()] = self.scatter(window.values).flatten()
         return 1 # rolling funcs need to return index..  
+  
+
+class SignatureFeatures(ParallelBaseIDTransformer):
+    """ Computes signature features for a given look back window """
+    def __init__(self, n_jobs=4, look_back=7, order=3, **kwargs):
+        """
+        Inputs:
+            - n_jobs: for parallelization on the patient level
+            - lock_back: how many hours to look into the past 
+                (default 7 following Morril et al.)
+            - order: signature truncation level of univariate signature features
+                --> for multivariate signatures (of groups of channels), we use order-1 
+        """
+        super().__init__(n_jobs=n_jobs, **kwargs)
+        # we process the raw time series measurements 
+        self.order = order
+        self.look_back = look_back
+        self.columns = extended_ts_columns
+        #self.column_dict = {
+        #    'vitals': vital_columns,
+        #    'labs_chem': lab_columns_chemistry,
+        #    'labs_org': lab_columns_organs,
+        #    'labs_hemo': lab_columns_hemo,
+        #    'scores_inds': scores_and_indicators_columns
+        #}
+        self.output_size = iis.siglength(2, self.order) # channel + time = 2
+        self.output_size_all = iis.siglength(len(self.columns) + 1, self.order)    
+
+    def fit(self, df, labels=None):
+        return self
+
+    def transform_id(self, df):
+        """ process invididual patient """  
+        inputs = deepcopy(df)
+        inputs.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+
+        # pad time series with look_back size many 0s (for getting online features of fixed window size)
+        inputs = self._pad_df(inputs, n_pad=self.look_back)
+        
+        #channel-wise signatures
+        signatures = self._compute_signatures(inputs)
+        
+        #multivariable signatures over variable groups
+        #mv_signatures = self._compute_mv_signatures(inputs) 
+ 
+        assert df.shape[0] == signatures.shape[0]
+        signatures.index = df.index
+        #assert df.shape[0] == mv_signatures.shape[0]
+        #mv_signatures.index = df.index
+
+        return pd.concat([df, signatures], axis=1) #mv_signatures
+
+    def _pad_df(self, df, n_pad, value=0):
+        """ util function to pad <n_pad> zeros at the start of the df 
+        """
+        x = np.concatenate([np.zeros([n_pad,df.shape[1]]), df.values]) 
+        return pd.DataFrame(x, columns=df.columns)
+
+    def _to_path(self, X):
+        """ Convert single, evenly spaced time series to path by adding time axis
+            X: np array (n time steps, d dimensions)
+        """
+        if len(X.shape) == 1:
+            X = X.reshape(-1,1)
+        n = X.shape[0]
+        steps = np.arange(n).reshape(-1,1)
+        path = np.concatenate((steps, X), axis=1)
+        return path
     
+    # univariate / single channel signatures
+    def _compute_signatures(self, df):
+        """ Loop over all columns, compute column-wise signature features
+             and create signature output columns"""
+        col_dfs = []
+        for col in df.columns:
+            col_df = self._process_column(df, col)
+            col_dfs.append(col_df)
+        return pd.concat(col_dfs, axis=1)
+        
+    def _process_column(self, df, col):
+        """ Processing a single column. """
+        out_cols = [col + f'_signature_{i}' for i in range(self.output_size)]
+        col_df = pd.DataFrame(columns=out_cols)
+        # we go over input column and write result to col_df, which is a 
+        # df gathering all features from the current col
+        df[col].rolling(window = self.look_back+1 ).apply(self._rolling_function, 
+            kwargs={'df': col_df, 'order': self.order})
+        return col_df
+
+    def _rolling_function(self, window, df, order):
+        """actually compute wavelet scattering in a rolling window """
+        path = self._to_path(window.values)
+        df.loc[window.index.min()] = iis.sig(path, order)
+        return 1 # rolling funcs need to return index.. 
+
+    # multivariate / multi channel signatures:
+    def _compute_mv_signatures(self, df):
+        """ Loop over columns groups compute multivariate signature features
+             and create output columns"""
+        col_dfs = []
+        for group, columns in self.column_dict.items():
+            col_df = self._process_group(df, group, columns)
+            col_dfs.append(col_df)
+        return pd.concat(col_dfs, axis=1)
+
+    def _process_group(self, df, group, columns):
+        """ Processing a group of columns. """
+        group_output_size = iis.siglength(len(columns)+1, self.order-1)
+        out_cols = [group + f'_signature_{i}' for i in range(group_output_size)]
+        col_df = pd.DataFrame(columns=out_cols)
+        # we go over input column and write result to col_df, which is a 
+        # df gathering all features from the current col
+        df[columns].rolling(window = self.look_back+1, axis=1).apply(self._rolling_function, 
+            kwargs={'df': col_df, 'order': self.order-1 })
+        return col_df
+
