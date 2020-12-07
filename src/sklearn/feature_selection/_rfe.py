@@ -33,9 +33,10 @@ def _rfe_single_fit(rfe, estimator, X, y, train, test, scorer):
     """
     X_train, y_train = _safe_split(estimator, X, y, train)
     X_test, y_test = _safe_split(estimator, X, y, test, train)
-    return rfe._fit(
+    rfe._fit(
         X_train, y_train, lambda estimator, features:
-        _score(estimator, X_test.iloc[:, features], y_test, scorer)).scores_
+        _score(estimator, X_test.iloc[:, features], y_test, scorer))
+    return {'scores': rfe.scores_, 'feature_sets': rfe.feature_sets_}
 
 
 class RFE(SelectorMixin, MetaEstimatorMixin, BaseEstimator):
@@ -214,6 +215,7 @@ class RFE(SelectorMixin, MetaEstimatorMixin, BaseEstimator):
 
         if step_score:
             self.scores_ = []
+            self.feature_sets_ = []
 
         # Elimination
         while np.sum(support_) > n_features_to_select:
@@ -254,6 +256,7 @@ class RFE(SelectorMixin, MetaEstimatorMixin, BaseEstimator):
             # that have not been eliminated yet
             if step_score:
                 self.scores_.append(step_score(estimator, features))
+                self.feature_sets_.append(features)
             support_[features[ranks][:threshold]] = False
             ranking_[np.logical_not(support_)] += 1
 
@@ -265,6 +268,8 @@ class RFE(SelectorMixin, MetaEstimatorMixin, BaseEstimator):
         # Compute step score when only n_features_to_select features left
         if step_score:
             self.scores_.append(step_score(self.estimator_, features))
+            self.feature_sets_.append(features)
+            
         self.n_features_ = support_.sum()
         self.support_ = support_
         self.ranking_ = ranking_
@@ -579,10 +584,13 @@ class RFECV(RFE):
         else:
             parallel = Parallel(n_jobs=self.n_jobs)
             func = delayed(_rfe_single_fit)
-        scores = parallel(
+        output = parallel(
             func(rfe, self.estimator, X, y, train, test, scorer)
             for train, test in cv.split(X, y, groups))
-
+        #unpack output:
+        scores = [item['scores'] for item in output]
+        feature_sets = [item['feature_sets'] for item in output]
+ 
         scores = np.sum(scores, axis=0)
         scores_rev = scores[::-1]
         argmax_idx = len(scores) - np.argmax(scores_rev) - 1
@@ -607,4 +615,5 @@ class RFECV(RFE):
         # Fixing a normalization error, n is equal to get_n_splits(X, y) - 1
         # here, the scores are normalized by get_n_splits(X, y)
         self.grid_scores_ = scores[::-1] / cv.get_n_splits(X, y, groups)
+        self.grid_feature_sets_ = feature_sets 
         return self
