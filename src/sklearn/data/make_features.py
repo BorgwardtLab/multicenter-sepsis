@@ -140,6 +140,7 @@ def main():
             ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)),
             # wavelets require imputed data! 
             ('wavelet_features', WaveletFeatures(n_jobs=50, concat_output=True)), #n_jobs=n_jobs, concat_output=True 
+            ('signatures', SignatureFeatures(n_jobs=10, concat_output=True)), #n_jobs=10
             ])
         df_sklearn = sklearn_pipe.fit_transform(df_deep2)
 
