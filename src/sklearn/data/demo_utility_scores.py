@@ -8,6 +8,8 @@ import pandas as pd
 
 from sklearn.pipeline import Pipeline
 
+from .utils import index_check
+
 from .transformers import *
 from src.sklearn.data.utils import load_pickle, save_pickle
 
@@ -58,13 +60,12 @@ if __name__ == "__main__":
         name = f'X_features_{split}'
         features_path = os.path.join(path, name + '.pkl')
         X = load_pickle(features_path)
+        X = index_check(X)
         X = data_pipeline.fit_transform(X)
 
         print(f'Mean utility score for {split}:')
 
         means = X.groupby('id')['utility'].mean()
-
-        print(means)
 
         mean_utility_scores.extend(X.groupby('id')['utility'].mean().values)
 
