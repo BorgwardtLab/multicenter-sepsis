@@ -16,6 +16,7 @@ from src.sklearn.data.utils import load_data, load_pickle, save_pickle
 from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 
+
 def load_data_from_input_path(input_path, dataset_name, index, extended_features=False):
     """Load the data according to dataset_name, and index-handling
 
@@ -70,6 +71,18 @@ def get_pipeline_and_grid(method_name, clf_params, feature_set):
             'est__solver': ['sag', 'saga'], 
         }
         return pipe, param_dist
+    elif method_name in ['sofa', 'qsofa', 'sirs', 'mews', 'news']:
+        from src.sklearn.baseline import BaselineModel
+        import scipy.stats as stats
+        parameters = {'column': method_name}
+        parameters.update(clf_params)
+        est = BaselineModel(**parameters)
+        steps.append(('est', est))
+        pipe = Pipeline(steps)
+        param_dist = { 
+            'est__theta':  stats.uniform(0, 1)
+        }
+        return pipe, param_dist 
     else:
         raise ValueError('Invalid method: {}'.format(method_name))
 
@@ -196,6 +209,15 @@ def main():
         args.input_path, args.dataset, args.index, args.extended_features)
 
     data = handle_label_shift(args, data)
+    
+    # for baselines: 
+    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
+        # use baselines as prediction input data
+        # hack until prepro is run again (currently live jobs depending on it)
+        data['baselines_train'].index = data['X_train'].index
+        data['baselines_validation'].index = data['X_validation'].index
+        data['X_train'] = data['baselines_train']
+        data['X_validation'] = data['baselines_validation']
  
     pipeline, hparam_grid = get_pipeline_and_grid(args.method, args.clf_params, args.feature_set)
 
