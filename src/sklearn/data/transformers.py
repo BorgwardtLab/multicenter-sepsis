@@ -101,6 +101,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         passthrough=True,
         label='sep3',
         score_name='utility',
+        shift=0,
         **kwargs
     ):
         """Create new instance of class.
@@ -121,6 +122,11 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
             column name will only be used in the result data frame
             instead of being used as a new column for the *input*.
 
+        shift : int
+            Number of hours to shift the sepsis label into the future.
+            This makes it possible to compensate for label propagation
+            if need be.
+
         **kwargs:
             Optional keyword arguments that will be passed to the
             parent class.
@@ -130,7 +136,15 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         self.passthrough = passthrough
         self.label = label
         self.score_name = score_name
+        self.shift = shift
+
+        # Internal data frame with scores; can be used later on for
+        # other purposes.
         self.df_scores = None
+
+        # Indicated for superclass usage: will automatically concatenate
+        # all outputs instead of delivering them for all patients
+        # individually.
         self.concat_output = True
 
     @property
@@ -156,12 +170,14 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         zeros = compute_prediction_utility(
             labels.values,
             np.zeros(shape=n),
+            shift_labels=self.shift,
             return_all_scores=True
         )
 
         ones = compute_prediction_utility(
             labels.values,
             np.ones(shape=n),
+            shift_labels=self.shift,
             return_all_scores=True
         )
 
@@ -190,7 +206,6 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
 
             df[self.score_name] = scores[self.score_name]
 
-        print('Done with CalculateUtilityScores')
         return df
 
 
