@@ -111,7 +111,6 @@ def main():
     else:
         raise ValueError(f'{split} not among the valid eval splits: [validation, test]')
 
-    # CAME UNTIL HERE  
     results = {}
     cache = {}
     call = partial(_cached_call, cache)
@@ -127,15 +126,28 @@ def main():
     results['dataset_eval'] = eval_dataset
     results['split'] = split
     
-    results['predictions'] = model.predict(X_eval).tolist() 
-    results['scores'] = model.predict_proba(X_eval)[:,1].tolist()
+    #results['predictions']
+    preds = model.predict(X_eval)
+    preds = pd.DataFrame(preds, index=y_eval.index)
+     
+    probas = model.predict_proba(X_eval)[:,1]
+    probas = pd.DataFrame(probas, index=y_eval.index)
+
     ids = y_eval.index.get_level_values('id').unique().tolist() 
     results['ids'] = ids
     labels = []
+    predictions = []
+    scores = []
+    times = []
     for pid in ids:
         labels.append(y_eval[pid].values.tolist()) 
+        predictions.append(preds.loc[pid][0].tolist())
+        scores.append(probas.loc[pid][0].values.tolist()) 
+        times.append(y_eval[pid].index.tolist()) 
     results['labels'] = labels
- 
+    results['predictions'] = predictions
+    results['scores'] = scores 
+    results['times'] = times
     output_path = args.output_path
     os.makedirs(output_path, exist_ok=True) 
     outfile = os.path.join(output_path, f'{method}_{train_dataset}_{eval_dataset}.json')
@@ -144,10 +156,9 @@ def main():
     for key in ['steps', 'est']:
         results['model_params'].pop(key, None)
 
-    from IPython import embed; embed() 
     with open(outfile, 'w') as f:
         json.dump(results, f)
-     
+
 if __name__ in "__main__":
     main()
 
