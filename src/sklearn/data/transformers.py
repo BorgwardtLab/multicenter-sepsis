@@ -220,10 +220,11 @@ class DropColumns(TransformerMixin, BaseEstimator):
     """
     Drop and potentially save columns. By default we drop all baseline scores.
     """
-    def __init__(self, columns=baseline_cols, label='sep3', save=False, 
+    def __init__(self, columns=baseline_cols, label='sep3', time='time', save=False, 
                  data_dir=None, split=None):
         self.columns = columns
         self.label = label
+        self.time = time
         self.save = save
         self.data_dir = data_dir
         self.split = split
@@ -233,7 +234,7 @@ class DropColumns(TransformerMixin, BaseEstimator):
 
     def transform(self, df):
         if self.save:
-            cols_to_save = self.columns + [self.label]
+            cols_to_save = self.columns + [self.label, self.time]
             save_pickle(df[cols_to_save], os.path.join(self.data_dir, f'baselines_{self.split}.pkl'))
         df = df.drop(self.columns, axis=1, errors='ignore')
 
@@ -486,6 +487,9 @@ class LookbackFeatures(DaskIDTransformer):
 #TODO adjust variable names!
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
+    This class is based on J. Morill's code base: 
+    https://github.com/jambo6/physionet_sepsis_challenge_2019/blob/master/src/data/transformers.py 
+
     Adds any derived features thought to be useful
         - Shock Index: hr/sbp
         - Bun/crea ratio: Bun/crea
