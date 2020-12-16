@@ -57,7 +57,9 @@ def main():
         help='Method which is used (only for file naming)'
     )
     parser.add_argument(
-        '--model_path', default='results/aumc_features/aumc_lgbm/best_estimator.pkl', type=str,
+        '--model_path', 
+        default="""results/feature_selection/signatures_wavelets_counts_GAIN/aumc_lgbm/best_estimator.pkl""", 
+        type=str,
         help='Path to pretrained best estimator'
     )
     parser.add_argument(
@@ -70,7 +72,7 @@ def main():
                 consistent with the saved model in model_path"""
     )
     parser.add_argument(
-        '--extended_features', default=True, action='store_true',
+        '--extended_features', default=True, type=bool,
         help='flag if extended feature set should be used (incl measurement counter, wavelets etc)'
     )
     parser.add_argument(
