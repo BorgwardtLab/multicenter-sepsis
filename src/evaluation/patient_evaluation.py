@@ -21,17 +21,23 @@ from sklearn.model_selection import RandomizedSearchCV
 from src.sklearn.main import load_data_from_input_path
 
  
-def apply_threshold(scores, thres):
+def apply_threshold(scores, thres, pat_level=True):
     """
     applying threshold to scores to return binary predictions
     (assuming list of lists (patients and time series))
     """
     result = []
     for pat_scores in scores:
-        preds = []
-        for score in pat_scores:
-            preds.append(1 if score >= thres else 0)
-        result.append(preds)
+        if pat_level:
+            #binarize on patient level:
+            pred = 1 if any([score >= thres for score in pat_scores]) else 0 
+            result.append(pred)
+        else:
+            #binarize prediction of each timestep
+            preds = []
+            for score in pat_scores:
+                preds.append(1 if score >= thres else 0)
+            result.append(preds)
     return result 
 
 def flatten_list(x):
@@ -54,7 +60,92 @@ def flatten_wrapper(func):
         assert y_true.shape == y_pred.shape
         return func(y_true, y_pred)
     return wrapped
-   
+
+def extract_first_alarm(x, indices=None):
+    """
+    assumes x to be a list (patients) of lists (time series)
+        - if indices are provided, the data in x is extracted for these indices
+            otherwise, a binary predictions are assumed and the indices are 
+            identified and returned.
+    """
+    result = []
+    if indices:
+        # use provided indices
+        for pat, index in zip(x, indices):
+            if index == -1:
+                result.append(np.nan)
+            else:
+                result.append(pat[index]) 
+        return np.array(result)
+    else:
+        indices = []
+        # extract indices ourselves
+        for pat in x:
+            # ensure that we have binary predictions 
+            assert all([item in [0,1] for item in pat])
+                
+            # get index of first `1`
+            index = np.argmax(pat)
+            label = 1 if np.sum(pat) > 0 else 0
+            result.append(label)
+            if not label: #if no alarm was raised
+                index = -1 #distinguish alarm in first hour from no alarm
+            indices.append(index)
+        return np.array(result), indices
+
+
+def get_patient_labels(x):
+    """ from time step labels"""
+    labels = []
+    for pat in x:
+        label = 1 if np.sum(pat) > 0 else 0
+        labels.append(label)
+    return np.array(labels)
+        
+def extract_onset_index(x):
+    """ get index of sepsis onset,
+        -1 indicates no onset in a patient.
+    """
+    result = []
+    for pat in x:
+        assert all([item in [0,1] for item in pat])
+        if np.sum(pat) == 0:
+            index = -1
+        else: 
+            index = np.argmax(pat) 
+        result.append(index)
+    return result 
+    
+def first_alarm_eval(y_true, y_pred, times):
+    """ extract and evaluate prediction and label of first alarm
+    """
+    labels = get_patient_labels(y_true)
+    case_mask = labels.astype(bool)
+    y_pred, pred_indices = extract_first_alarm(y_pred)
+    onset_indices = extract_onset_index(y_true)
+    alarm_times  = extract_first_alarm(times, indices=pred_indices)
+    onset_times  = extract_first_alarm(times, indices=onset_indices)
+    r = {} #results 
+    r['pat_recall'] = recall_score(labels, y_pred)
+    r['pat_precision'] = precision_score(labels, y_pred)
+    r['alarm_times'] = alarm_times 
+    r['onset_times'] = onset_times
+    delta = alarm_times[case_mask] - onset_times[case_mask]
+    r['case_delta'] = delta #including nans
+    delta_ = delta[~np.isnan(delta)] #excluding nans for statistics
+     
+    r['control_alarm_times'] = alarm_times[~case_mask]
+    r['case_alarm_times'] = alarm_times[case_mask]
+    if len(delta_) == 0: 
+        print('No non-nan value in delta!')
+        r['earliness_mean'] = r['earliness_median'] = r['earliness_min'] = r['earliness_max'] = np.nan
+    else:
+        r['earliness_mean'] = np.mean(delta_)
+        r['earliness_median'] = np.median(delta_)
+        r['earliness_min'] = np.min(delta_)
+        r['earliness_max'] = np.max(delta_)
+    return r 
+     
 def evaluate_threshold(data, labels, thres, measures):
     """
     function to evaluate eval measures for a given threshold
@@ -63,13 +154,25 @@ def evaluate_threshold(data, labels, thres, measures):
     - measures: dict of callable evaluation measures to quantify
     """
     results = {}
-    predictions = apply_threshold(data['scores'], thres)
+    predictions = apply_threshold(data['scores'], thres, pat_level=False)
+    times = data['times'] #list of lists of incrementing patient hours
 
-    #sanity check that format fits:
+    # sanity check that format fits:
     format_check(predictions, labels)
+    format_check(predictions, times)
 
-    for name, func in measures.items():
-        results[name] = func(labels, predictions)  
+    # time point measures:
+    tp_keys = [key for key in measures.keys() if 'tp_' in key]
+    tp_measures = {key: measures[key] for key in tp_keys}
+    # patient level measures:
+    pat_keys = [key for key in measures.keys() if 'pat_' in key]
+    pat_measures = {key: measures[key] for key in pat_keys} 
+ 
+    for name, func in tp_measures.items():
+        results[name] = func(labels, predictions) 
+    for name, func in pat_measures.items():
+        output_dict = func(labels, predictions, times) 
+        results.update(output_dict) 
     return results
  
 def format_check(x,y):
@@ -147,14 +250,14 @@ def main():
     s2 = np.sum(np.sum(labels)) 
     print(f'sum shifted / unshifted labels: {s1} /  {s2} ')
     
-    measures = {'recall': flatten_wrapper(recall_score), 
-                'precision': flatten_wrapper(precision_score)
+    measures = {'tp_recall': flatten_wrapper(recall_score), 
+                'tp_precision': flatten_wrapper(precision_score),
+                'pat_eval': first_alarm_eval
     }
-    thres = 0.3
+    thres = 0.2
     results = evaluate_threshold(d, labels, thres, measures) 
-    
     from IPython import embed; embed()
-
+ 
 if __name__ in "__main__":
     main()
 
