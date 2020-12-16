@@ -139,8 +139,8 @@ def main():
         sklearn_pipe =  Pipeline([
             ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)),
             # wavelets require imputed data! 
-            ('wavelet_features', WaveletFeatures(n_jobs=50, concat_output=True)), #n_jobs=n_jobs, concat_output=True 
-            ('signatures', SignatureFeatures(n_jobs=10, concat_output=True)), #n_jobs=10
+            ('wavelet_features', WaveletFeatures(n_jobs=5, concat_output=True)), #n_jobs=n_jobs, concat_output=True 
+            ('signatures', SignatureFeatures(n_jobs=2, concat_output=True)), #n_jobs=10
             ])
         df_sklearn = sklearn_pipe.fit_transform(df_deep2)
 
@@ -152,7 +152,7 @@ def main():
 
         # Save
         save_pickle(df_sklearn, os.path.join(out_dir, f'X_extended_features_{split}.pkl'))
-        save_pickle(df_deep2, os.path.join(out_dir, f'X_extended_features_no_imp_{split}.pkl'))
+        #save_pickle(df_deep2, os.path.join(out_dir, f'X_extended_features_no_imp_{split}.pkl'))
 
     client.close()
     
