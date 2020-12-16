@@ -254,10 +254,26 @@ def main():
                 'tp_precision': flatten_wrapper(precision_score),
                 'pat_eval': first_alarm_eval
     }
-    thres = 0.2
-    results = evaluate_threshold(d, labels, thres, measures) 
-    from IPython import embed; embed()
- 
+    n_steps = 200
+    thresholds = np.arange(0,1,1/n_steps)
+    results = {'thres': [], 'pat_recall': [], 'pat_precision': [],
+        'earliness_mean': [], 'earliness_median': [], 'tp_precision': [],
+        'tp_recall': []}
+
+    for thres in thresholds:
+        current = evaluate_threshold(d, labels, thres, measures)
+        for key in results.keys():
+            if key == 'thres':
+                new_val = thres
+            else:
+                new_val = current[key]
+            results[key].append(new_val)
+    
+    out_file = os.path.split(args.experiment_path)[-1]
+    out_file = os.path.join(args.output_path, '_'.join(['patient_eval', out_file])) 
+    with open(out_file, 'w') as f:
+        json.dump(results, f)
+
 if __name__ in "__main__":
     main()
 
