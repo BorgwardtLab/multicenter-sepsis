@@ -69,6 +69,10 @@ def main():
         help='on which split to evaluate [validation (default), test]'
     )
     parser.add_argument(
+        '--extended_features', default=False, action='store_true',
+        help='flag if extended feature set should be used (incl measurement counter, wavelets etc)'
+    )
+    parser.add_argument(
         '--index', default='multi',
         help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
     )
@@ -79,7 +83,7 @@ def main():
     eval_dataset = args.eval_dataset
 
     data = load_data_from_input_path(
-        args.input_path, eval_dataset, args.index)
+        args.input_path, eval_dataset, args.index, args.extended_features)
   
     # label_shift function assumes a dataset arg:
     args.dataset = eval_dataset 
