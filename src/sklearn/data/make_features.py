@@ -46,6 +46,10 @@ def main():
     parser.add_argument('--n_partitions', type=int,
         default=50,
         help='number of df partitions in dask')
+    parser.add_argument('--n_chunks', type=int,
+        default=4,
+        help='number of df chunks for wavelet and signature extraction (relevant for eICU)')
+
     parser.add_argument('--splits', nargs='+', default=['train', 'validation', 'test'])
     args = parser.parse_args()
     client = Client(n_workers=args.n_jobs, memory_limit='50GB', local_directory='/local0/tmp/dask')
@@ -130,24 +134,41 @@ def main():
             ('drop_cols', DropColumns(save=False))   # don't save here, as still delayed dask obj 
         ])
         df_deep2 = pipeline.fit_transform(df).compute()
-        
+
         # Test how deep models perform with lookback features:
         # For sklearn pipe, we need proper multi index format once again 
         df_deep2.reset_index(inplace=True)
         df_deep2.set_index(['id', 'time'], inplace=True)
+
+        # We chunk for the next memory-costly part (which could not easily be implemented in dask)
+        ids = np.unique(df_deep2.index.get_level_values('id'))
+        id_splits = np.array_split(ids, args.n_chunks)
+        df_splits = {}
+        for i, id_split in enumerate(id_splits):
+            df_splits[i] = df_deep2.loc[id_split]  # list comp. didn't find df in scope
+        # clear large df from memory: 
+        del df_deep2 
  
         sklearn_pipe =  Pipeline([
             ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)),
             # wavelets require imputed data! 
-            ('wavelet_features', WaveletFeatures(n_jobs=5, concat_output=True)), #n_jobs=n_jobs, concat_output=True 
-            ('signatures', SignatureFeatures(n_jobs=2, concat_output=True)), #n_jobs=10
+            ('wavelet_features', WaveletFeatures(n_jobs=n_jobs, concat_output=True)), #n_jobs=5, concat_output=True 
+            ('signatures', SignatureFeatures(n_jobs=n_jobs, concat_output=True)), #n_jobs=2
             ])
-        df_sklearn = sklearn_pipe.fit_transform(df_deep2)
+        out_df_splits = []
+        keys = list(df_splits.keys()) # dict otherwise doesnt like popping keys
+        for key in keys:
+            out_df = sklearn_pipe.fit_transform(df_splits[key])
+            #free mem of current input df:
+            df_splits.pop(key)
+            out_df_splits.append(out_df) 
+        df_sklearn = pd.concat(out_df_splits)
+        #df_sklearn = sklearn_pipe.fit_transform(df_deep2)
 
         print(f'.. finished. Took {time() - start} seconds.')
         
         #All models assume time as column and only id as index (multi-index would cause problem with dask models)
-        df_deep2 = ensure_single_index(df_deep2)
+        ##df_deep2 = ensure_single_index(df_deep2)
         df_sklearn = ensure_single_index(df_sklearn) 
 
         # Save
