@@ -70,13 +70,15 @@ if __name__ == "__main__":
         splits = [split]
 
     if dataset == 'all':
-        datasets = ['demo', 'physionet2019', 'mimic3', 'eicu', 'hirid']
+        datasets = ['demo', 'physionet2019', 'mimic3', 'eicu', 'hirid', 'aumc']
     else:
         datasets = [dataset]
 
     results = {}
+    lengths = 0
     for dataset in datasets: 
         results[dataset] = {}
+        
         for split in splits:
             
             path = os.path.join('datasets', dataset, args.path)
@@ -92,7 +94,8 @@ if __name__ == "__main__":
             X_ni = load_pickle(X_ni_path)
             X_f = load_pickle(filtered_path)  
             b = load_pickle(baseline_path)
-         
+        
+            lengths += len(X_f) 
             #dfs = [X, Xf]
             #names = ['X_features', 'X_features_no_imp']
             #for df, name in zip(dfs, names):
@@ -100,5 +103,19 @@ if __name__ == "__main__":
          
             results[dataset][split] = compute_stats(X) 
             #check_times(X_f)
+
+    overall_total = 0
+    overall_cases = 0 
+    for dataset in results.keys():
+        total = 0
+        cases = 0 
+        for split in results[dataset].keys():
+            total += results[dataset][split]['total_stays']
+            cases += results[dataset][split]['total_cases']
+        overall_total += total
+        overall_cases += cases
+        print(dataset, total, cases)
+    print(overall_total, overall_cases)
+    print(lengths/(24*365), 'years')
     embed()
 
