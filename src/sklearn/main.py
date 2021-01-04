@@ -36,7 +36,8 @@ def get_pipeline_and_grid(method_name, clf_params, feature_set):
     if feature_set == 'challenge':
         from src.sklearn.data.subsetters import ChallengeFeatureSubsetter
         subsetter = ChallengeFeatureSubsetter() #transform to remove all features which cannot be derived from challenge data
-        steps.append(('feature_subsetter', subsetter)) 
+        steps.append(('feature_subsetter', subsetter))
+         
     elif feature_set != 'all':
         raise ValueError(f'provided feature set {feature_set} is not among the valid [all, challenge]')
  
@@ -59,7 +60,7 @@ def get_pipeline_and_grid(method_name, clf_params, feature_set):
         return pipe, param_dist
     elif method_name == 'lr':
         from sklearn.linear_model import LogisticRegression as LR
-        parameters = {'n_jobs': 10}
+        parameters = {'n_jobs': 10} #-1 led to OOM
         parameters.update(clf_params)
         est = LR(**parameters)
         steps.append(('est', est))
