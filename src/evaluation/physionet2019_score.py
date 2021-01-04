@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import numpy as np
 from .sklearn_utils import nanany
 
+
 def compute_prediction_utility(labels, predictions, dt_early=-12,
                                dt_optimal=-6, dt_late=3.0, max_u_tp=1,
                                min_u_fn=-2, u_fp=-0.05, u_tn=0,
@@ -43,21 +44,26 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
     # Check inputs for errors.
     if check_errors:
         if len(predictions) != len(labels):
-            raise Exception('Numbers of predictions and labels must be the same.')
+            raise Exception(
+                'Numbers of predictions and labels must be the same.')
 
         for label in labels:
             if not label in (0, 1) and not np.isnan(label):
-                raise Exception('Labels must satisfy label == 0 or label == 1.')
+                raise Exception(
+                    'Labels must satisfy label == 0 or label == 1.')
 
         for prediction in predictions:
             if not prediction in (0, 1) and not np.isnan(prediction):
-                raise Exception('Predictions must satisfy prediction == 0 or prediction == 1.')
+                raise Exception(
+                    'Predictions must satisfy prediction == 0 or prediction == 1.')
 
         if dt_early >= dt_optimal:
-            raise Exception('The earliest beneficial time for predictions must be before the optimal time.')
+            raise Exception(
+                'The earliest beneficial time for predictions must be before the optimal time.')
 
         if dt_optimal >= dt_late:
-            raise Exception('The optimal time for predictions must be before the latest beneficial time.')
+            raise Exception(
+                'The optimal time for predictions must be before the latest beneficial time.')
 
     # Does the patient eventually have sepsis?
     if nanany(labels):
@@ -148,11 +154,14 @@ def physionet2019_utility(y_true, y_score, shift_labels=0):
             best_predictions[np.isnan(labels)] = np.NaN
 
         utilities.append(
-            compute_prediction_utility(labels, observed_predictions))
+            compute_prediction_utility(
+                labels, observed_predictions, shift_labels=shift_labels))
         best_utilities.append(
-            compute_prediction_utility(labels, best_predictions))
+            compute_prediction_utility(
+                labels, best_predictions, shift_labels=shift_labels))
         inaction_utilities.append(
-            compute_prediction_utility(labels, inaction_predictions))
+            compute_prediction_utility(
+                labels, inaction_predictions, shift_labels=shift_labels))
 
     unnormalized_observed_utility = sum(utilities)
     unnormalized_best_utility = sum(best_utilities)
