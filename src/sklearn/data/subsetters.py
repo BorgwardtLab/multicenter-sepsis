@@ -19,8 +19,18 @@ class ChallengeFeatureSubsetter(TransformerMixin, BaseEstimator):
                                 features are derived once - even if its cached out file already exists)
     """
     def __init__(self, prefix='datasets/physionet2019/data/sklearn/processed', 
-            split='train', feature_suffices=['ind','pt', 'dir'], preprocessing=False): 
-        imputed_path = os.path.join(prefix, f'X_features_{split}.pkl')
+            split='train', feature_suffices=['ind','pt', 'dir'], preprocessing=False, extended_features=True):
+        self.prefix = prefix
+        self.split = split
+        self.feature_suffices = feature_suffices
+        self.preprocessing = preprocessing
+        self.extended_features = extended_features
+
+        if extended_features:
+            suffix = f'X_extended_features_{split}.pkl'
+        else:
+            suffix = f'X_features_{split}.pkl'
+        imputed_path = os.path.join(prefix, suffix)
         not_imputed_path = os.path.join(prefix, f'X_features_no_imp_{split}.pkl')
         drop_features_path = os.path.join(prefix, f'drop_features_{split}.pkl')
         if preprocessing:
