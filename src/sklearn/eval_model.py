@@ -152,6 +152,8 @@ def main():
     results['predictions'] = predictions
     results['scores'] = scores 
     results['times'] = times
+    results['label_propagation'] = args.label_propagation 
+    
     output_path = args.output_path
     os.makedirs(output_path, exist_ok=True) 
     outfile = os.path.join(output_path, f'{method}_{train_dataset}_{eval_dataset}.json')
