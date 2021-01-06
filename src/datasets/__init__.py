@@ -15,7 +15,8 @@ from .data import (
     IBMIMIC3Dataset,
     IBEICUDataset,
     IBHiridDataset,
-    IBDemoDataset 
+    IBDemoDataset,
+    ExtendedPhysionet2019Dataset 
 )
 
 __all__ = [
@@ -35,5 +36,6 @@ __all__ = [
     'IBMIMIC3Dataset',
     'IBEICUDataset',
     'IBHiridDataset',
-    'IBDemoDataset' 
+    'IBDemoDataset',
+    'ExtendedPhysionet2019Dataset' 
 ]

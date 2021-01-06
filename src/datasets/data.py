@@ -448,3 +448,13 @@ class IBEICUDataset(InstanceBasedDataset):
                  prefix='datasets/eicu/data/sklearn/processed/instances/X_features_{}/',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
+
+
+class ExtendedPhysionet2019Dataset(PreprocessedDataset):
+    def __init__(self,
+                 prefix='datasets/physionet2019/data/sklearn/processed/X_extended_features',
+                 **kwargs):
+        super().__init__(prefix=prefix, **kwargs)
+
+
+
