@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from src.torch.models.base_model import BaseModel
-from src.torch.torch_utils import PositionalEncoding, to_observation_tuples
+from src.torch.torch_utils import PositionalEncoding, to_observation_tuples, to_observation_tuples_without_indicators
 
 
 def get_subsequent_mask(seq):
@@ -144,7 +144,7 @@ class TransformerEncoderLayer(nn.Module):
 class AttentionModel(BaseModel):
     """Sequence to sequence model based on MultiHeadAttention."""
 
-    def __init__(self, d_model, ff_dim, n_layers, n_heads, dropout, norm,
+    def __init__(self, d_model, ff_dim, n_layers, n_heads, dropout, norm, indicators=True,
                  **kwargs):
         """AttentionModel.
 
@@ -153,8 +153,10 @@ class AttentionModel(BaseModel):
             ff_dim: Dimensionality of ff layers
             n_layers: Number of MultiHeadAttention layers
             n_heads: Number of attention heads
+            indicators: flag if missingness indicators should be applied
         """
         super().__init__(**kwargs)
+        self.to_observation_tuples = to_observation_tuples if indicators else to_observation_tuples_without_indicators 
         self.save_hyperparameters()
         d_in = self._get_input_dim()
         self.layers = nn.ModuleList(
@@ -172,7 +174,7 @@ class AttentionModel(BaseModel):
         parent_transforms = super().transforms
         parent_transforms.extend([
             PositionalEncoding(1, 500, 10),  # apply positional encoding
-            to_observation_tuples            # mask nan with zero add indicator
+            self.to_observation_tuples            # mask nan with zero add indicator
         ])
         return parent_transforms
 

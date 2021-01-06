@@ -8,16 +8,19 @@ from src.torch.torch_utils import add_indicators
 class RecurrentModel(BaseModel):
     """Recurrent Model."""
 
-    def __init__(self, model_name, d_model, n_layers, dropout, **kwargs):
+    def __init__(self, model_name, d_model, n_layers, dropout, indicators=True, **kwargs):
         """Recurrent Model.
 
         Args:
             -model_name: ['GRU', 'LSTM', 'RNN']
             -d_model: Dimensionality of hidden state
             -n_layers: Number of stacked RNN layers
-            -dropout: Fraction of elements that should be dropped out
+            -dropout: Fraction of elements that should be dropped out,
+            -indicators: flag whether missingness indicator transform 
+                should be applied on the fly.
         """
         super().__init__(**kwargs)
+        self.indicators = indicators
         self.save_hyperparameters()
         model_cls = getattr(torch.nn, model_name)
         d_in = self._get_input_dim()
@@ -33,9 +36,10 @@ class RecurrentModel(BaseModel):
     @property
     def transforms(self):
         parent_transforms = super().transforms
-        parent_transforms.append(
-            add_indicators  # mask nan with zero and add indicator
-        )
+        if self.indicators:
+            parent_transforms.append(
+                add_indicators  # mask nan with zero and add indicator
+            )
         return parent_transforms
 
     def forward(self, x, lengths):
