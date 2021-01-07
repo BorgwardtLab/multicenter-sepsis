@@ -5,6 +5,8 @@ import pickle
 
 from sklearn.model_selection import train_test_split
 from src.sklearn.data.subsetters import FeatureSubsetter
+from src.evaluation.sklearn_utils import (
+    ensure_not_NaN, ensure_aligned, make_consecutive)
 import numpy as np
 import pandas as pd
 
@@ -241,7 +243,14 @@ class PreprocessedDataset(Dataset):
 
     def _get_instance(self, idx):
         patient_id = self.patients[idx]
-        patient_data = self.data.loc[[patient_id]]
+
+        # Convert data into consecutive time points
+        patient_data = self.data.loc[[patient_id]].copy()
+        patient_data.set_index(self.TIME_COLUMN, inplace=True, drop=True)
+        min_time, max_time = patient_data.index.min(), patient_data.index.max()
+        consecutive_times = np.arange(min_time, max_time+1)
+        patient_data.reindex(consecutive_times, method=None, fill_value=np.NaN)
+
         time = patient_data[self.TIME_COLUMN].values
         labels = patient_data[self.LABEL_COLUMN].values
         # maybe feature subsetting (e.g. for challenge feature set)
@@ -455,6 +464,3 @@ class ExtendedPhysionet2019Dataset(PreprocessedDataset):
                  prefix='datasets/physionet2019/data/sklearn/processed/X_extended_features',
                  **kwargs):
         super().__init__(prefix=prefix, **kwargs)
-
-
-

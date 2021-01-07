@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import dask.dataframe as dd
 from sklearn.model_selection import StratifiedKFold
-from IPython import embed
+
 
 def nanany(array: np.ndarray):
     """Any operation which ignores NaNs.
@@ -178,14 +178,14 @@ class StratifiedPatientKFold(StratifiedKFold):
 
     def split(self, X, y, groups=None):
         """Split X and y into stratified folds based on patient ids."""
-        #determine if data is a dask dataframe:
+        # determine if data is a dask dataframe:
         if type(X) == dd.DataFrame:
-            #using dask:
+            # using dask:
             patient_ids = X.index.compute().get_level_values('id')
             unique_patient_ids = patient_ids.unique()
             y = y.compute()
             patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
-        else: 
+        else:
             patient_ids = X.index.get_level_values('id')
             unique_patient_ids = patient_ids.unique()
             patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]

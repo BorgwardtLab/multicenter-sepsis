@@ -6,6 +6,8 @@ import torch
 from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning.loggers import TensorBoardLogger
 
+from src.evaluation.sklearn_utils import (nanany, NotOnsetLabelError)
+
 
 class TbWithBestValueLogger(TensorBoardLogger):
     """Tensorboard logger which also tracks the best value of metrics."""
@@ -290,18 +292,19 @@ class LabelPropagation():
 
     def __call__(self, instance):
         label = instance['labels']
-        is_case = np.any(label)
-        assert not np.any(np.isnan(label))
+        is_case = nanany(label)
         if is_case:
-            onset = np.argmax(label)
+            onset = np.nanargmax(label)
             # Check if label is a onset
             if not np.all(label[onset:]):
-                raise ValueError('Did not get an onset label.')
+                raise NotOnsetLabelError(instance['id'])
 
             new_onset = onset + self.hours_shift
             new_onset = min(max(0, new_onset), len(label))
+            old_onset_segment = label[new_onset:]
             new_onset_segment = np.ones(len(label) - new_onset)
             # NaNs should stay NaNs
+            new_onset_segment[np.isnan(old_onset_segment)] = np.NaN
             new_label = np.concatenate(
                 [label[:new_onset], new_onset_segment], axis=0)
             instance['labels'] = new_label
