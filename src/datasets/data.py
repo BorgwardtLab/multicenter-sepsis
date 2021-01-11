@@ -246,7 +246,7 @@ class PreprocessedDataset(Dataset):
 
         # Convert data into consecutive time points
         patient_data = self.data.loc[[patient_id]].copy()
-        patient_data.set_index(self.TIME_COLUMN, inplace=True, drop=True)
+        patient_data.set_index(self.TIME_COLUMN, inplace=True, drop=False) #drop=True
         min_time, max_time = patient_data.index.min(), patient_data.index.max()
         consecutive_times = np.arange(min_time, max_time+1)
         patient_data.reindex(consecutive_times, method=None, fill_value=np.NaN)
