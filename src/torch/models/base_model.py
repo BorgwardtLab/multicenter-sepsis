@@ -58,7 +58,7 @@ class BaseModel(pl.LightningModule):
         self.loss = torch.nn.BCEWithLogitsLoss(
             reduction='none',
             pos_weight=torch.Tensor(
-                [self.hparams.pos_weight * d.class_imbalance_factor])
+                [self.hparams.pos_weight ])
         )
 
     def training_step(self, batch, batch_idx):
