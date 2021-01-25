@@ -2,10 +2,12 @@
 
 In this repo, we gather pipelining code for a multicenter sepsis prediction effort.
 
-## 0. Python environment:  
+## Python pipeline:  
 To set up python libraries run:  
 ```>pipenv install --skip-lock```  
 ```>pipenv shell```  
+
+### Datasets   
 
 `datasets`: (code for downloading and extracting this dataset)
 - `physionet2019`
@@ -16,30 +18,21 @@ for the other datasets: mimic3, eicu, hirid, aumc: first download the zip files 
 then move the zips to the following path:  
 ```datasets/downloads/```  
 
+### Source code
+
 `src`:
 - `torch`: pytorch-based pipeline and models (currently an attention model)  
     TODO: add docu for training a  model  
 - `sklearn`: sklearn-based pipeline for boosted trees baselines
     
-To set up python libraries run:  
-```pipenv install --skip-lock```  
-```pipenv shell```  
-  
-For the sklearn pipeline:  
-```python -m src.sklearn.data.make_dataframe``` to run online and parallelized preprocessing, feature extraction  
-```python -m src.sklearn.main``` to run a hyperparameter search of a sklearn-based online classifier  
-  
-For additional arguments, use ```--help```.  
- 
-For preprocessing a single dataset, e.g. "hirid", simply run   
-```>python -m src.sklearn.data.make_dataframe --dataset hirid```  
+### Running the preprocessing
+```source scripts/run_preprocessing_extended.sh```  
 
 ### Sanity checks:
 For checking, if all datasets were preprocessed properly (e.g. dimensions of all instances are consistent within a dataset (one-hot encoding of categorical variables could cause problems over different splits)), run:  
 ```>python -m scripts.sanity_checks.check_datasets```
  
-## 3. Model Pipelines
-### Overview   
+### Model overview   
 - src/torch: pytorch-based pipeline and models (currently GRU and attention model)  
 - src/sklearn: sklearn-based pipeline for lightGBM and LogReg models 
 
@@ -58,10 +51,9 @@ For additional arguments, use ```--help```.
 These jobs we currently run on bs-slurm-02.
 
 #### Starting hyperparameter search for all datasets and all deep models:
-```>source scripts/submit_jobs.sh results/hypersearch3``` where `results/hypersearch3` is an example of a result path.  
+```>source scripts/submit_jobs_array.sh results/hypersearch``` where `results/hypersearch` is an example of a result path.  
  
 #### Training a single dataset and model
---> this should also work on bs-gpu13!   
 Fitting an attention-model on Physionet:    
 ```>python -m src.torch.train_model --dataset PreprocessedPhysionet2019Dataset --model AttentionModel --max-epochs=100 --label-propagation=6 --gpus 0 ```   
 
