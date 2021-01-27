@@ -4,7 +4,7 @@ import os
 from IPython import embed
 
 
-path = 'results/hypersearch5' #'internal_validation'
+path = 'results/baselines' #'results/hypersearch8_internal' 
 drop_keys = ['predict', 'decision', 'params'] 
 results = []
 for p, _, file in os.walk(path):
