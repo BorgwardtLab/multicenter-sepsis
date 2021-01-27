@@ -6,6 +6,9 @@ import torch
 from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning.loggers import TensorBoardLogger
 
+from src.evaluation.sklearn_utils import (nanany, NotOnsetLabelError)
+
+
 class TbWithBestValueLogger(TensorBoardLogger):
     """Tensorboard logger which also tracks the best value of metrics."""
 
@@ -114,6 +117,8 @@ def variable_length_collate(batch):
         key: list(map(lambda a: a[key], batch))
         for key in batch[0].keys()
     }
+
+    transposed_items['id'] = np.array(transposed_items['id'])
 
     lengths = np.array(list(map(len, transposed_items['labels'])))
     transposed_items['lengths'] = lengths
@@ -234,18 +239,36 @@ def to_observation_tuples(instance_dict):
     ts_data = np.nan_to_num(ts_data)  # Replace NaNs with zero
 
     # Combine into a vector
-    combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1) 
-    
+    combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1)
+
     # Replace time series data with new vectors
     instance_dict['ts'] = combined
     return instance_dict
 
 
-def to_observation_tuples_with_indicators(instance_dict):
+def add_indicators(instance_dict):
+    """Replace nans in input with 0 and add measurement indicators."""
+    instance_dict = instance_dict.copy()  # We only want a shallow copy
+    time = instance_dict['times']
+    if len(time.shape) != 2:
+        time = time[:, np.newaxis]
+
+    ts_data = instance_dict['ts']
+    invalid_measurements = ~np.isfinite(ts_data)
+    ts_data = np.nan_to_num(ts_data)  # Replace NaNs with zero
+
+    # Combine into a vector
+    combined = np.concatenate((ts_data, invalid_measurements), axis=-1)
+
+    # Replace time series data with new vectors
+    instance_dict['ts'] = combined
+    return instance_dict
+
+
+def to_observation_tuples_without_indicators(instance_dict):
     """Convert time series to tuple representation.
 
-    Basically replace all NaNs in the ts field with zeros, add a measurement
-    indicator vector and combine both with the time field.
+    Basically replace all NaNs in the ts field with zeros and combine it with the time field.
     """
     instance_dict = instance_dict.copy()  # We only want a shallow copy
     time = instance_dict['times']
@@ -253,19 +276,15 @@ def to_observation_tuples_with_indicators(instance_dict):
         time = time[:, np.newaxis]
 
     ts_data = instance_dict['ts']
-    # Inspired by "Why not to use Zero Imputation"
-    # https://arxiv.org/abs/1906.00150
-    # We augment "absence indicators", which should reduce distribution shift
-    # and bias induced by measurements with low number of observations.
-    invalid_measurements = ~np.isfinite(ts_data)
     ts_data = np.nan_to_num(ts_data)  # Replace NaNs with zero
 
     # Combine into a vector
-    combined = np.concatenate((time, ts_data, invalid_measurements), axis=-1)
-    
+    combined = np.concatenate((time, ts_data), axis=-1)
+
     # Replace time series data with new vectors
     instance_dict['ts'] = combined
     return instance_dict
+
 
 class LabelPropagation():
     def __init__(self, hours_shift):
@@ -273,18 +292,19 @@ class LabelPropagation():
 
     def __call__(self, instance):
         label = instance['labels']
-        is_case = np.any(label)
-        assert not np.any(np.isnan(label))
+        is_case = nanany(label)
         if is_case:
-            onset = np.argmax(label)
+            onset = np.nanargmax(label)
             # Check if label is a onset
             if not np.all(label[onset:]):
-                raise ValueError('Did not get an onset label.')
+                raise NotOnsetLabelError(instance['id'])
 
             new_onset = onset + self.hours_shift
             new_onset = min(max(0, new_onset), len(label))
+            old_onset_segment = label[new_onset:]
             new_onset_segment = np.ones(len(label) - new_onset)
             # NaNs should stay NaNs
+            new_onset_segment[np.isnan(old_onset_segment)] = np.NaN
             new_label = np.concatenate(
                 [label[:new_onset], new_onset_segment], axis=0)
             instance['labels'] = new_label
@@ -309,5 +329,3 @@ class ComposeTransformations():
         for transform in self.transformations:
             out = transform(out)
         return out
-
-

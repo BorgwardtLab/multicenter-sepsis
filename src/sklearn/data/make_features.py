@@ -46,6 +46,10 @@ def main():
     parser.add_argument('--n_partitions', type=int,
         default=50,
         help='number of df partitions in dask')
+    parser.add_argument('--n_chunks', type=int,
+        default=4,
+        help='number of df chunks for wavelet and signature extraction (relevant for eICU)')
+
     parser.add_argument('--splits', nargs='+', default=['train', 'validation', 'test'])
     args = parser.parse_args()
     client = Client(n_workers=args.n_jobs, memory_limit='50GB', local_directory='/local0/tmp/dask')
@@ -94,7 +98,7 @@ def main():
             df = data_pipeline.fit_transform(None)
             print(f'.. finished. Took {time() - start} seconds.')
             # Save
-            save_pickle(df, dump)
+            #### save_pickle(df, dump)
            
             # 1.B) Filtering for deep learning pipeline:
             #------------------------------------------ 
@@ -103,13 +107,13 @@ def main():
             # while skipping the manual feature engineering
             filter_for_deep_pipe =  Pipeline([
             ('filter_invalid_times', InvalidTimesFiltration()),
-            ('drop_cols', DropColumns( save=True,  
+            ('drop_cols', DropColumns( save=False, ####True  
                 data_dir=out_dir, split=split)), #save baselines here, as its not a dask df
              ])
             print('Running invalid times filtr. for deep pipeline..')
             df_deep = df.reset_index(level='time', drop=False) # invalid times filt. can't handle multi-index due to dask
             df_deep = filter_for_deep_pipe.fit_transform(df_deep) 
-            save_pickle(df_deep, dump_for_deep)
+            #### save_pickle(df_deep, dump_for_deep)
             print('Done with invalid times filtr.')
     
         #2. Tunable Pipeline: Feature Extraction, further Preprocessing
@@ -123,37 +127,58 @@ def main():
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
-            ('lookback_features', LookbackFeatures(n_jobs=n_jobs, concat_output=True)),
+            ('lookback_features', LookbackFeatures(n_jobs=n_jobs)), ####concat_output=True)),
+            ('measurement_counts', MeasurementCounter(n_jobs=n_jobs)),
             ('filter_invalid_times', InvalidTimesFiltration()),
             #drop and save baseline scores after filtering invalid (which ignored baselines)
             ('drop_cols', DropColumns(save=False))   # don't save here, as still delayed dask obj 
         ])
         df_deep2 = pipeline.fit_transform(df).compute()
-        
+
         # Test how deep models perform with lookback features:
         # For sklearn pipe, we need proper multi index format once again 
         df_deep2.reset_index(inplace=True)
         df_deep2.set_index(['id', 'time'], inplace=True)
+
+        # We chunk for the next memory-costly part (which could not easily be implemented in dask)
+        ids = np.unique(df_deep2.index.get_level_values('id'))
+        id_splits = np.array_split(ids, args.n_chunks)
+        df_splits = {}
+        for i, id_split in enumerate(id_splits):
+            df_splits[i] = df_deep2.loc[id_split]  # list comp. didn't find df in scope
+        # clear large df from memory: 
+        del df_deep2 
  
         sklearn_pipe =  Pipeline([
-            ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)) 
+            ('imputation', IndicatorImputation(n_jobs=n_jobs, concat_output=True)),
+            # wavelets require imputed data! 
+            ('wavelet_features', WaveletFeatures(n_jobs=n_jobs, concat_output=True)), #n_jobs=5, concat_output=True 
+            ('signatures', SignatureFeatures(n_jobs=n_jobs, concat_output=True)), #n_jobs=2
             ])
-        df_sklearn = sklearn_pipe.fit_transform(df_deep2)
+        out_df_splits = []
+        keys = list(df_splits.keys()) # dict otherwise doesnt like popping keys
+        for key in keys:
+            out_df = sklearn_pipe.fit_transform(df_splits[key])
+            #free mem of current input df:
+            df_splits.pop(key)
+            out_df_splits.append(out_df) 
+        df_sklearn = pd.concat(out_df_splits)
+        #df_sklearn = sklearn_pipe.fit_transform(df_deep2)
 
         print(f'.. finished. Took {time() - start} seconds.')
         
         #All models assume time as column and only id as index (multi-index would cause problem with dask models)
-        df_deep2 = ensure_single_index(df_deep2)
+        ##df_deep2 = ensure_single_index(df_deep2)
         df_sklearn = ensure_single_index(df_sklearn) 
 
         # Save
-        save_pickle(df_sklearn, os.path.join(out_dir, f'X_features_{split}.pkl'))
-        save_pickle(df_deep2, os.path.join(out_dir, f'X_features_no_imp_{split}.pkl'))
+        save_pickle(df_sklearn, os.path.join(out_dir, f'X_extended_features_{split}.pkl'))
+        #save_pickle(df_deep2, os.path.join(out_dir, f'X_extended_features_no_imp_{split}.pkl'))
 
     client.close()
     
     # Finally, we derive which features need to be dropped for physionet variable set:
-    _ = ChallengeFeatureSubsetter(preprocessing=True)
+    #### _ = ChallengeFeatureSubsetter(preprocessing=True)
 
 if __name__ == '__main__':
     main()

@@ -1,4 +1,4 @@
-all: demo/data eicu/data hirid/data mimic3/data physionet2019/data 
+all: demo/data aumc/data eicu/data hirid/data mimic3/data physionet2019/data 
 MAKEFLAGS += --no-builtin-rules
 .SUFFIXES:
 .DELETE_ON_ERROR:
@@ -6,18 +6,10 @@ SUBDIRS = physionet2019 eicu hirid mimic3
 SUBDIRSCLEAN=$(addsuffix _clean,$(SUBDIRS))
 .PHONY: all clean tests $(SUBDIRS) $(SUBDIRSCLEAN)
 
-#all: $(SUBDIRS)
-#clean: $(SUBDIRSCLEAN)
-#
-#$(SUBDIRS):
-#	$(MAKE) -C $@
-#
-#%_clean: %
-#	$(MAKE) -C $^ clean
-#
- 
 demo/data:
 	cd demo; make
+aumc/data:
+	cd aumc; make
 eicu/data:
 	cd eicu; make 
 hirid/data: 
@@ -29,6 +21,7 @@ physionet2019/data:
 
 clean:
 	cd demo; make clean; cd ../
+	cd aumc; make clean; cd ../
 	cd eicu; make clean; cd ../  
 	cd hirid; make clean; cd ../
 	cd mimic3; make clean; cd ../

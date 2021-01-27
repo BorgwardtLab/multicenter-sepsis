@@ -26,6 +26,10 @@ dask-ml = "*"
 dask-lightgbm = "*"
 dask-xgboost = "*"
 pyarrow = "*"
+seaborn = "*"
+kymatio = "*"
+plotille = "*"
+iisignature = "*"
 
 [requires]
 python_version = "3.7"

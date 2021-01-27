@@ -81,7 +81,8 @@ def main(hparams, model_cls):
     masked_result = online_eval(
         loaded_model,
         getattr(src.datasets, hparams.dataset, 'validation'),
-        'validation'
+        'validation',
+        feature_set=hparams.feature_set
     )
     results['validation_masked'] = masked_result
     with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
@@ -117,6 +118,8 @@ if __name__ == '__main__':
                         default='online_val/loss')
     parser.add_argument('--monitor-mode', type=str, choices=['max', 'min'],
                         default='min')
+    parser.add_argument('--indicators', type=bool,
+                        default=True)
     parser.add_argument(
         '--feature-set', default='all',
         help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'

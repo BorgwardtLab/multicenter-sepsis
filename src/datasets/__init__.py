@@ -3,17 +3,20 @@ from .data import (
     MIMIC3Dataset,
     EICUDataset,
     HiridDataset,
+    AUMCDataset,
     DemoDataset,
     PreprocessedPhysionet2019Dataset,
     PreprocessedMIMIC3Dataset,
     PreprocessedEICUDataset,
     PreprocessedHiridDataset,
+    PreprocessedAUMCDataset,
     PreprocessedDemoDataset,
     IBPhysionet2019Dataset,
     IBMIMIC3Dataset,
     IBEICUDataset,
     IBHiridDataset,
-    IBDemoDataset 
+    IBDemoDataset,
+    ExtendedPhysionet2019Dataset 
 )
 
 __all__ = [
@@ -21,15 +24,18 @@ __all__ = [
     'MIMIC3Dataset',
     'EICUDataset',
     'HiridDataset',
+    'AUMCDataset',
     'DemoDataset',
     'PreprocessedPhysionet2019Dataset',
     'PreprocessedMIMIC3Dataset',
     'PreprocessedEICUDataset',
     'PreprocessedHiridDataset',
+    'PreprocessedAUMCDataset',
     'PreprocessedDemoDataset',
     'IBPhysionet2019Dataset',
     'IBMIMIC3Dataset',
     'IBEICUDataset',
     'IBHiridDataset',
-    'IBDemoDataset' 
+    'IBDemoDataset',
+    'ExtendedPhysionet2019Dataset' 
 ]

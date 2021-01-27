@@ -6,7 +6,7 @@ baseline_cols = ['sirs', 'news', 'mews', 'gcs', 'qsofa',
         'sofa_renal', 'sofa_resp', 'sofa']
 
 
-#copied from Physionet2019 Dataset Class 
+# raw measurements
 ts_columns = [
         'hr', 'o2sat', 'temp', 'sbp', 'map', 'dbp', 'resp',
         'etco2', 'be', 'bicar', 'fio2', 'ph', 'pco2', 'ast', 
@@ -35,6 +35,37 @@ extended_ts_columns = [
         'ShockIndex', 'bun/cr', 'po2/fio2', 'SOFA', 'SOFA_deterioration',  
         'qSOFA', 'SepticShock', 'MEWS', 'SIRS'
     ]
+
+# following a partition of the ts_columns into vitals, labs, and 
+# others (scores and indicators)
+vital_columns = [
+        'hr', 'o2sat', 'temp', 'sbp', 'map', 'dbp', 'resp',
+        'etco2', 'fio2' 
+]
+
+lab_columns_chemistry = [ 
+        'be', 'bicar', 'ph', 'pco2', 'po2', 'mg', 'phos', 'k',
+        'ca', 'cl', 'cai', 'na' 
+]
+
+lab_columns_organs = [
+        'ast', 'bun', 'alp',  'crea', 'bili_dir', 'glu', 
+        'lact',  'bili', 'tri', 'alb', 'alt',  'ck', 'ckmb',
+        'crp', 'tnt'
+] 
+
+lab_columns_hemo = [
+        'hct', 'hgb', 'ptt', 'wbc', 'fgn', 'plt', 'basos', 
+        'bnd',  'eos', 'esr', 'hbco',
+        'inr_pt', 'lymph', 'mch', 'mchc', 'mcv', 'methb',  
+        'neut', 'pt', 'rbc', 'rdw', 'tco2' 
+]
+ 
+scores_and_indicators_columns = [
+        'vaso_ind', 'vent_ind', 'urine24',
+        'ShockIndex', 'bun/cr', 'po2/fio2', 'SOFA', 'SOFA_deterioration',  
+        'qSOFA', 'SepticShock', 'MEWS', 'SIRS'
+]
 
 static_columns = ['age', 'sex', 'weight', 'height']
 

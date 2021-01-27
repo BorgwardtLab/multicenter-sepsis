@@ -102,5 +102,5 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
     def transform(self, dask_df):
         """ Parallelized transform
         """
-        result = dask_df.groupby('id').apply(self.transform_id)
+        result = dask_df.groupby('id', group_keys=False).apply(self.transform_id)
         return result

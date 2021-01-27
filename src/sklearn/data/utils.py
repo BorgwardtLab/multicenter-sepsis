@@ -33,32 +33,39 @@ def index_check(full_data):
         full_data.set_index(['id', 'time'], inplace=True) 
     return full_data
 
+def handle_index(data, index):
+    if index == 'multi':
+        data = index_check(data)
+        print('Multi-index check finished')
+    elif index == 'single':
+        print('Single-index is used')
+    else:
+        raise NotImplementedError(f'{index} not among valid index types [multi, single]')
+    return data
+
 def load_data(
-        path='datasets/physionet2019/data/sklearn/processed',
-        label='sep3',
-        index='multi',
-        load_test_split=False
-):
+    path='datasets/physionet2019/data/sklearn/processed',
+    label='sep3',
+    splits = ['train', 'validation', 'test'],
+    index='multi', 
+    extended_features=False):
     """
     Load preprocessed Data in sklearn format from pickle, depending on index type reformat properly.
     """
-    splits = ['train', 'validation']
-    if load_test_split:
-        splits.append('test')
     drop_col = 'Gender_Other' #only 5 patients in eicu have this, dropping this col as its still encoded in male female both zero. 
     data = defaultdict()
-    files = ['X_features_' + split for split in splits]
     
-    for split, filename in zip(splits, files):
+    if extended_features:
+        prefix = 'X_extended_features_'
+    else: 
+        prefix = 'X_features_'
+    files = [prefix + split for split in splits]
+    baseline_files = ['baselines_' + split + '.pkl' for split in splits]
+    
+    for split, filename, baseline in zip(splits, files, baseline_files):
         filepath = os.path.join(path, filename + '.pkl')
         full_data = load_pickle(filepath)
-        if index == 'multi':
-            full_data = index_check(full_data)
-            print('Multi-index check finished')
-        elif index == 'single':
-            print('Single-index is used')
-        else:
-            raise NotImplementedError(f'{index} not among valid index types [multi, single]')        
+        full_data = handle_index(full_data, index)
         y = full_data[label]
         X = full_data.drop(label, axis=1)
         if drop_col in X.columns:
@@ -66,6 +73,15 @@ def load_data(
             print(f'Shape after dropping {drop_col}: {X.shape}')    
         data[f'X_{split}'] = X
         data[f'y_{split}'] = y
+
+        # Additionally, try to load baseline scores (if not physionet data):
+        if not 'physionet2019' in path:
+            baseline_path = os.path.join(path, baseline)
+            baselines = load_pickle(baseline_path)
+            baselines = handle_index(baselines, index)
+            baselines = baselines.drop(label, axis=1)
+            data[f'baselines_{split}'] = baselines 
+        
     return data
 
 def to_tsfresh_form(df, labels):

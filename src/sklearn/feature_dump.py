@@ -16,6 +16,15 @@ from src.sklearn.data.utils import load_data, load_pickle, save_pickle
 from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 
+import pyarrow as pa 
+import pyarrow.parquet as pq
+
+def to_parquet(df, path):
+    if type(df) == pd.Series:
+        df = pd.DataFrame(df, columns=['sep3'])
+    table = pa.Table.from_pandas(df)
+    pq.write_table(table, path)
+    return None 
 
 def load_data_from_input_path(input_path, dataset_name, index, extended_features=False):
     """Load the data according to dataset_name, and index-handling
@@ -60,7 +69,7 @@ def get_pipeline_and_grid(method_name, clf_params, feature_set):
         return pipe, param_dist
     elif method_name == 'lr':
         from sklearn.linear_model import LogisticRegression as LR
-        parameters = {'n_jobs': 10} #-1 led to OOM
+        parameters = {'n_jobs': 1} #10 for non-eicu #-1 led to OOM
         parameters.update(clf_params)
         est = LR(**parameters)
         steps.append(('est', est))
@@ -239,6 +248,18 @@ def main():
         iid=False,
         n_jobs=args.cv_n_jobs
     )
+    from IPython import embed
+    X_train, y_train = data['X_train'], data['y_train']
+    X_validation, y_validation = data['X_validation'], data['y_validation']
+    base_path = os.path.join('datasets', args.dataset, 'data', 'parquet')
+    os.makedirs(base_path, exist_ok=True)
+    keys = ['X_train', 'y_train', 'X_validation', 'y_validation']
+    for key in keys:
+        file_path = os.path.join(base_path, key + '.parquet')
+        to_parquet(data[key], file_path)
+    
+    embed(); sys.exit() 
+
     # actually run the randomized search
     start = time()
     random_search.fit(data['X_train'], data['y_train'])

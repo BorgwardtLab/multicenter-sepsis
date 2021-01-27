@@ -1,6 +1,9 @@
 """Routine for loading and evaluating a model."""
 from argparse import ArgumentParser
+from hashlib import md5
 from functools import partial
+import os
+import yaml
 import json
 
 import numpy as np
@@ -21,7 +24,6 @@ if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
-
 
 
 def expand_time(instance, transform_each=lambda a: a,
@@ -49,7 +51,15 @@ def expand_time(instance, transform_each=lambda a: a,
     for i in range(1, length+1):
         instances_out.append(
             transform_each(
-                {key: value[:i] for key, value in instance.items()}))
+                {
+                    # ts values
+                    **{key: value[:i] for key, value in instance.items()
+                       if hasattr(value, '__len__')},
+                    # non-ts values
+                    **{key: value for key, value in instance.items()
+                       if not hasattr(value, '__len__')},
+                }
+            ))
     return instances_out
 
 
@@ -76,7 +86,7 @@ def concat(fn):
     return wrapped
 
 
-def online_eval(model, dataset_cls, split, check_matching_unmasked=False):
+def online_eval(model, dataset_cls, split, check_matching_unmasked=False, **kwargs):
     """Run online evaluation with future masking."""
     transforms = model.transforms
     # TODO: Make this more generic, if first transform is not label propagation
@@ -93,7 +103,7 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False):
     )
 
     dataloader = DataLoader(
-        dataset_cls(split=split, transform=transform_fn),
+        dataset_cls(split=split, transform=transform_fn, **kwargs),
         # This passes one instance at a time to the collate function. It could
         # be that the expanded instance requires to much memory to be
         # processed in a single pass.
@@ -116,18 +126,9 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False):
         )
 
     labels = []
+    scores = []
     predictions = []
-
-    scores = {
-        'auroc': concat(roc_auc_score),
-        'average_precision': concat(average_precision_score),
-        'balanced_accuracy': concat(scores_to_pred(balanced_accuracy_score)),
-        'physionet2019_score':
-            scores_to_pred(partial(
-                physionet2019_utility,
-                shift_labels=model.hparams.label_propagation
-            ))
-    }
+    ids = []
 
     model.eval()
     with torch.no_grad():
@@ -145,8 +146,11 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False):
                 output_um = model(data_um.to(device), length_um.to(device))
                 labels.append(label[(batch_index, last_index)].numpy())
                 pred = output[(batch_index, last_index)][:, 0]
-                predictions.append(torch.sigmoid(pred).detach().cpu().numpy())
-                assert np.allclose(pred.detach().cpu().numpy(), output_um[..., 0].detach().cpu().numpy(), atol=1e-6)
+                scores.append(torch.sigmoid(pred).cpu().numpy())
+                predictions.append((scores[-1] >= 0.5).astype(int))
+                ids.append(int(batch_um['id'].cpu().numpy()[0]))
+                assert np.allclose(pred.cpu().numpy(
+                ), output_um[..., 0].cpu().numpy(), atol=1e-6)
         else:
             for batch in tqdm(dataloader, desc='Masked evaluation', total=len(dataloader)):
                 data, length, label = batch['ts'], batch['lengths'], batch['labels']
@@ -155,61 +159,120 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False):
                 output = model(data.to(device), length.to(device))
                 labels.append(label[(batch_index, last_index)].numpy())
                 pred = output[(batch_index, last_index)][:, 0]
-                predictions.append(torch.sigmoid(pred).detach().cpu().numpy())
+                scores.append(torch.sigmoid(pred).cpu().numpy())
+                predictions.append((scores[-1] >= 0.5).astype(int))
+                ids.append(int(batch['id'][0].cpu().numpy()))
+    scores_fns = {
+        'auroc': concat(roc_auc_score),
+        'average_precision': concat(average_precision_score),
+        'balanced_accuracy': concat(scores_to_pred(balanced_accuracy_score)),
+        'physionet2019_score':
+            scores_to_pred(partial(
+                physionet2019_utility,
+                shift_labels=model.hparams.label_propagation
+            ))
+    }
 
     # Compute scores
-    output = {name: fn(labels, predictions) for name, fn in scores.items()}
+    output = {name: fn(labels, scores) for name, fn in scores_fns.items()}
     # Add predictions
     output['labels'] = [el.tolist() for el in labels]
+    output['scores'] = [el.tolist() for el in scores]
     output['predictions'] = [el.tolist() for el in predictions]
+    output['ids'] = ids  # [el.tolist() for el in ids]
     return output
 
 
-def main(model, checkpoint, dataset, splits, output):
+def compute_md5hash(filename, blocksize=1024):
+    """Compute the md5 has of file with path filename."""
+    filesize = os.path.getsize(filename)
+    hash_md5 = md5()
+    with open(filename, "rb") as f:
+        iterator = iter(lambda: f.read(blocksize), b"")
+        for chunk in tqdm(iterable=iterator, total=filesize // blocksize, unit='KB'):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
+def get_model_checkpoint_path(run_folder):
+    """Get path to model checkpoint from run directory."""
+    checkpoint_dir = os.path.join(run_folder, 'checkpoints')
+    checkpoint_file = os.listdir(checkpoint_dir)[0]
+    checkpoint = os.path.join(checkpoint_dir, checkpoint_file)
+    return checkpoint
+
+
+def extract_model_information(run_folder, checkpoint_path=None):
+    with open(os.path.join(run_folder, 'hparams.yaml'), 'r') as f:
+        run_info = yaml.load(f, Loader=yaml.BaseLoader)
+
+    if checkpoint_path is None:
+        checkpoint_path = get_model_checkpoint_path(run_folder)
+    model_checksum = compute_md5hash(checkpoint_path)
+
+    return {
+        "model": run_info['model'],
+        "model_path": checkpoint_path,
+        "model_checksum": model_checksum,
+        "model_params": run_info,
+        "dataset_train": run_info['dataset']
+    }
+
+
+def main(run_folder, dataset, split, feature_set, checkpoint_path, output):
     """Main function to evaluate a model."""
-    model_cls = getattr(src.torch.models, model)
+    out = extract_model_information(run_folder, checkpoint_path)
+    out['dataset_eval'] = dataset
+    out['split'] = split
+    out['feature_set'] = feature_set
+
+    model_cls = getattr(src.torch.models, out['model'])
     dataset_cls = getattr(src.datasets, dataset)
     model = model_cls.load_from_checkpoint(
-        checkpoint,
-        hparam_overrides={
-            'dataset': dataset
-        }
+        out['model_path'],
+        dataset=dataset
     )
     model.to(device)
-    results = {}
-    for split in splits:
-        res = online_eval(model, dataset_cls, split)
-        results.update(
-            {"{}_{}".format(split, key): value for key, value in res.items()})
+    out.update(online_eval(model, dataset_cls, split, feature_set=feature_set))
 
     print({
-        key: value for key, value in results.items()
-        if 'labels' not in key and 'predictions' not in key
+        key: value for key, value in out.items()
+        if key not in ['labels', 'predictions', 'scores', 'ids']
     })
 
     if output is not None:
         with open(output, 'w') as f:
-            json.dump(results, f)
+            json.dump(out, f, indent=2)
 
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--model', choices=src.torch.models.__all__, type=str,
-                        default='AttentionModel')
+    parser.add_argument('--run_folder', type=str, required=True)
     parser.add_argument(
         '--dataset', required=True, type=str, choices=src.datasets.__all__,
     )
     parser.add_argument(
-        '--splits', default=['validation'], choices=['validation', 'testing'],
-        type=str, nargs='+')
-    parser.add_argument('--checkpoint-path', required=True, type=str)
+        '--split',
+        default='validation',
+        choices=['train', 'validation', 'test'],
+        type=str
+    )
+    parser.add_argument(
+        '--checkpoint-path', required=False, default=None, type=str)
+    parser.add_argument(
+        '--feature-set', default='all', choices=['all', 'challenge'],
+        help='Which feature set should be used: [all, challenge], '
+             'where challenge refers to the subset as derived from physionet '
+             'challenge variables'
+    )
     parser.add_argument('--output', type=str, default=None)
     params = parser.parse_args()
 
     main(
-        params.model,
-        params.checkpoint_path,
+        params.run_folder,
         params.dataset,
-        params.splits,
-        params.output
+        params.split,
+        params.feature_set,
+        params.checkpoint_path,
+        params.output,
     )

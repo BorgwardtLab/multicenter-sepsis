@@ -49,7 +49,7 @@ class BaseModel(pl.LightningModule):
         }
 
     def __init__(self, dataset, pos_weight, label_propagation, learning_rate,
-                 batch_size, **kwargs):
+                 batch_size, weight_decay, **kwargs):
         super().__init__()
         self.save_hyperparameters()
         self.dataset_cls = getattr(src.datasets, self.hparams.dataset)
@@ -58,7 +58,7 @@ class BaseModel(pl.LightningModule):
         self.loss = torch.nn.BCEWithLogitsLoss(
             reduction='none',
             pos_weight=torch.Tensor(
-                [self.hparams.pos_weight * d.class_imbalance_factor])
+                [self.hparams.pos_weight ])
         )
 
     def training_step(self, batch, batch_idx):
@@ -177,8 +177,22 @@ class BaseModel(pl.LightningModule):
         # TODO: We should also add a scheduler here to implement warmup. Most
         # recent version of pytorch lightning seems to have problems with how
         # it was implemented before.
-        optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.hparams.learning_rate)
+
+        # we don't apply weight decay to bias and layernorm parameters, as inspired by:
+        # https://colab.research.google.com/github/PytorchLightning/pytorch-lightning/blob/master/notebooks/04-transformers-text-classification.ipynb
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in self.named_parameters() if not any(nd in n for nd in no_decay)],
+                "weight_decay": self.hparams.weight_decay,
+            },
+            {
+                "params": [p for n, p in self.named_parameters() if any(nd in n for nd in no_decay)],
+                "weight_decay": 0.0,
+            },
+        ] 
+        optimizer = torch.optim.AdamW(
+            optimizer_grouped_parameters, lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay)
         return optimizer
 
     def train_dataloader(self):
@@ -250,6 +264,7 @@ class BaseModel(pl.LightningModule):
             options=[16, 32, 64, 128, 256],
             tunable=True
         )
+        parser.add_argument('--weight-decay', default=0., type=float)
         parser.add_argument('--label-propagation', default=6, type=int)
         parser.add_argument('--pos-weight', type=float, default=1.)
         return parser

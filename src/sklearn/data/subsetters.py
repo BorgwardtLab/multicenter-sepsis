@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import pickle
 import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 from .utils import save_pickle, load_pickle 
@@ -9,22 +10,41 @@ class ChallengeFeatureSubsetter(TransformerMixin, BaseEstimator):
     This class acts as a transform before running a sklearn clf in order to
     restrict the clf to features that can be derived from the physionet challenge
     data.
-    #feature_flag: changing the feature names will affect this class! 
+    #feature_flag: changing the feature names will affect this class!
+    Inputs:
+        - prefix:               path to input data files
+        - split:                which data split to use [train,validation,test]
+        - feature_suffices:     suffices of multi word feature names that introduce edge cases below
+        - preprocessing:        flag whether class is called as a preprocessin step (where drop 
+                                features are derived once - even if its cached out file already exists)
     """
     def __init__(self, prefix='datasets/physionet2019/data/sklearn/processed', 
-            split='train', feature_suffices=['ind','pt', 'dir']): 
-        imputed_path = os.path.join(prefix, f'X_features_{split}.pkl')
+            split='train', feature_suffices=['ind','pt', 'dir'], preprocessing=False, extended_features=True):
+        self.prefix = prefix
+        self.split = split
+        self.feature_suffices = feature_suffices
+        self.preprocessing = preprocessing
+        self.extended_features = extended_features
+
+        if extended_features:
+            suffix = f'X_extended_features_{split}.pkl'
+        else:
+            suffix = f'X_features_{split}.pkl'
+        imputed_path = os.path.join(prefix, suffix)
         not_imputed_path = os.path.join(prefix, f'X_features_no_imp_{split}.pkl')
         drop_features_path = os.path.join(prefix, f'drop_features_{split}.pkl')
-        if not os.path.exists(drop_features_path): 
+        if preprocessing:
+            print(f'Defining features to drop for physionet variable subset ...') 
             #all features including imputations
             self.Xi = load_pickle(imputed_path)
             self.Xn = load_pickle(not_imputed_path) 
-            
             self.drop_vars = self._get_drop_vars(self.Xn)
             self.drop_features = self._get_features_from_drop_vars(feature_suffices)
-            with open(drop_features_path, 'rb') as f:
+            print('Dumping drop feature file ...')
+            with open(drop_features_path, 'wb') as f:
                 pickle.dump(self.drop_features, f)
+        elif not os.path.exists(drop_features_path):
+            raise ValueError('No drop feature file found, use preprocessing mode first.')
         else:
             self.drop_features = load_pickle(drop_features_path)
  

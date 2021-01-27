@@ -5,6 +5,10 @@ import sys
 sys.path.append(os.getcwd())
 from src.sklearn.data.utils import load_pickle
 from IPython import embed
+import json
+import pandas as pd 
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def check_times(df):
     patients = df.index.unique()
@@ -17,21 +21,22 @@ def check_times(df):
             embed()
         print(f'Patient {pat_id} has times {time}')
 
-def compute_stats(df):
+def compute_stats(df, results, dataset, split):
     """
     Computes case and case timepoint frequencies
     """
-    results = {}
     #Time point prevalence of sepsis:
     tp_freq = df['sep3'].sum()/df['sep3'].shape    
-    results['tp_prevalence'] = tp_freq[0]
+    results['tp_prevalence'].append(tp_freq[0])
     #Case-level prevalence:
     case_ids = df[df['sep3'] == 1].index.unique() 
     total_ids = df.index.unique()
     freq = len(case_ids) / len(total_ids)
-    results['case_prevalence'] = freq
-    results['total_stays'] = len(total_ids)
-    results['total_cases'] = len(case_ids)
+    results['case_prevalence'].append(freq)
+    results['total_stays'].append(len(total_ids))
+    results['total_cases'].append(len(case_ids))
+    results['dataset'].append(dataset)
+    results['split'].append(split)
     return results
 
 def check_nans(df, name):
@@ -70,30 +75,34 @@ if __name__ == "__main__":
         splits = [split]
 
     if dataset == 'all':
-        datasets = ['demo', 'physionet2019', 'mimic3', 'eicu', 'hirid', 'aumc']
+        datasets = ['physionet2019', 'mimic3', 'eicu', 'hirid', 'aumc']
     else:
         datasets = [dataset]
 
     results = {}
+    #initialize keys:
+    results['tp_prevalence'] = [] 
+    results['case_prevalence'] = [] 
+    results['total_stays'] = []
+    results['total_cases'] = []
+    results['dataset'] = []
+    results['split'] = []
+
     lengths = 0
     for dataset in datasets: 
-        results[dataset] = {}
         
         for split in splits:
             
             path = os.path.join('datasets', dataset, args.path)
-            #normalized_path = os.path.join(path, f'X_normalized_{split}.pkl')
             features_path = os.path.join(path, f'X_features_{split}.pkl')
             filtered_path = os.path.join(path, f'X_filtered_{split}.pkl')
 
             X_ni_path = os.path.join(path, f'X_features_no_imp_{split}.pkl')
             baseline_path = os.path.join(path, f'baselines_{split}.pkl')
          
-            #df_n = load_pickle(normalized_path)
-            X = load_pickle(features_path)
-            X_ni = load_pickle(X_ni_path)
+            #X = load_pickle(features_path)
             X_f = load_pickle(filtered_path)  
-            b = load_pickle(baseline_path)
+            #b = load_pickle(baseline_path)
         
             lengths += len(X_f) 
             #dfs = [X, Xf]
@@ -101,21 +110,16 @@ if __name__ == "__main__":
             #for df, name in zip(dfs, names):
             #    check_df(df, name)
          
-            results[dataset][split] = compute_stats(X) 
+            results = compute_stats(X_f, results, dataset, split) 
             #check_times(X_f)
-
-    overall_total = 0
-    overall_cases = 0 
-    for dataset in results.keys():
-        total = 0
-        cases = 0 
-        for split in results[dataset].keys():
-            total += results[dataset][split]['total_stays']
-            cases += results[dataset][split]['total_cases']
-        overall_total += total
-        overall_cases += cases
-        print(dataset, total, cases)
-    print(overall_total, overall_cases)
-    print(lengths/(24*365), 'years')
-    embed()
-
+    
+    df = pd.DataFrame(results)
+    df = df.sort_values(by=['tp_prevalence'])
+    fig, ax = plt.subplots(1,2, figsize=(12,5), sharey='all')
+    sns.barplot(ax=ax[0], x='dataset', y='tp_prevalence', data=df)  
+    sns.barplot(ax=ax[1], x='dataset', y='case_prevalence', data=df)
+    fig.suptitle('Prevalence on time point and case level', fontsize=16)
+    plt.savefig( os.path.join('results', 'pos_weight_analysis', 'prevalences.png'), dpi=300)
+ 
+    out_path = os.path.join('results', 'pos_weight_analysis', 'dataset_stats.csv')
+    df.to_csv(out_path)
