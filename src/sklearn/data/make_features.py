@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', 
         default='physionet2019',
-        help='dataset to use: [physionet2019, mimic3, eicu, hirid, demo]')
+        help='dataset to use: [physionet2019, mimic3, eicu, hirid, aumc, demo]')
     parser.add_argument('--data_dir', 
         default='datasets',
         help='path pointing to the dataset directory')
@@ -84,8 +84,8 @@ def main():
             print('Running (fixed) data pipeline and dumping it..')
             start = time()
             data_pipeline = Pipeline([
-                ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, 
-                    split=split, drop_label=False)),
+                ('create_dataframe', DataframeFromDataloader(dataset_cls=dataset_cls, data_dir=out_dir, 
+                    split=split)),
                 ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, 
                     split=split, onset_bounds=onset_bounds, n_jobs=n_jobs)),
                 ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset(n_jobs=n_jobs, 
