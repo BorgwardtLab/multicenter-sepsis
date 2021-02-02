@@ -62,6 +62,7 @@ class Physionet2019Dataset(Dataset):
         Args:
             root_dir: Path to extracted patient files as provided by physionet
             split_file: Path to split file
+            split: [train, validation, test, all]
             transform: Tranformation that should be applied to each instance
             custom_path: when working from a different repo, custom path can be used to replace the root of the other paths
         """
@@ -76,7 +77,13 @@ class Physionet2019Dataset(Dataset):
 
         with open(split_file, 'rb') as f:
             d = pickle.load(f)
-        self.patients = d[split_repetition_name][split]
+        if split == 'all':
+            splits = ['train', 'validation', 'test']
+            self.patients = np.concatenate(
+                [ d[split_repetition_name][split_] for split_ in splits ] 
+            )
+        else:  
+            self.patients = d[split_repetition_name][split]
 
         self.files = [
             # Patient ids are int but files contain leading zeros

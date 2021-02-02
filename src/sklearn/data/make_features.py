@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', 
         default='physionet2019',
-        help='dataset to use: [physionet2019, mimic3, eicu, hirid, demo]')
+        help='dataset to use: [physionet2019, mimic3, eicu, hirid, aumc, demo]')
     parser.add_argument('--data_dir', 
         default='datasets',
         help='path pointing to the dataset directory')
@@ -84,8 +84,8 @@ def main():
             print('Running (fixed) data pipeline and dumping it..')
             start = time()
             data_pipeline = Pipeline([
-                ('create_dataframe', DataframeFromDataloader(save=True, dataset_cls=dataset_cls, data_dir=out_dir, 
-                    split=split, drop_label=False)),
+                ('create_dataframe', DataframeFromDataloader(dataset_cls=dataset_cls, data_dir=out_dir, 
+                    split=split)),
                 ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, 
                     split=split, onset_bounds=onset_bounds, n_jobs=n_jobs)),
                 ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset(n_jobs=n_jobs, 
@@ -98,7 +98,8 @@ def main():
             df = data_pipeline.fit_transform(None)
             print(f'.. finished. Took {time() - start} seconds.')
             # Save
-            #### save_pickle(df, dump)
+            # TODO: save to parquet
+            save_pickle(df, dump)
            
             # 1.B) Filtering for deep learning pipeline:
             #------------------------------------------ 
@@ -107,7 +108,7 @@ def main():
             # while skipping the manual feature engineering
             filter_for_deep_pipe =  Pipeline([
             ('filter_invalid_times', InvalidTimesFiltration()),
-            ('drop_cols', DropColumns( save=False, ####True  
+            ('drop_cols', DropColumns( save=True,  
                 data_dir=out_dir, split=split)), #save baselines here, as its not a dask df
              ])
             print('Running invalid times filtr. for deep pipeline..')
@@ -116,7 +117,7 @@ def main():
             #### save_pickle(df_deep, dump_for_deep)
             print('Done with invalid times filtr.')
     
-        #2. Tunable Pipeline: Feature Extraction, further Preprocessing
+        #2. Feature Extraction, further Preprocessing
         #---------------------------------------------------------------------------------
         # We need to sort the index by ourselves to ensure the time axis is
         # correctly ordered. Dask would not take this into account.
@@ -135,7 +136,6 @@ def main():
         ])
         df_deep2 = pipeline.fit_transform(df).compute()
 
-        # Test how deep models perform with lookback features:
         # For sklearn pipe, we need proper multi index format once again 
         df_deep2.reset_index(inplace=True)
         df_deep2.set_index(['id', 'time'], inplace=True)
@@ -163,7 +163,6 @@ def main():
             df_splits.pop(key)
             out_df_splits.append(out_df) 
         df_sklearn = pd.concat(out_df_splits)
-        #df_sklearn = sklearn_pipe.fit_transform(df_deep2)
 
         print(f'.. finished. Took {time() - start} seconds.')
         

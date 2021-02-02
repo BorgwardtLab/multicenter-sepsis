@@ -119,7 +119,7 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
         return np.sum(u)
 
 
-def physionet2019_utility(y_true, y_score, shift_labels=0):
+def physionet2019_utility(y_true, y_score, shift_labels=0, u_fp=-0.05):
     """Compute physionet 2019 Sepsis eary detection utility.
 
     Args:
@@ -155,13 +155,13 @@ def physionet2019_utility(y_true, y_score, shift_labels=0):
 
         utilities.append(
             compute_prediction_utility(
-                labels, observed_predictions, shift_labels=shift_labels))
+                labels, observed_predictions, shift_labels=shift_labels, u_fp=u_fp))
         best_utilities.append(
             compute_prediction_utility(
-                labels, best_predictions, shift_labels=shift_labels))
+                labels, best_predictions, shift_labels=shift_labels, u_fp=u_fp))
         inaction_utilities.append(
             compute_prediction_utility(
-                labels, inaction_predictions, shift_labels=shift_labels))
+                labels, inaction_predictions, shift_labels=shift_labels, u_fp=u_fp))
 
     unnormalized_observed_utility = sum(utilities)
     unnormalized_best_utility = sum(best_utilities)
