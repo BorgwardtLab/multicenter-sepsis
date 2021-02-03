@@ -120,9 +120,10 @@ def shift_onset_label(patient_id, label, shift):
 class OnlineScoreWrapper:
     """Wraps an online prediction scores to process pandas DataFrames."""
 
-    def __init__(self, score_func, shift_onset_label=0, **kwargs):
+    def __init__(self, score_func, shift_onset_label=0, kwargs={}):
         self.score_func = score_func
         self.shift_onset_label = shift_onset_label
+        self.kwargs = kwargs
 
     @property
     def __name__(self):

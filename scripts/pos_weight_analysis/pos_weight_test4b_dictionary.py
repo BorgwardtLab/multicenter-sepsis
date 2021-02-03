@@ -11,10 +11,13 @@ import pandas as pd
 
 from sklearn.pipeline import Pipeline
 
+from functools import partial
+from sklearn.metrics._scorer import _cached_call
+
 from src.sklearn.data.transformers import *
 from src.sklearn.data.utils import load_pickle, save_pickle, index_check
 from src.evaluation.physionet2019_score import compute_prediction_utility, physionet2019_utility 
-
+from src.evaluation import get_physionet2019_scorer
 import seaborn as sns
 from IPython import embed
 
@@ -153,7 +156,7 @@ if __name__ == "__main__":
         #)
 
         u_fp = u_fp_dict[dataset]
-        scorer = get_physionet2019_scorer(shift=0, u_fp=u_fp) #here we dont apply label propagation 
+        scorer = get_physionet2019_scorer(shift=0, kwargs={'u_fp': u_fp}) #here we dont apply label propagation 
 
         print(f'Processing {dataset} and splits {splits}')
         for split in splits: 
