@@ -18,21 +18,30 @@ from src.evaluation.physionet2019_score import compute_prediction_utility, physi
 import seaborn as sns
 from IPython import embed
 
+class RandomBaseline:
+    def __init__(self, r):
+        self.r = r
+    def fit(self, X,y):
+        return self
+    def predict(self, X):
+        pred = np.random.binomial(1,self.r,(len(X)))
+        return pred
+
 def run_task(X, stats, i, n_draws, split, dataset, scorer):
     """
     task function for parallelism
     quadratic heuristic for U_FP
     """
     #prev = stats[stats['dataset'] == dataset]['tp_prevalence'].values[0]
-    d = {
-        'hirid': -0.23,
-        'physionet2019': -0.025,
-        'eicu': -0.03,
-        'mimic3': -0.075,
-        'aumc': -0.045,
-    } 
-    u_fp = d[dataset] 
-    utils, util_mu = get_average_util(X, i, n_draws=n_draws, u_fp=u_fp, scorer=scorer) 
+    #d = {
+    #    'hirid': -0.23,
+    #    'physionet2019': -0.025,
+    #    'eicu': -0.03,
+    #    'mimic3': -0.075,
+    #    'aumc': -0.045,
+    #} 
+    #u_fp = d[dataset] 
+    utils, util_mu = get_average_util(X, i, n_draws=n_draws, scorer=scorer) 
     results = []
     for j, util in enumerate(utils):
         result = {}
@@ -44,27 +53,24 @@ def run_task(X, stats, i, n_draws, split, dataset, scorer):
         results.append(result)
     return results
 
-def get_average_util(X, r, n_draws=10, u_fp=-0.05, scorer=None):
+def get_average_util(X, r, n_draws=10, scorer=None):
     """
     get average util of data X with weight r and n bernoulli draws
     """
-    preds = np.random.binomial(1,r,(n_draws, len(X)))
+    #preds = np.random.binomial(1,r,(n_draws, len(X)))
     utils = []
     labels = X['sep3']
-    for i, pred in enumerate(preds):
+    for i in np.arange(n_draws):
         df = pd.DataFrame(labels)
-        df['pred'] = pred
-        ids = df.index.get_level_values('id').unique()
-        y_true = [df['sep3'].loc[id].values for id in ids]
-        y_pred = [df['pred'].loc[id].values for id in ids]
-        util = scorer(y_true, y_pred) 
-        #util = physionet2019_utility(y_true, y_pred, u_fp=u_fp)
-        #util = compute_prediction_utility(
-        #    labels,
-        #    pred,
-        #    shift_labels=0,
-        #    return_all_scores=False
-        #)
+        #df['pred'] = pred
+        #ids = df.index.get_level_values('id').unique()
+        #y_true = [df['sep3'].loc[id].values for id in ids]
+        #y_pred = [df['pred'].loc[id].values for id in ids]
+        est = RandomBaseline(r)
+        cache = {}
+        call = partial(_cached_call, cache)
+        util = scorer._score(
+            call, est, df, df) #the baseline simply draws bernoulli and needs the shape of the labels
         utils.append(util)
     return utils, np.mean(utils)  
     
@@ -146,8 +152,8 @@ if __name__ == "__main__":
         #        CalculateUtilityScores(passthrough=False, n_jobs=20))]
         #)
 
-        u_fp = u_fp_dict[dataset] 
-
+        u_fp = u_fp_dict[dataset]
+        scorer = get_physionet2019_scorer(shift=0, u_fp=u_fp) #here we dont apply label propagation 
 
         print(f'Processing {dataset} and splits {splits}')
         for split in splits: 
@@ -162,7 +168,8 @@ if __name__ == "__main__":
                                     i, 
                                     n_draws, 
                                     split, 
-                                    dataset ) for i in params)
+                                    dataset,
+                                    scorer) for i in params)
             res_list.append(res)
             #for weight in weights:
             #         
@@ -216,7 +223,7 @@ if __name__ == "__main__":
     
     os.makedirs(out_path, exist_ok=True)
     df.to_csv(
-        os.path.join(out_path, 'random_baselines_parallel_dictionary_u_fp.csv')
+        os.path.join(out_path, 'random_baselines_parallel_dictionary_u_fp_scorer.csv')
     ) 
     
          
