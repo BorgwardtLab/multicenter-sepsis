@@ -120,7 +120,7 @@ def shift_onset_label(patient_id, label, shift):
 class OnlineScoreWrapper:
     """Wraps an online prediction scores to process pandas DataFrames."""
 
-    def __init__(self, score_func, shift_onset_label=0):
+    def __init__(self, score_func, shift_onset_label=0, **kwargs):
         self.score_func = score_func
         self.shift_onset_label = shift_onset_label
 
@@ -170,7 +170,7 @@ class OnlineScoreWrapper:
             per_patient_y.append(patient_y.values)
             per_patient_preds.append(patient_preds.values)
 
-        return self.score_func(per_patient_y, per_patient_preds)
+        return self.score_func(per_patient_y, per_patient_preds, **self.kwargs)
 
 
 class StratifiedPatientKFold(StratifiedKFold):

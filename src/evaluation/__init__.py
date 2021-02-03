@@ -5,7 +5,7 @@ from .sklearn_utils import (
 from sklearn.metrics import make_scorer
 
 
-def get_physionet2019_scorer(shift):
+def get_physionet2019_scorer(shift, **kwargs):
     """Get physionet2019 scorer which corrects for shift.
 
     Args:
@@ -16,7 +16,7 @@ def get_physionet2019_scorer(shift):
         scorer
 
     """
-    return make_scorer(OnlineScoreWrapper(physionet2019_utility, shift))
+    return make_scorer(OnlineScoreWrapper(physionet2019_utility, shift, **kwargs))
 
 __all__ = [
     'physionet2019_utility', 'get_physionet2019_scorer',
