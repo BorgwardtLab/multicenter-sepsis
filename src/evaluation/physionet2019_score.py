@@ -39,8 +39,11 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
                                dt_optimal=-6, dt_late=3.0, max_u_tp=1,
                                min_u_fn=-2, u_fp=-0.05, u_tn=0,
                                check_errors=True, shift_labels=0,
-                               return_all_scores=False):
-    """Compute utility score of physionet 2019 challenge."""
+                               return_all_scores=False, lam=1):
+    """Compute utility score of physionet 2019 challenge. 
+        
+        - lambda: sample weight for septic patients
+    """
     # Check inputs for errors.
     if check_errors:
         if len(predictions) != len(labels):
@@ -112,6 +115,10 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
                 # predictions[t] is probably np.NaN
                 pass
 
+    # apply sample weight lambda to septic patients
+    if is_septic:
+        u = lam * u
+
     # Find total utility for patient.
     if return_all_scores:
         return u
@@ -119,7 +126,7 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
         return np.sum(u)
 
 
-def physionet2019_utility(y_true, y_score, shift_labels=0, u_fp=-0.05):
+def physionet2019_utility(y_true, y_score, shift_labels=0, u_fp=-0.05, lam=1):
     """Compute physionet 2019 Sepsis eary detection utility.
 
     Args:
@@ -155,13 +162,13 @@ def physionet2019_utility(y_true, y_score, shift_labels=0, u_fp=-0.05):
 
         utilities.append(
             compute_prediction_utility(
-                labels, observed_predictions, shift_labels=shift_labels, u_fp=u_fp))
+                labels, observed_predictions, shift_labels=shift_labels, u_fp=u_fp, lam=lam))
         best_utilities.append(
-            compute_prediction_utility(
-                labels, best_predictions, shift_labels=shift_labels, u_fp=u_fp))
+            compute_prediction_utility (
+                labels, best_predictions, shift_labels=shift_labels, u_fp=u_fp, lam=lam))
         inaction_utilities.append(
             compute_prediction_utility(
-                labels, inaction_predictions, shift_labels=shift_labels, u_fp=u_fp))
+                labels, inaction_predictions, shift_labels=shift_labels, u_fp=u_fp, lam=lam))
 
     unnormalized_observed_utility = sum(utilities)
     unnormalized_best_utility = sum(best_utilities)

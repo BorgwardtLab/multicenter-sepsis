@@ -29,9 +29,15 @@ def load_data_from_input_path(input_path, dataset_name, index, extended_features
                         index=index, extended_features=extended_features)
     return data 
 
-def get_pipeline_and_grid(method_name, clf_params, feature_set):
+def get_pipeline_and_grid(args):
     """Get sklearn pipeline and parameter grid."""
     # first determine which feature set to use for current model:
+    # unpack arguments:
+    method_name = args.method_name
+    clf_params = args.clf_params 
+    feature_set = args.feature_set
+    task = args.task
+ 
     steps = [] #pipeline steps
     if feature_set == 'challenge':
         from src.sklearn.data.subsetters import ChallengeFeatureSubsetter
@@ -47,7 +53,12 @@ def get_pipeline_and_grid(method_name, clf_params, feature_set):
         import lightgbm as lgb
         parameters = {'n_jobs': -1}
         parameters.update(clf_params)
-        est = lgb.LGBMClassifier(**parameters)
+        if task == 'classification':
+            est = lgb.LGBMClassifier(**parameters)
+        elif task == 'regression':
+            est == lgb.LGBMRegressor(**parameteres)
+        else:
+            raise ValueError(f'task {task} must be classification or regression') 
         steps.append(('est', est))
         pipe = Pipeline(steps)
         param_dist = {
@@ -60,7 +71,7 @@ def get_pipeline_and_grid(method_name, clf_params, feature_set):
         return pipe, param_dist
     elif method_name == 'lr':
         from sklearn.linear_model import LogisticRegression as LR
-        parameters = {'n_jobs': 10} #-1 led to OOM
+        parameters = {'n_jobs': 1} #10 for non-eicu #-1 led to OOM
         parameters.update(clf_params)
         est = LR(**parameters)
         steps.append(('est', est))
@@ -200,6 +211,10 @@ def main():
         help='flag if extended feature set should be used (incl measurement counter, wavelets etc)'
     )
     parser.add_argument(
+        '--task', default='classification', 
+        help='which prediction task to use: [classification, regression]'
+    )
+    parser.add_argument(
         '--index', default='multi',
         help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
     )
@@ -220,7 +235,7 @@ def main():
         data['X_train'] = data['baselines_train']
         data['X_validation'] = data['baselines_validation']
  
-    pipeline, hparam_grid = get_pipeline_and_grid(args.method, args.clf_params, args.feature_set)
+    pipeline, hparam_grid = get_pipeline_and_grid(args)
 
     scores = {
         'physionet_utility': get_physionet2019_scorer(args.label_propagation),
