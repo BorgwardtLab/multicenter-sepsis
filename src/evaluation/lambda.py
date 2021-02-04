@@ -50,12 +50,12 @@ class LambdaCalculator:
         """
         
         u_fp = self.u_fp
-        ids = data.index.get_level_values(0) #works both on single and multi index 
+        ids = data.index.get_level_values(0).unique() #works both on single and multi index 
         # level, assuming that ids are first index 
         t_minus = 0
         t_plus = 0
         septic = 0
-        output = Parallel(n_jobs=self.n_jobs)(
+        output = Parallel(n_jobs=self.n_jobs, verbose=1)(
                 delayed(self._process_patient)(data.loc[[i]]) for i in ids)
         for (t_m, t_p, s) in output:
             t_minus += t_m
@@ -63,7 +63,7 @@ class LambdaCalculator:
             septic += s
             #sanity check: at most one can be non-zero:
             assert t_m * t_p == 0
-        lam = (u_fp * t_minus) / (33 * septic - u_fp * t_plus) 
+        lam = (-u_fp * t_minus) / (33 * septic + u_fp * t_plus) 
         
         self.lam = lam
         self.t_minus = t_minus
@@ -78,6 +78,6 @@ if __name__ == "__main__":
     features_path = 'datasets/physionet2019/data/sklearn/processed/X_features_train.pkl' 
     X = load_pickle(features_path)
     
-    calc = LambdaCalculator(n_jobs=10)
+    calc = LambdaCalculator(n_jobs=50)
     lam = calc(X)
     embed()
