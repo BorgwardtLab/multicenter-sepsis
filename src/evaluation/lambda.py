@@ -42,18 +42,20 @@ class LambdaCalculator:
             t_minus = len(y)
         return t_minus, t_plus, is_septic
 
+    
     def __call__(self, data):
         """
         Inputs:
             - data: pandas df of dataset
         """
+        
         u_fp = self.u_fp
         ids = data.index.get_level_values(0) #works both on single and multi index 
         # level, assuming that ids are first index 
         t_minus = 0
         t_plus = 0
         septic = 0
-        output = Parallel(n_jobs=n_jobs, max_nbytes=None, verbose=1)(
+        output = Parallel(n_jobs=self.n_jobs)(
                 delayed(self._process_patient)(data.loc[[i]]) for i in ids)
         for (t_m, t_p, s) in output:
             t_minus += t_m
@@ -76,6 +78,6 @@ if __name__ == "__main__":
     features_path = 'datasets/physionet2019/data/sklearn/processed/X_features_train.pkl' 
     X = load_pickle(features_path)
     
-    calc = LambdaCalculator(n_jobs=30)
+    calc = LambdaCalculator(n_jobs=10)
     lam = calc(X)
     embed()
