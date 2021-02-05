@@ -136,8 +136,14 @@ if __name__ == "__main__":
         'eicu': -0.03,
         'mimic3': -0.075,
         'aumc': -0.045,
+    }
+    lam_dict = {'physionet2019': 0.9450719692139626, 
+                'mimic3': 0.2264304193825734, 
+                'hirid': 0.10039156674302935, 
+                'aumc': 0.3726159954477741, 
+                'eicu': 0.6234856778169942
     } 
-
+    
     out_path = os.path.join('results', 'pos_weight_analysis')
     stats = pd.read_csv(
         os.path.join(out_path, 'dataset_stats.csv')
@@ -155,8 +161,9 @@ if __name__ == "__main__":
         #        CalculateUtilityScores(passthrough=False, n_jobs=20))]
         #)
 
-        u_fp = u_fp_dict[dataset]
-        scorer = get_physionet2019_scorer(shift=0, kwargs={'u_fp': u_fp}) #here we dont apply label propagation 
+        #u_fp = u_fp_dict[dataset]
+        lam = lam_dict[dataset]
+        scorer = get_physionet2019_scorer(shift=0, kwargs={'lam': lam}) #here we dont apply label propagation 
 
         print(f'Processing {dataset} and splits {splits}')
         for split in splits: 
@@ -226,7 +233,7 @@ if __name__ == "__main__":
     
     os.makedirs(out_path, exist_ok=True)
     df.to_csv(
-        os.path.join(out_path, 'random_baselines_parallel_dictionary_u_fp_scorer.csv')
+        os.path.join(out_path, 'random_baselines_parallel_dictionary_lambda.csv')
     ) 
     
          
