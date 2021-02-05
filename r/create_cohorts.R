@@ -62,7 +62,7 @@ cohort <- function(source, min_age = 14) {
 }
 
 if (is_lsf()) {
-  src <- "all"
+  src <- check_src("all")
 } else {
   src <- check_src(parse_args(src_opt))
 }
