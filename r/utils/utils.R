@@ -11,3 +11,5 @@ n_cores <- function() {
 cfg_path <- function(file) {
   file.path(here::here("r", "config"), file)
 }
+
+is_lsf <- function() !is.na(Sys.getenv("LSB_JOBID", unset = NA))

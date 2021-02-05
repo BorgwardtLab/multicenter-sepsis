@@ -6,7 +6,9 @@
 #BSUB -J cohorts
 #BSUB -o results/cohorts_%J.out
 
-lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)
+invisible(
+  lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)
+)
 
 eicu_hospitals <- function(thresh = 0.05) {
 
@@ -19,16 +21,16 @@ eicu_hospitals <- function(thresh = 0.05) {
                   cols = c("patientunitstayid", "hospitalid"))
 
   dat <- merge(eicu, hosp, all = TRUE)
-  dat <- dat[, list(septic = sum(sepsis_3, na.rm = TRUE),
+  dat <- dat[, list(septic = sum(sep3, na.rm = TRUE),
                     total = .N), by = "hospitalid"]
   dat <- dat[, prop := septic / total]
 
   res <- unique(dat$hospitalid[dat$prop >= thresh])
 
   message(
-    "* selecting ", length(res), " hospitals from ",
-    length(unique(hosp$hospitalid)), " based on a sep3 prevalence of ", thres,
-    " "
+    "\n--> selecting ", length(res), " hospitals from ",
+    length(unique(hosp$hospitalid)), " based on a sep3 prevalence of ", thresh,
+    "\n"
   )
 
   res
@@ -44,22 +46,27 @@ cohort <- function(source, min_age = 14) {
   nrw <- nrow(res)
   res <- res[age > min_age, ]
 
-  message("* removing ", nrw - nrow(res), " from ", nrw,
-          " ids due to min age of ", min_age)
+  message("\n--> removing ", nrw - nrow(res), " from ", nrw,
+          " ids due to min age of ", min_age, "\n")
 
   if (grepl("eicu", source)) {
     hosp <- load_id("patient", source, cols = c(id_var(res), "hospitalid"))
     hosp <- hosp[hospitalid %in% eicu_hospitals(), ]
     nrw <- nrow(res)
     res <- merge(res, hosp)
-    message("* removing ", nrw - nrow(res), " from ", nrw,
-            " ids based on hosp selection")
+    message("\n--> removing ", nrw - nrow(res), " from ", nrw,
+            " ids based on hosp selection\n")
   }
 
   id_col(res)
 }
 
-src <- check_src(parse_args(src_opt))
+if (is_lsf()) {
+  src <- "all"
+} else {
+  src <- check_src(parse_args(src_opt))
+}
+
 res <- lapply(src, cohort)
 names(res) <- src
 
