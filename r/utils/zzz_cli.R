@@ -18,7 +18,7 @@ out_dir <- optparse::make_option(
 )
 
 parse_args <- function(...) {
-  parser <- OptionParser(option_list = list(...))
+  parser <- optparse::OptionParser(option_list = list(...))
   res <- optparse::parse_args(parser)
   attr(res, "parser") <- parser
   res
@@ -43,20 +43,25 @@ check_src <- function(opt, extra = NULL) {
 
   data_opts <- c(all, "demo", "prod", "all", extra)
 
-  check_args(
-    length(opt$src) == 1L && opt$src %in% data_opts,
-    attr(opt, "parser"),
-    "\nSelect a data source among the following options:\n  ",
-    paste0("\"", data_opts, "\"", collapse = ", "), "\n\n"
-  )
+  if (is.list(opt)) {
 
-  if (identical(opt$src, "all")) {
+    check_args(
+      length(opt$src) == 1L && opt$src %in% data_opts,
+      attr(opt, "parser"),
+      "\nSelect a data source among the following options:\n  ",
+      paste0("\"", data_opts, "\"", collapse = ", "), "\n\n"
+    )
+
+    opt <- opt$src
+  }
+
+  if (identical(opt, "all")) {
     all
-  } else if (identical(opt$src, "demo")) {
+  } else if (identical(opt, "demo")) {
     demo
-  } else if (identical(opt$src, "prod")) {
+  } else if (identical(opt, "prod")) {
     prod
   } else {
-    opt$src
+    opt
   }
 }
