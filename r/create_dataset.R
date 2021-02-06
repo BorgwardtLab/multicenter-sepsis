@@ -1,91 +1,18 @@
 #!/usr/bin/env Rscript
 
-pkgs <- c("optparse", "here", "ricu")
-miss <- pkgs %in% installed.packages()
+#BSUB -W 1:00
+#BSUB -n 1
+#BSUB -R rusage[mem=24000]
+#BSUB -J cohorts
+#BSUB -o results/cohorts_%J.out
 
-if (any(!miss)) {
-  install.packages(pkgs[!miss])
-}
-
-load <- vapply(pkgs, library, logical(1L), character.only = TRUE,
-               logical.return = TRUE)
-
-stopifnot(all(load))
-
-source(here("r", "config.R"))
-source(here("r", "utils.R"))
-
-option_list <- list(
-  make_option(c("-s", "--source"), type = "character", default = "mimic_demo",
-              help = "data source name (e.g. \"mimic\")",
-              metavar = "source", dest = "src"),
-  make_option(c("-d", "--dir"), type = "character",
-              default = "data",
-              help = "output directory [default = \"%default\"]",
-              metavar = "dir", dest = "path")
+invisible(
+  lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)
 )
 
-opt_parser <- OptionParser(option_list = option_list)
-opt <- parse_args(opt_parser)
+args <- parse_args(src_opt, out_dir)
 
-demo <- c("mimic_demo", "eicu_demo")
-prod <- c("mimic", "eicu", "hirid", "aumc")
-all  <- c(demo, prod)
+src <- check_src(args, "challenge")
+dir <- check_dir(args)
 
-data_opts <- c(all, "demo", "prod", "all", "challenge")
-
-if (!(length(opt$src) == 1L && opt$src %in% data_opts)) {
-  cat("\nSelect a data source among the following options:\n  ",
-      paste0("\"", data_opts, "\"", collapse = ", "), "\n\n")
-  print_help(opt_parser)
-  q("no", status = 1, runLast = FALSE)
-}
-
-if (!dir.exists(opt$path)) {
-  cat("\nThe output directory must be a valid directory. You requested\n  ",
-      opt$path, "\n\n")
-  print_help(opt_parser)
-  q("no", status = 1, runLast = FALSE)
-}
-
-setwd(opt$path)
-
-if (identical(opt$src, "all")) {
-  sources <- all
-} else if (identical(opt$src, "demo")) {
-  sources <- demo
-} else if (identical(opt$src, "prod")) {
-  sources <- prod
-} else {
-  sources <- opt$src
-}
-
-if ("challenge" %in% sources) {
-  Sys.setenv(CHALLENGE_DATA_DIR = here("datasets", "physionet2019", "data",
-                                       "training_setB"))
-}
-
-for (src in sources) {
-
-  if (!is_data_avail(src)) {
-    message("not all required data for `", src, "` is available")
-    setup_src_data(src)
-  }
-
-  message("dumping `", src, "`")
-
-  dump_dataset(source = src, dir = ".")
-
-  if (!dir.exists("shared")) {
-    dir.create("shared")
-  }
-
-  zip_file <- file.path("shared",
-                        paste0(src, "_", packageVersion("ricu"), ".zip"))
-
-  if (file.exists(zip_file)) {
-    unlink(zip_file)
-  }
-
-  zip(zip_file, src, flags = "-qr9X")
-}
+for (x in src) export_data(x)

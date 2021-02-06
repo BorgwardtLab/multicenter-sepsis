@@ -35,3 +35,7 @@ read_var_json <- function(path = cfg_path("variables.json")) {
     col_spec = I(lapply(col, do.call, list()))
   )
 }
+
+create_parquet <- function(x, name) {
+  arrow::write_parquet(x, paste0(name, ".parquet"))
+}
