@@ -15,4 +15,7 @@ args <- parse_args(src_opt, out_dir)
 src <- check_src(args, "challenge")
 dir <- check_dir(args)
 
-for (x in src) export_data(x)
+for (x in src) {
+  msg("\n\nexporting data for {x}\n\n")
+  export_data(x, dest_dir = dir)
+}

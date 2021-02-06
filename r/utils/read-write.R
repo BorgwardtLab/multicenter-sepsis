@@ -39,3 +39,7 @@ read_var_json <- function(path = cfg_path("variables.json")) {
 create_parquet <- function(x, name) {
   arrow::write_parquet(x, paste0(name, ".parquet"))
 }
+
+read_parquet <- function(name) {
+  arrow::read_parquet(paste0(name, ".parquet"))
+}
