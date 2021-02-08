@@ -74,10 +74,13 @@ class LambdaCalculator:
         return lam
 
 if __name__ == "__main__":
-
-    features_path = 'datasets/physionet2019/data/sklearn/processed/X_features_train.pkl' 
-    X = load_pickle(features_path)
-    
-    calc = LambdaCalculator(n_jobs=50)
-    lam = calc(X)
+    datasets = [ 'physionet2019', 'mimic3', 'hirid', 'aumc', 'eicu']
+    features_path = 'datasets/{}/data/sklearn/processed/X_features_train.pkl' 
+    result = {}
+    for dataset in datasets:
+        X = load_pickle(features_path.format(dataset))
+        calc = LambdaCalculator(n_jobs=50)
+        lam = calc(X)
+        result[dataset] = lam
+    print(result)
     embed()
