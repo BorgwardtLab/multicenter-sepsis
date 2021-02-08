@@ -6,37 +6,13 @@
 #BSUB -J glm-big-16
 #BSUB -o data/glm/glm-big-16_%J.out
 
-n_cores <- function() {
-
-  res <- Sys.getenv("LSB_DJOB_NUMPROC", unset = parallel::detectCores() / 2L)
-
-  message("using ", res, " cores")
-
-  as.integer(res)
-}
+invisible(
+  lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)
+)
 
 res_name <- function() {
   res <- paste0(Sys.getenv("LSB_JOBNAME"), "_", Sys.getenv("LSB_JOBID"))
   paste0(if (identical(res, "_")) "results" else res, ".qs")
-}
-
-read_to_bm <- function(path, ...) {
-
-  file <- arrow::ParquetFileReader$create(path)
-
-  cols <- names(file$GetSchema())
-  sel  <- !cols %in% c("time", "id")
-
-  res <- bigmemory::big.matrix(file$num_rows, sum(sel), type = "double",
-                               dimnames = list(NULL, cols[sel]), shared = TRUE)
-
-  cols <- which(sel)
-
-  for (i in seq_along(cols)) {
-    res[, i] <- as.double(file$ReadColumn(i)$as_vector())
-  }
-
-  res
 }
 
 read_response <- function(path) arrow::read_parquet(path)$sep3
