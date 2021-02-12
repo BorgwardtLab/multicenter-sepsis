@@ -8,7 +8,7 @@ n_cores <- function() {
   as.integer(res)
 }
 
-cfg_path <- function(file) file.path(root_dir, "r", "config", file)
+cfg_path <- function(file) file.path(root_dir, "config", file)
 
 is_lsf <- function() !is.na(Sys.getenv("LSB_JOBID", unset = NA))
 
