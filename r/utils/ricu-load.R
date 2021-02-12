@@ -248,13 +248,9 @@ export_data <- function(src, dest_dir = data_path("export"),
   tsv <- paste0(tsn, "_raw")
   dat <- rename_cols(dat, tsv, tsn, by_ref = TRUE)
 
-  tmp <- tempfile()
-  dir.create(tmp)
-  on.exit(unlink(tmp, recursive = TRUE))
-
-  ind <- augment(dat, Negate(is.na), "ind", tsv, tmpdir = tmp)
+  ind <- augment(dat, Negate(is.na), "ind", tsv)
   lof <- augment(dat, data.table::nafill, "locf", tsv, by = id_vars(dat),
-                 tmpdir = tmp, type = "locf")
+                 type = "locf")
 
   funs <- c("min", "max", "mean", "var")
   wins <- c(4L, 8L, 16L)
@@ -265,9 +261,12 @@ export_data <- function(src, dest_dir = data_path("export"),
     suffix = paste0(rep(funs, length(wins)), rep(wins, each = length(funs))),
     cols = list(tsv),
     win = hours(rep(wins, each = length(funs))),
-    tmpdir = tmp,
     na.rm = TRUE
   )
+
+  dat <- dat[, c(index_var(dat)) := as.double(
+    get(index_var(dat)), units = "hours"
+  )]
 
   lbk <- do.call("c", lbk)
   res <- c(dat, ind, lof, lbk)
