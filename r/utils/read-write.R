@@ -21,7 +21,7 @@ read_to_bm <- function(path, ...) {
 read_var_json <- function(path = cfg_path("variables.json")) {
 
   get_one <- function(x, i) {
-    if (is.null(x[[i]][[1L]])) NA_character_ else x[[i]][[1L]]
+    if (length(x[[i]])) x[[i]][[1L]] else NA_character_
   }
 
   get_chr <- function(x, i) vapply(x, get_one, character(1L), i)
@@ -32,7 +32,9 @@ read_var_json <- function(path = cfg_path("variables.json")) {
   data.frame(
     concept = get_chr(cfg, 1L),
     callenge = get_chr(cfg, 2L),
-    col_spec = I(lapply(col, do.call, list()))
+    col_spec = I(lapply(col, do.call, list())),
+    name = get_chr(cfg, 4L),
+    category = get_chr(cfg, 5L)
   )
 }
 

@@ -153,20 +153,125 @@ sepsis3_crit <- function(source, pids = NULL,
   sep3(dat, si)
 }
 
-export_data <- function(src, dest_dir = data_path("export"), ...) {
+augment <- function(x, fun, suffix,
+                    cols = grep("_raw$", colnames(x), value = TRUE),
+                    by = NULL, win = NULL, tmpdir = tempdir(),
+                    names = sub("_raw$", paste0("_", suffix), cols), ...) {
+
+  inf_to_na <- function(x) replace(x, is.infinite(x), NA)
+
+  msg("\n\n--> augmentation step {suffix}\n")
+
+  if (is.numeric(win)) {
+    win <- as.difftime(win, units = "hours")
+  }
+
+  if (is.null(win) && is.null(by)) {
+
+    res <- x[, lapply(.SD, fun, ...), .SDcols = c(cols)]
+
+  } else if (is.null(win)) {
+
+    res <- x[, lapply(.SD, fun, ...), .SDcols = c(cols), by = c(by)]
+
+  } else if (is.character(fun)) {
+
+    fix_inf <- FALSE
+
+    res <- withCallingHandlers({
+      switch(fun,
+        min  = slide(x, lapply(.SD, min,  ...), win, .SDcols = c(cols)),
+        max  = slide(x, lapply(.SD, max,  ...), win, .SDcols = c(cols)),
+        mean = slide(x, lapply(.SD, mean, ...), win, .SDcols = c(cols)),
+        var  = slide(x, lapply(.SD, var,  ...), win, .SDcols = c(cols))
+      )
+    }, warning = function(w) {
+
+      if (identical(substr(conditionMessage(w), 1, 24),
+                    "no non-missing arguments")) {
+
+        fix_inf <<- TRUE
+        tryInvokeRestart("muffleWarning")
+      }
+    })
+
+    if (fix_inf) {
+      res <- res[, c(cols) := lapply(.SD, inf_to_na), .SDcols = c(cols)]
+    }
+
+  } else {
+
+    res <- slide(x, lapply(.SD, fun, ...), win, .SDcols = c(cols))
+  }
+
+  assert(identical(nrow(x), nrow(res)))
+
+  res <- rename_cols(res, names, cols, by_ref = TRUE)
+  res <- rm_cols(res, setdiff(colnames(res), names), by_ref = TRUE)
+
+  res
+}
+
+export_data <- function(src, dest_dir = data_path("export"),
+                        var_cfg = cfg_path("variables.json"), ...) {
+
+  aug_fun_win <- function(fun, win, suf)
 
   assert(is.string(src), dir.exists(dir))
 
   if (identical(src, "challenge")) {
-    dat <- load_challenge(...)
+    dat <- load_challenge(cfg = var_cfg)
   } else {
-    dat <- load_ricu(src, ...)
+    dat <- load_ricu(src, var_cfg = var_cfg, ...)
   }
 
   dat <- dat[, onset := sep3]
   dat <- replace_na(dat, type = "locf", by_ref = TRUE, vars = "sep3",
                     by = id_vars(dat))
   dat <- replace_na(dat, FALSE, by_ref = TRUE, vars = "sep3")
+  dat <- dat[, c("sex") := list(sex == "Female")]
 
-  create_parquet(dat, file.path(dest_dir, src))
+  cfg <- read_var_json(var_cfg)
+  cfg <- cfg[!is.na(cfg$concept), ]
+
+  dat <- rename_cols(dat, cfg$name, cfg$concept, by_ref = TRUE)
+
+  missing <- !cfg$name %in% data_vars(dat)
+
+  if (any(missing)) {
+    dat <- dat[, c(cfg$name[missing]) := NA_real_]
+  }
+
+  dat <- data.table::setcolorder(dat, c(meta_vars(dat), cfg$name))
+
+  tsn <- cfg$name[!cfg$category %in% c("static", "baseline")]
+  tsv <- paste0(tsn, "_raw")
+  dat <- rename_cols(dat, tsv, tsn, by_ref = TRUE)
+
+  tmp <- tempfile()
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE))
+
+  ind <- augment(dat, Negate(is.na), "ind", tsv, tmpdir = tmp)
+  lof <- augment(dat, data.table::nafill, "locf", tsv, by = id_vars(dat),
+                 tmpdir = tmp, type = "locf")
+
+  funs <- c("min", "max", "mean", "var")
+  wins <- c(4L, 8L, 16L)
+
+  lbk <- Map(augment,
+    list(dat),
+    fun = rep(funs, length(wins)),
+    suffix = paste0(rep(funs, length(wins)), rep(wins, each = length(funs))),
+    cols = list(tsv),
+    win = hours(rep(wins, each = length(funs))),
+    tmpdir = tmp,
+    na.rm = TRUE
+  )
+
+  lbk <- do.call("c", lbk)
+  res <- c(dat, ind, lof, lbk)
+  res <- data.table::setDT(res)
+
+  create_parquet(res, file.path(dest_dir, src))
 }
