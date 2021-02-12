@@ -28,8 +28,8 @@ eicu_hospitals <- function(thresh = 0.05) {
   res <- unique(dat$hospitalid[dat$prop >= thresh])
 
   msg("\n\n--> selecting {length(res)} hospitals from",
-  " {length(unique(hosp$hospitalid))} based on a sep3 prevalence of",
-  " {thresh}\n")
+      " {length(unique(hosp$hospitalid))} based on a sep3 prevalence of",
+      " {thresh}\n")
 
   res
 }

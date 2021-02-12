@@ -2,431 +2,561 @@
   {
     "concept": ["hr"],
     "challenge": ["HR"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["hr"],
+    "category": ["vitals"]
   },
   {
     "concept": ["o2sat"],
     "challenge": ["O2Sat"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["o2sat"],
+    "category": ["vitals"]
   },
   {
     "concept": ["temp"],
     "challenge": ["Temp"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["temp"],
+    "category": ["vitals"]
   },
   {
     "concept": ["sbp"],
     "challenge": ["SBP"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["sbp"],
+    "category": ["vitals"]
   },
   {
     "concept": ["map"],
     "challenge": ["MAP"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["map"],
+    "category": ["vitals"]
   },
   {
     "concept": ["dbp"],
     "challenge": ["DBP"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["dbp"],
+    "category": ["vitals"]
   },
   {
     "concept": ["resp"],
     "challenge": ["Resp"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["resp"],
+    "category": ["vitals"]
   },
   {
     "concept": ["etco2"],
     "challenge": ["EtCO2"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["be"],
-    "challenge": ["BaseExcess"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["bicar"],
-    "challenge": ["HCO3"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["etco2"],
+    "category": ["vitals"]
   },
   {
     "concept": ["fio2"],
     "challenge": ["FiO2"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["fio2"],
+    "category": ["vitals"]
+  },
+  {
+    "concept": ["be"],
+    "challenge": ["BaseExcess"],
+    "type": ["double"],
+    "name": ["be"],
+    "category": ["chemistry"]
+  },
+  {
+    "concept": ["bicar"],
+    "challenge": ["HCO3"],
+    "type": ["double"],
+    "name": ["bicar"],
+    "category": ["chemistry"]
   },
   {
     "concept": ["ph"],
     "challenge": ["pH"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["ph"],
+    "category": ["chemistry"]
   },
   {
     "concept": ["pco2"],
     "challenge": ["PaCO2"],
-    "type": ["double"]
-  },
-  {
-    "concept": [null],
-    "challenge": ["SaO2"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["ast"],
-    "challenge": ["AST"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["bun"],
-    "challenge": ["BUN"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["alp"],
-    "challenge": ["Alkalinephos"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["ca"],
-    "challenge": ["Calcium"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["pco2"],
+    "category": ["chemistry"]
   },
   {
     "concept": ["cl"],
     "challenge": ["Chloride"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["crea"],
-    "challenge": ["Creatinine"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["bili_dir"],
-    "challenge": ["Bilirubin_direct"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["glu"],
-    "challenge": ["Glucose"],
-    "type": ["double"]
-  },
-  {
-    "concept": ["lact"],
-    "challenge": ["Lactate"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["cl"],
+    "category": ["chemistry"]
   },
   {
     "concept": ["mg"],
     "challenge": ["Magnesium"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["mg"],
+    "category": ["chemistry"]
   },
   {
     "concept": ["phos"],
     "challenge": ["Phosphate"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["phos"],
+    "category": ["chemistry"]
   },
   {
     "concept": ["k"],
     "challenge": ["Potassium"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["k"],
+    "category": ["chemistry"]
+  },
+  {
+    "concept": {},
+    "challenge": ["SaO2"],
+    "type": ["double"],
+    "name": {},
+    "category": {}
+  },
+  {
+    "concept": ["ast"],
+    "challenge": ["AST"],
+    "type": ["double"],
+    "name": ["ast"],
+    "category": ["organs"]
+  },
+  {
+    "concept": ["bun"],
+    "challenge": ["BUN"],
+    "type": ["double"],
+    "name": ["bun"],
+    "category": ["organs"]
+  },
+  {
+    "concept": ["alp"],
+    "challenge": ["Alkalinephos"],
+    "type": ["double"],
+    "name": ["alp"],
+    "category": ["organs"]
+  },
+  {
+    "concept": ["ca"],
+    "challenge": ["Calcium"],
+    "type": ["double"],
+    "name": ["ca"],
+    "category": ["organs"]
+  },
+  {
+    "concept": ["crea"],
+    "challenge": ["Creatinine"],
+    "type": ["double"],
+    "name": ["crea"],
+    "category": ["organs"]
+  },
+  {
+    "concept": ["bili_dir"],
+    "challenge": ["Bilirubin_direct"],
+    "type": ["double"],
+    "name": ["bildir"],
+    "category": ["organs"]
+  },
+  {
+    "concept": ["glu"],
+    "challenge": ["Glucose"],
+    "type": ["double"],
+    "name": ["glu"],
+    "category": ["organs"]
+  },
+  {
+    "concept": ["lact"],
+    "challenge": ["Lactate"],
+    "type": ["double"],
+    "name": ["lact"],
+    "category": ["organs"]
   },
   {
     "concept": ["bili"],
     "challenge": ["Bilirubin_total"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["bili"],
+    "category": ["organs"]
   },
   {
     "concept": ["tri"],
     "challenge": ["TroponinI"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["tri"],
+    "category": ["organs"]
   },
   {
     "concept": ["hct"],
     "challenge": ["Hct"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["hct"],
+    "category": ["hemo"]
   },
   {
     "concept": ["hgb"],
     "challenge": ["Hgb"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["hgb"],
+    "category": ["hemo"]
   },
   {
     "concept": ["ptt"],
     "challenge": ["PTT"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["ptt"],
+    "category": ["hemo"]
   },
   {
     "concept": ["wbc"],
     "challenge": ["WBC"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["wbc"],
+    "category": ["hemo"]
   },
   {
     "concept": ["fgn"],
     "challenge": ["Fibrinogen"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["fgn"],
+    "category": ["hemo"]
   },
   {
     "concept": ["plt"],
     "challenge": ["Platelets"],
-    "type": ["double"]
+    "type": ["double"],
+    "name": ["plt"],
+    "category": ["hemo"]
   },
   {
     "concept": ["age"],
     "challenge": ["Age"],
-    "type": ["integer"]
+    "type": ["integer"],
+    "name": ["age"],
+    "category": ["static"]
   },
   {
     "concept": ["sex"],
     "challenge": ["Gender"],
-    "type": ["integer"]
+    "type": ["integer"],
+    "name": ["female"],
+    "category": ["static"]
   },
   {
-    "concept": [null],
+    "concept": {},
     "challenge": ["Unit1"],
-    "type": ["skip"]
+    "type": ["skip"],
+    "name": {},
+    "category": {}
   },
   {
-    "concept": [null],
+    "concept": {},
     "challenge": ["Unit2"],
-    "type": ["skip"]
+    "type": ["skip"],
+    "name": {},
+    "category": {}
   },
   {
-    "concept": [null],
+    "concept": {},
     "challenge": ["HospAdmTime"],
-    "type": ["skip"]
+    "type": ["skip"],
+    "name": {},
+    "category": {}
   },
   {
-    "concept": [null],
+    "concept": {},
     "challenge": ["ICULOS"],
-    "type": ["integer"]
+    "type": ["integer"],
+    "name": {},
+    "category": {}
   },
   {
-    "concept": [null],
+    "concept": {},
     "challenge": ["SepsisLabel"],
-    "type": ["logical"]
-  },
-  {
-    "concept": ["alb"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["alt"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["basos"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["bnd"],
-    "challenge": [null],
-    "type": ["double"]
+    "type": ["logical"],
+    "name": {},
+    "category": {}
   },
   {
     "concept": ["cai"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["ck"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["ckmb"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["crp"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["eos"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["esr"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["hbco"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["inr_pt"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["lymph"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["mch"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["mchc"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["mcv"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["methb"],
-    "challenge": [null],
-    "type": ["double"]
+    "challenge": {},
+    "type": ["double"],
+    "name": ["cai"],
+    "category": ["chemistry"]
   },
   {
     "concept": ["na"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["neut"],
-    "challenge": [null],
-    "type": ["double"]
+    "challenge": {},
+    "type": ["double"],
+    "name": ["na"],
+    "category": ["chemistry"]
   },
   {
     "concept": ["po2"],
-    "challenge": [null],
-    "type": ["double"]
+    "challenge": {},
+    "type": ["double"],
+    "name": ["po2"],
+    "category": ["chemistry"]
   },
   {
-    "concept": ["pt"],
-    "challenge": [null],
-    "type": ["double"]
+    "concept": ["alb"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["alb"],
+    "category": ["organs"]
   },
   {
-    "concept": ["rbc"],
-    "challenge": [null],
-    "type": ["double"]
+    "concept": ["alt"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["alt"],
+    "category": ["organs"]
   },
   {
-    "concept": ["rdw"],
-    "challenge": [null],
-    "type": ["double"]
+    "concept": ["ck"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["ck"],
+    "category": ["organs"]
   },
   {
-    "concept": ["tco2"],
-    "challenge": [null],
-    "type": ["double"]
+    "concept": ["ckmb"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["ckmb"],
+    "category": ["organs"]
+  },
+  {
+    "concept": ["crp"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["crp"],
+    "category": ["organs"]
   },
   {
     "concept": ["tnt"],
-    "challenge": [null],
-    "type": ["double"]
+    "challenge": {},
+    "type": ["double"],
+    "name": ["tnt"],
+    "category": ["organs"]
   },
   {
-    "concept": ["abx"],
-    "challenge": [null],
-    "type": ["logical"]
+    "concept": ["urine"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["urine"],
+    "category": ["organs"]
   },
   {
-    "concept": ["ins"],
-    "challenge": [null],
-    "type": ["double"]
+    "concept": ["basos"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["basos"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["bnd"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["bnd"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["eos"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["eos"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["esr"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["esr"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["hbco"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["hbco"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["inr_pt"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["inrpt"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["lymph"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["lymph"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["mch"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["mch"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["mchc"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["mchc"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["mcv"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["mcv"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["methb"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["methb"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["neut"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["neut"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["pt"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["pt"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["rbc"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["rbc"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["rdw"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["rdw"],
+    "category": ["hemo"]
+  },
+  {
+    "concept": ["tco2"],
+    "challenge": {},
+    "type": ["double"],
+    "name": ["tco2"],
+    "category": ["hemo"]
   },
   {
     "concept": ["weight"],
-    "challenge": [null],
-    "type": ["double"]
+    "challenge": {},
+    "type": ["double"],
+    "name": ["weight"],
+    "category": ["static"]
   },
   {
     "concept": ["height"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["vaso_ind"],
-    "challenge": [null],
-    "type": ["logical"]
-  },
-  {
-    "concept": ["vent_ind"],
-    "challenge": [null],
-    "type": ["logical"]
-  },
-  {
-    "concept": ["gcs"],
-    "challenge": [null],
-    "type": ["integer"]
-  },
-  {
-    "concept": ["rass"],
-    "challenge": [null],
-    "type": ["double"]
-  },
-  {
-    "concept": ["urine24"],
-    "challenge": [null],
-    "type": ["double"]
+    "challenge": {},
+    "type": ["double"],
+    "name": ["height"],
+    "category": ["static"]
   },
   {
     "concept": ["sofa_resp"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["sresp"],
+    "category": ["baseline"]
   },
   {
     "concept": ["sofa_coag"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["scoag"],
+    "category": ["baseline"]
   },
   {
     "concept": ["sofa_liver"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["sliver"],
+    "category": ["baseline"]
   },
   {
     "concept": ["sofa_cardio"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["scardio"],
+    "category": ["baseline"]
   },
   {
     "concept": ["sofa_cns"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["scns"],
+    "category": ["baseline"]
   },
   {
     "concept": ["sofa_renal"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["srenal"],
+    "category": ["baseline"]
   },
   {
     "concept": ["sofa"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["sofa"],
+    "category": ["baseline"]
   },
   {
     "concept": ["qsofa"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["qsofa"],
+    "category": ["baseline"]
   },
   {
     "concept": ["sirs"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["sirs"],
+    "category": ["baseline"]
   },
   {
     "concept": ["news"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["news"],
+    "category": ["baseline"]
   },
   {
     "concept": ["mews"],
-    "challenge": [null],
-    "type": ["integer"]
+    "challenge": {},
+    "type": ["integer"],
+    "name": ["mews"],
+    "category": ["baseline"]
   }
 ]
