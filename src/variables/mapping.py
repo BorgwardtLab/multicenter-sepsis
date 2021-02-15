@@ -13,16 +13,20 @@ class VariableMapping:
     as output_col.
     
     """
-    def __init__(self, variable_file='config/variables.json', input_col='concept', output_col='name'):
+    def __init__(self, variable_file='config/variables.json', 
+                 input_col='concept', output_col='name',
+                 keys={'id': 'stay_id', 'time':'stay_time', 'label': 'sep3'}):
         """
         Arguments:
             - variable_file: path to json file containing all variable mappings
             - input_col: column in resulting df which is used to query variable name
-            - output_col: column in resulting df which is used to return variable name  
+            - output_col: column in resulting df which is used to return variable name 
+            - keys: dict of default variables to use in the core set 
         """
         self.input_col = input_col
         self.output_col = output_col
         self.var_df = self._load_and_process(variable_file) 
+        self.keys = keys 
 
     def _load_json(self, fpath):
         with open(fpath, 'r') as f:
@@ -53,12 +57,20 @@ class VariableMapping:
         df = df.apply(self._formatting) 
         return df 
         
-    def __call__(self, x):
+    def __call__(self, x, suffix=None):
         """
-        map input variable string x to output variable
+        map input variable string x to output variable.
+        If suffix is provided input is mapped to <output_suffix>.
         """
         df = self.var_df
-        return df[df[self.input_col] == x][self.output_col]
+        output_var = df[df[self.input_col] == x][self.output_col]
+        if suffix:
+            cat = self.check_cat(output_var[0], variable_col=self.output_col)
+            if all([c not in ['static', 'baseline'] for c in cat]):
+                output_var = '_'.join([output_var[0], suffix])
+            else:
+                output_var = output_var[0]
+        return output_var 
     
     def all_cat(self, category, category_col='category'):
         """
@@ -74,17 +86,16 @@ class VariableMapping:
         variable and variable_col.
         """
         df = self.var_df
-        return df[df[variable_col] == variable][category_col] #to return string 
+        return df[df[variable_col] == variable][category_col][0] #to return string 
 
     @property
-    def core_set(self, suffices=['raw', 'locf'],
-        default_keys=['stay_id', 'stay_time', 'sep3']):
+    def core_set(self, suffices=['raw', 'locf']):
         """
         Array of core variables to use.
         """
         df = self.var_df
         df = df[~df[self.output_col].isnull()] # we are only interested in those cols
-        result = default_keys.copy() 
+        result = list(self.keys.values()) 
         variables = df[self.output_col] 
         for i, suffix in enumerate(suffices):
             for v in variables:
