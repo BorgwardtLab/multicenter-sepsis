@@ -235,28 +235,6 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         return df
 
 
-class DropLabels(TransformerMixin, BaseEstimator):
-    """
-    Remove label information, which was required for filtering steps.
-    """
-    def __init__(self, label='sep3', save=True, data_dir=None, split=None):
-        self.label = label
-        self.save = save
-        self.data_dir = data_dir
-        self.split = split
-
-    def fit(self, df, labels=None):
-        return self
-
-    def transform(self, df):
-        if self.save:
-            labels = df[self.label]
-            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-        df = df.drop(self.label, axis=1)
-
-        print('Done with DropLabels')
-        return df
-
 class DropColumns(TransformerMixin, BaseEstimator):
     """
     Drop and potentially save columns. By default we drop all baseline scores.
@@ -525,7 +503,6 @@ class LookbackFeatures(DaskIDTransformer):
         df_out = pd.concat(features, axis=1)
         return df_out
 
-#TODO adjust variable names!
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
     This class is based on J. Morill's code base: 
@@ -538,21 +515,35 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
     # Can add renal and neruologic sofa
     """
-    def __init__(self):
-        pass
+    def __init__(self, vm=None, suffix='locf'):
+        """
+        Args: 
+            - vm: variable mapping object
+            - suffix: which variables to use [raw or locf]    
+        """
+        vm.suffix = suffix
+        self.vm = vm
 
     def fit(self, df, y=None):
         return self
 
-    @staticmethod
-    def sirs_criteria(df):
+    def sirs_criteria(self, df):
         # Create a dataframe that stores true false for each category
         df_sirs = pd.DataFrame(index=df.index, columns=['temp', 'hr', 'rr.paco2', 'wbc_'])
-        df_sirs['temp'] = ((df['temp'] > 38) | (df['temp'] < 36))
-        df_sirs['hr'] = df['hr'] > 90
-        df_sirs['rr.paco2'] = ((df['resp'] > 20) | (df['pco2'] < 32))
-        #TODO: wbc is not available anymore!
-        df_sirs['wbc_'] = ((df['wbc'] < 4) | (df['wbc'] > 12))
+
+        # determine variables:
+        vm = self.vm
+        temp = vm('temp')
+        hr = vm('hr')
+        resp = vm('resp')
+        pco2 = vm('pco2')
+        wbc = vm('wbc')
+ 
+        # Calculate score: 
+        df_sirs['temp'] = ((df[temp] > 38) | (df[temp] < 36))
+        df_sirs[hr] = df[hr] > 90
+        df_sirs['rr.paco2'] = ((df[resp] > 20) | (df[pco2] < 32))
+        df_sirs['wbc_'] = ((df[wbc] < 4) | (df[wbc] > 12))
 
         # Sum each row, if >= 2 then mar as SIRS
         sirs = pd.to_numeric((df_sirs.sum(axis=1) >= 2) * 1)
@@ -563,19 +554,24 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
         return sirs_df
 
-    @staticmethod
-    def mews_score(df):
+    def mews_score(self, df):
         mews = np.zeros(shape=df.shape[0])
-
+        # determine variables:
+        vm = self.vm
+        sbp = vm('sbp') 
+        hr = vm('hr')
+        resp = vm('resp')
+        temp = vm('temp') 
+ 
         # sbp
-        sbp = df['sbp'].values
+        sbp = df[sbp].values
         mews[sbp <= 70] += 3
         mews[(70 < sbp) & (sbp <= 80)] += 2
         mews[(80 < sbp) & (sbp <= 100)] += 1
         mews[sbp >= 200] += 2
 
         # hr
-        hr = df['hr'].values
+        hr = df[hr].values
         mews[hr < 40] += 2
         mews[(40 < hr) & (hr <= 50)] += 1
         mews[(100 < hr) & (hr <= 110)] += 1
@@ -583,33 +579,41 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         mews[hr >= 130] += 3
 
         # resp
-        resp = df['resp'].values
+        resp = df[resp].values
         mews[resp < 9] += 2
         mews[(15 < resp) & (resp <= 20)] += 1
         mews[(20 < resp) & (resp < 30)] += 2
         mews[resp >= 30] += 3
 
         # temp
-        temp = df['temp'].values
+        temp = df[temp].values
         mews[temp < 35] += 2
         mews[(temp >= 35) & (temp < 38.5 ) ] += 0
         mews[temp >= 38.5] += 2
         
         return mews
 
-    @staticmethod
-    def qSOFA(df):
+    def qSOFA(self, df):
+        vm = self.vm
+        resp = vm('resp')
+        sbp = vm('sbp')
+
         qsofa = np.zeros(shape=df.shape[0])
-        qsofa[df['resp'].values >= 22] += 1
-        qsofa[df['sbp'].values <= 100] += 1
+        qsofa[df[resp].values >= 22] += 1
+        qsofa[df[sbp].values <= 100] += 1
         return qsofa
 
-    @staticmethod
-    def SOFA(df):
+    def SOFA(self, df):
+        vm = self.vm
+        plt = vm('plt')
+        bili = vm('bili')
+        map = vm('map')
+        crea = vm('crea')
+ 
         sofa = np.zeros(shape=df.shape[0])
-
+        
         # Coagulation
-        platelets = df['plt'].values
+        platelets = df[plt].values
         sofa[platelets >= 150] += 0
         sofa[(100 <= platelets) & (platelets < 150)] += 1
         sofa[(50 <= platelets) & (platelets < 100)] += 2
@@ -617,7 +621,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         sofa[platelets < 20] += 4
 
         # Liver
-        bilirubin = df['bili'].values
+        bilirubin = df[bili].values
         sofa[bilirubin < 1.2] += 0
         sofa[(1.2 <= bilirubin) & (bilirubin <= 1.9)] += 1
         sofa[(1.9 < bilirubin) & (bilirubin <= 5.9)] += 2
@@ -625,12 +629,12 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         sofa[bilirubin > 11.9] += 4
 
         # Cardiovascular
-        map = df['map'].values
+        map = df[map].values
         sofa[map >= 70] += 0
         sofa[map < 70] += 1
 
         # crea
-        creatinine = df['crea'].values
+        creatinine = df[crea].values
         sofa[creatinine < 1.2] += 0
         sofa[(1.2 <= creatinine) & (creatinine <= 1.9)] += 1
         sofa[(1.9 < creatinine) & (creatinine <= 3.4)] += 2
@@ -639,67 +643,54 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
         return sofa
 
-    @staticmethod
-    def SOFA_max_24(s):
-        """ Get the max value of the SOFA score over the prev 24 hrs """
-        def find_24_hr_max(s):
-            prev_24_hrs = pd.concat([s.shift(i) for i in range(24)], axis=1).values[:, ::-1]
-            return pd.Series(index=s.index, data=np.nanmax(prev_24_hrs, axis=1))
-        sofa_24 = s.groupby('id').apply(find_24_hr_max)
-        return sofa_24
-
-    @staticmethod
-    def SOFA_deterioration_new(s):
-        def check_24hr_deterioration(s):
-            """ Check the max deterioration over the last 24 hours, if >= 2 then mark as a 1"""
-            prev_24_hrs = pd.concat([s.shift(i) for i in range(24)], axis=1).values[:, ::-1]
-
-            def max_deteriorate(arr):
-                return np.nanmin([arr[i] - np.nanmax(arr[i+1:]) for i in range(arr.shape[-1]-1)])
-
-            tfr_hr_min = np.apply_along_axis(max_deteriorate, 1, prev_24_hrs)
-            return pd.Series(index=s.index, data=tfr_hr_min)
-        sofa_det = s.groupby('id').apply(check_24hr_deterioration)
-        return sofa_det
-
-    @staticmethod
-    def SOFA_deterioration(s):
+    def SOFA_deterioration(self, s):
         def check_24hr_deterioration(s):
             """ Check the max deterioration over the last 24 hours, if >= 2 then mark as a 1"""
             prev_23_hrs = pd.concat([s.shift(i) for i in range(1, 24)], axis=1).values
             tfr_hr_min = np.nanmin(prev_23_hrs, axis=1)
             return pd.Series(index=s.index, data=(s.values - tfr_hr_min))
-        sofa_det = s.groupby('id').apply(check_24hr_deterioration)
+        sofa_det = s.groupby(
+            self.vm('id')).apply(check_24hr_deterioration)
         sofa_det[sofa_det < 0] = 0
         sofa_det = sofa_det
         return sofa_det
 
-    @staticmethod
-    def septic_shock(df):
+    def septic_shock(self, df):
+        vm = self.vm
+        map = vm('map')
+        lact = vm('lact')
         shock = np.zeros(shape=df.shape[0])
-        shock[df['map'].values < 65] += 1
-        shock[df['lact'].values > 2] += 1
+        shock[df[map].values < 65] += 1
+        shock[df[lact].values > 2] += 1
         return shock
 
     def transform(self, df):
-        # Compute things
-        df['ShockIndex'] = df['hr'].values / df['sbp'].values
-        df['bun/cr'] = df['bun'].values / df['crea'].values
-        df['po2/fio2'] = df['po2'].values / df['fio2'].values #shouldnt it be PaO2/Fi ratio?
+        vm = self.vm
+        hr = vm('hr')
+        sbp = vm('sbp')
+        bun = vm('bun')
+        crea = vm('crea')
+        po2 = vm('po2')
+        fio2 = vm('fio2')
+        plt = vm('plt')
+        map = vm('map')
+        bili = vm('bili')
+ 
+        # Ratios:
+        df['ShockIndex_derived'] = df[hr].values / df[sbp].values
+        df['bun/cr_derived'] = df[bun].values / df[crea].values
+        df['po2/fio2_dervied'] = df[po2].values / df[fio2].values #shouldnt it be PaO2/Fi ratio?
 
         # SOFA
-        df['SOFA'] = self.SOFA(df[['plt', 'map', 'crea', 'bili']])
-        df['SOFA_deterioration'] = self.SOFA_deterioration(df['SOFA'])
-        #df['sofa_max_24hrs'] = self.SOFA_max_24(df['SOFA'])
-        df['qSOFA'] = self.qSOFA(df)
-        # df['SOFA_24hrmaxdet'] = self.SOFA_deterioration(df['SOFA_max_24hrs'])
-        # df['SOFA_deterioration_new'] = self.SOFA_deterioration_new(df['SOFA_max_24hrs'])
-        df['SepticShock'] = self.septic_shock(df)
+        df['SOFA_derived'] = self.SOFA(df[[plt, map, crea, bili]])
+        df['SOFA_deterioration_derived'] = self.SOFA_deterioration(df['SOFA_derived'])
+        df['qSOFA_derived'] = self.qSOFA(df)
+        df['SepticShock_derived'] = self.septic_shock(df)
 
         # Other scores
         sirs_df = self.sirs_criteria(df)
-        df['MEWS'] = self.mews_score(df)
-        df['SIRS'] = sirs_df['SIRS']
+        df['MEWS_derived'] = self.mews_score(df)
+        df['SIRS_derived'] = sirs_df['SIRS']
         return df
 
 class MeasurementCounter(DaskIDTransformer):
