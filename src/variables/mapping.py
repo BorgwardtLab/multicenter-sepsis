@@ -77,17 +77,23 @@ class VariableMapping:
         return df[df[variable_col] == variable][category_col] #to return string 
 
     @property
-    def core_set(self):
+    def core_set(self, suffices=['raw', 'locf'],
+        default_keys=['stay_id', 'stay_time', 'sep3']):
+        """
+        Array of core variables to use.
+        """
         df = self.var_df
         df = df[~df[self.output_col].isnull()] # we are only interested in those cols
-        result = []
+        result = default_keys.copy() 
         variables = df[self.output_col] 
-        for v in variables:
-            cat = self.check_cat(v) 
-            if any([c in ['static', 'baseline'] for c in cat]): #hack as cat is technically a series 
-                result.append(v)
-            else: #add raw suffix
-                v = v + '_raw'
-                result.append(v)
+        for i, suffix in enumerate(suffices):
+            for v in variables:
+                cat = self.check_cat(v) 
+                if any([c in ['static', 'baseline'] for c in cat]): #hack as cat is technically a series 
+                    if i==0:
+                        result.append(v)
+                else: #add suffix
+                    v = '_'.join([v, suffix])
+                    result.append(v)
         return result
  
