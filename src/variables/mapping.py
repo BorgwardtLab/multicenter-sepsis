@@ -63,12 +63,15 @@ class VariableMapping:
         map input variable string x to output variable.
         If suffix is avaible, the input is mapped to <output_suffix>.
         """
-        df = self.var_df
-        output_var = df[df[self.input_col] == x][self.output_col].values[0]
-        if self.suffix:
-            cat = self.check_cat(output_var, variable_col=self.output_col)
-            if cat not in ['static', 'baseline']:
-                output_var = '_'.join([output_var, self.suffix])
+        if x in self.keys.keys():
+            output_var = self.keys[x]
+        else:
+            df = self.var_df
+            output_var = df[df[self.input_col] == x][self.output_col].values[0]
+            if self.suffix:
+                cat = self.check_cat(output_var, variable_col=self.output_col)
+                if cat not in ['static', 'baseline']:
+                    output_var = '_'.join([output_var, self.suffix])
         return output_var 
     
     def all_cat(self, category, category_col='category'):
