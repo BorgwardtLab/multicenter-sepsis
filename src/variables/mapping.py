@@ -26,7 +26,8 @@ class VariableMapping:
         self.input_col = input_col
         self.output_col = output_col
         self.var_df = self._load_and_process(variable_file) 
-        self.keys = keys 
+        self.keys = keys
+        self.suffix = None 
 
     def _load_json(self, fpath):
         with open(fpath, 'r') as f:
@@ -57,19 +58,17 @@ class VariableMapping:
         df = df.apply(self._formatting) 
         return df 
         
-    def __call__(self, x, suffix=None):
+    def __call__(self, x):
         """
         map input variable string x to output variable.
-        If suffix is provided input is mapped to <output_suffix>.
+        If suffix is avaible, the input is mapped to <output_suffix>.
         """
         df = self.var_df
-        output_var = df[df[self.input_col] == x][self.output_col]
-        if suffix:
-            cat = self.check_cat(output_var[0], variable_col=self.output_col)
-            if all([c not in ['static', 'baseline'] for c in cat]):
-                output_var = '_'.join([output_var[0], suffix])
-            else:
-                output_var = output_var[0]
+        output_var = df[df[self.input_col] == x][self.output_col].values[0]
+        if self.suffix:
+            cat = self.check_cat(output_var, variable_col=self.output_col)
+            if cat not in ['static', 'baseline']:
+                output_var = '_'.join([output_var, self.suffix])
         return output_var 
     
     def all_cat(self, category, category_col='category'):
@@ -86,7 +85,7 @@ class VariableMapping:
         variable and variable_col.
         """
         df = self.var_df
-        return df[df[variable_col] == variable][category_col][0] #to return string 
+        return df[df[variable_col] == variable][category_col].values[0] #to return string 
 
     @property
     def core_set(self, suffices=['raw', 'locf']):
@@ -100,7 +99,7 @@ class VariableMapping:
         for i, suffix in enumerate(suffices):
             for v in variables:
                 cat = self.check_cat(v) 
-                if any([c in ['static', 'baseline'] for c in cat]): #hack as cat is technically a series 
+                if cat in ['static', 'baseline']: #hack as cat is technically a series 
                     if i==0:
                         result.append(v)
                 else: #add suffix
