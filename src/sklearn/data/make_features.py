@@ -7,10 +7,11 @@ from sklearn.pipeline import Pipeline
 from time import time
 from dask.distributed import Client
 import dask.dataframe as dd
-
+import json
 
 from .transformers import *
 from .subsetters import ChallengeFeatureSubsetter 
+from src.variables.mapping import VariableMapping
 
 dataset_class_mapping = {
     'physionet2019': 'Physionet2019Dataset',
@@ -49,8 +50,10 @@ def main():
     parser.add_argument('--n_chunks', type=int,
         default=4,
         help='number of df chunks for wavelet and signature extraction (relevant for eICU)')
+    parser.add_argument('--var_config_path', 
+        default='config/variables.json',
+        help='path to config info (variable names)')
 
-    parser.add_argument('--splits', nargs='+', default=['train', 'validation', 'test'])
     args = parser.parse_args()
     client = Client(n_workers=args.n_jobs, memory_limit='50GB', local_directory='/local0/tmp/dask')
     n_jobs = args.n_jobs
@@ -62,79 +65,69 @@ def main():
 
     data_dir = os.path.join(base_dir, 'extracted') #only used when creating df directly from psv
     out_dir = os.path.join(base_dir, args.out_dir, 'processed')
-    splits = args.splits  
- 
-    #For verbosity, we outline preprocessing / filtering parameters here:
-    cut_off = 24 #how many hours we include after a sepsis onset
-    onset_bounds = (3, 168) #the included sepsis onset window (before too early, after too late)
+    var_config_path = args.var_config_path
+    
+    # we initialize a dynamic variable mapping object which can be passed through the preprocessing transforms 
+    vm = VariableMapping(
+        variable_file = var_config_path,
+        input_col = 'concept', # we stick to the ricu concept
+        output_col = 'name' #currently used variable names, this can be changed
+    )
+    splits = ['all']
      
+    data_path = 'datasets/downloads/mimic_demo_int.parquet'
     for split in splits:
         # Run full pipe
         print(f'Processing {split} split ..')
         
-        #1. Fixed Data Pipeline: Dataloading and normalization (non-parallel)
+        #1. Fixed Data Pipeline: Dataloading, Derived Features (non-parallel)
         #--------------------------------------------------------------------
         # this step is not tunable, hence we cache it out in a pkl dump
-        dump = os.path.join(out_dir, f'X_normalized_{split}.pkl')
-        dump_for_deep = os.path.join(out_dir, f'X_filtered_{split}.pkl')
- 
-        if os.path.exists(dump) and not overwrite: 
-            df = load_pickle(dump)
-        else:
-            print('Running (fixed) data pipeline and dumping it..')
-            start = time()
-            data_pipeline = Pipeline([
-                ('create_dataframe', DataframeFromDataloader(dataset_cls=dataset_cls, data_dir=out_dir, 
-                    split=split)),
-                ('drop_cases_with_late_or_early_onsets', PatientFiltration(save=True, data_dir=out_dir, 
-                    split=split, onset_bounds=onset_bounds, n_jobs=n_jobs)),
-                ('remove_time_after_sepsis_onset+window', CaseFiltrationAfterOnset(n_jobs=n_jobs, 
-                    cut_off=cut_off, onset_bounds=onset_bounds, concat_output=True)),
-                #('drop_labels', DropLabels(save=True, data_dir=out_dir, split=split)),
-                ('derived_features', DerivedFeatures()),
-                ('normalization', Normalizer(data_dir=out_dir, split=split)),
-                ('categorical_one_hot_encoder', CategoricalOneHotEncoder())
-            ])
-            df = data_pipeline.fit_transform(None)
-            print(f'.. finished. Took {time() - start} seconds.')
-            # Save
-            # TODO: save to parquet
-            save_pickle(df, dump)
-           
-            # 1.B) Filtering for deep learning pipeline:
-            #------------------------------------------ 
-            # In addition, to prepare the data for the deep learning pipeline, 
-            # consistently apply the same final invalid times filtration steps as in sklearn pipe
-            # while skipping the manual feature engineering
-            filter_for_deep_pipe =  Pipeline([
-            ('filter_invalid_times', InvalidTimesFiltration()),
-            ('drop_cols', DropColumns( save=True,  
-                data_dir=out_dir, split=split)), #save baselines here, as its not a dask df
-             ])
-            print('Running invalid times filtr. for deep pipeline..')
-            df_deep = df.reset_index(level='time', drop=False) # invalid times filt. can't handle multi-index due to dask
-            df_deep = filter_for_deep_pipe.fit_transform(df_deep) 
-            #### save_pickle(df_deep, dump_for_deep)
-            print('Done with invalid times filtr.')
+        print('Running (fixed) data pipeline and dumping it..')
+        start = time()
+        data_pipeline = Pipeline([
+            ('create_dataframe', DataframeFromParquet(data_path, vm)),  
+            ('derived_features', DerivedFeatures(vm, suffix='locf')),
+        ])
+        df = data_pipeline.fit_transform(None)
+        
+        ## TODO: CAME UNTIL HERE
+        print(f'.. finished. Took {time() - start} seconds.')
+       
+        ## 1.B) Filtering for deep learning pipeline:
+        ##------------------------------------------ 
+        ## In addition, to prepare the data for the deep learning pipeline, 
+        ## consistently apply the same final invalid times filtration steps as in sklearn pipe
+        ## while skipping the manual feature engineering
+        #filter_for_deep_pipe =  Pipeline([
+        #('filter_invalid_times', InvalidTimesFiltration()),
+        #('drop_cols', DropColumns( save=True,  
+        #    data_dir=out_dir, split=split)), #save baselines here, as its not a dask df
+        # ])
+        #print('Running invalid times filtr. for deep pipeline..')
+        #df_deep = df.reset_index(level='time', drop=False) # invalid times filt. can't handle multi-index due to dask
+        #df_deep = filter_for_deep_pipe.fit_transform(df_deep) 
+        ##### save_pickle(df_deep, dump_for_deep)
+        #print('Done with invalid times filtr.')
     
         #2. Feature Extraction, further Preprocessing
         #---------------------------------------------------------------------------------
         # We need to sort the index by ourselves to ensure the time axis is
         # correctly ordered. Dask would not take this into account.
         df.sort_index(
-            axis='index', level='id', inplace=True, sort_remaining=True)
-        df.reset_index(level='time', drop=False, inplace=True)
+            axis='index', level=vm('id'), inplace=True, sort_remaining=True)
+        df.reset_index(level=vm('time'), drop=False, inplace=True)
         df = dd.from_pandas(df, npartitions=args.n_partitions, sort=True)
         print('Running (tunable) preprocessing pipeline and dumping it..')
         start = time()
         pipeline = Pipeline([
-            ('lookback_features', LookbackFeatures(n_jobs=n_jobs)), ####concat_output=True)),
-            ('measurement_counts', MeasurementCounter(n_jobs=n_jobs)),
-            ('filter_invalid_times', InvalidTimesFiltration()),
-            #drop and save baseline scores after filtering invalid (which ignored baselines)
-            ('drop_cols', DropColumns(save=False))   # don't save here, as still delayed dask obj 
+            ('lookback_features', LookbackFeatures(vm=vm, n_jobs=n_jobs, concat_output=True)), ####concat_output=True)),
+        #    ('measurement_counts', MeasurementCounter(n_jobs=n_jobs)),
+        #    ('filter_invalid_times', InvalidTimesFiltration()),
         ])
         df_deep2 = pipeline.fit_transform(df).compute()
+
+        from IPython import embed; embed(); sys.exit()
 
         # For sklearn pipe, we need proper multi index format once again 
         df_deep2.reset_index(inplace=True)
