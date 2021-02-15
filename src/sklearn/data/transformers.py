@@ -462,12 +462,12 @@ class LookbackFeatures(DaskIDTransformer):
     """
     Simple statistical features including moments over a tunable look-back window.
     """
-    def __init__(self, stats=None, windows = [4, 8, 16],**kwargs):
+    def __init__(self, stats=None, windows = [4, 8, 16], vm=None, **kwargs):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values)
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
-        self.cols = extended_ts_columns #apply look-back stats to time series columns
+        self.col_suffices = ['_raw', '_derived'] #apply look-back stats to time series columns
         if stats is None:
             keys = ['min', 'max', 'mean', 'median', 'var']
             stats = []
@@ -475,7 +475,7 @@ class LookbackFeatures(DaskIDTransformer):
                 for window in windows:
                     stats.append( (key, window) )
         self.stats = stats
-        super().__init__(**kwargs)
+        super().__init__(vm, **kwargs)
 
     def _compute_stat(self, df, stat, window):
         """ Computes current statistic over look-back window for all time series variables
@@ -484,7 +484,9 @@ class LookbackFeatures(DaskIDTransformer):
         # first get the function to compute the statistic:
         # determine available columns (which could be a subset of the
         # predefined cols, depending on the setup):
-        used_cols = [col for col in self.cols if col in df.columns]
+        used_cols = [col for col in df.columns if any(
+            [s in col for s in self.col_suffices] )]
+
         grouped = df[used_cols].rolling(window, min_periods=0)
         stats = getattr(grouped, stat)().fillna(0)
         # the first window is  computed in an expanding fashion. Still certain
