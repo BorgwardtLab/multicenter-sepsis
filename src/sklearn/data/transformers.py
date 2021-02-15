@@ -81,6 +81,35 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         print('Done with DataframeFromDataloader')
         return output
 
+class DataframeFromParquet(TransformerMixin, BaseEstimator):
+    """
+    This transform allows to load data directly from parquet to 
+    a pandas dataframe.
+    """
+    def __init__(self, path, vm=None):
+        """
+        Args:
+            - path: path to parquet data file
+            - vm: variable mapping object
+        """
+        self.path = path
+        self.vm = vm
+
+    def fit(self, df, labels=None):
+        return self
+
+    def transform(self, df=None):
+        df = pd.read_parquet(self.path, engine='pyarrow', columns=self.vm.core_set) 
+
+        # convert bools to float
+        bool_cols = [col for col in df.columns if df[col].dtype == bool]        
+        df[bool_cols] = df[bool_cols].astype(float)
+
+        df.set_index(['stay_id', 'stay_time'], inplace=True)
+        
+        df.sort_index(ascending=True, inplace=True)
+
+        return df 
 
 class CalculateUtilityScores(ParallelBaseIDTransformer):
     """Calculate utility scores from patient.
