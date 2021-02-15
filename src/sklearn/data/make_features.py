@@ -125,13 +125,13 @@ def main():
         #    ('measurement_counts', MeasurementCounter(n_jobs=n_jobs)),
         #    ('filter_invalid_times', InvalidTimesFiltration()),
         ])
-        df_deep2 = pipeline.fit_transform(df).compute()
+        df = pipeline.fit_transform(df).compute()
 
         from IPython import embed; embed(); sys.exit()
 
         # For sklearn pipe, we need proper multi index format once again 
-        df_deep2.reset_index(inplace=True)
-        df_deep2.set_index(['id', 'time'], inplace=True)
+        df.reset_index(inplace=True)
+        df.set_index([vm('id'), vm('time')], inplace=True)
 
         # We chunk for the next memory-costly part (which could not easily be implemented in dask)
         ids = np.unique(df_deep2.index.get_level_values('id'))

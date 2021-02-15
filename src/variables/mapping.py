@@ -28,7 +28,7 @@ class VariableMapping:
         self.var_df = self._load_and_process(variable_file) 
         self.keys = keys
         self.suffix = None 
-
+   
     def _load_json(self, fpath):
         with open(fpath, 'r') as f:
             return json.load(f) 
