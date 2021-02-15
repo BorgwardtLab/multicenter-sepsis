@@ -60,11 +60,34 @@ class VariableMapping:
         df = self.var_df
         return df[df[self.input_col] == x][self.output_col]
     
-    def get_category(self, category, category_col='category'):
+    def all_cat(self, category, category_col='category'):
         """
         returns a list of all variables which are part of the provided 
         category (e.g. 'vitals') as defined by the column category_col.
         """
         df = self.var_df
         return df[df[category_col] == category][self.output_col].tolist() 
+    
+    def check_cat(self, variable, variable_col='name', category_col='category'):
+        """
+        returns the category (in terms of category_col) of the provided 
+        variable and variable_col.
+        """
+        df = self.var_df
+        return df[df[variable_col] == variable][category_col] #to return string 
+
+    @property
+    def core_set(self):
+        df = self.var_df
+        df = df[~df[self.output_col].isnull()] # we are only interested in those cols
+        result = []
+        variables = df[self.output_col] 
+        for v in variables:
+            cat = self.check_cat(v) 
+            if any([c in ['static', 'baseline'] for c in cat]): #hack as cat is technically a series 
+                result.append(v)
+            else: #add raw suffix
+                v = v + '_raw'
+                result.append(v)
+        return result
  
