@@ -104,8 +104,8 @@ class DataframeFromParquet(TransformerMixin, BaseEstimator):
         # convert bools to float
         bool_cols = [col for col in df.columns if df[col].dtype == bool]        
         df[bool_cols] = df[bool_cols].astype(float)
-
-        df.set_index(['stay_id', 'stay_time'], inplace=True)
+        vm = self.vm
+        df.set_index([vm('id'), vm('time')], inplace=True)
         
         df.sort_index(ascending=True, inplace=True)
 
@@ -142,7 +142,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         label : str
             Indicates which column to use for the sepsis label.
 
-        score_name : str
+        )score_name : str
             Indicates the name of the column that will contain the
             calculated utility score. If `passthrough` is set, the
             column name will only be used in the result data frame
@@ -700,7 +700,7 @@ class MeasurementCounter(DaskIDTransformer):
     def __init__(self, n_jobs=4, **kwargs):
         super().__init__(n_jobs=n_jobs, **kwargs)
         # we only count raw time series measurements 
-        self.columns = ts_columns
+        self.col_suffix = '_raw' #apply look-back stats to time series columns
 
     def fit(self, df, labels=None):
         return self
@@ -708,7 +708,8 @@ class MeasurementCounter(DaskIDTransformer):
     def transform_id(self, df):
         # Make a counts frame
         counts = deepcopy(df)
-        counts.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+        drop_cols = [x for x in df.columns if not self.col_suffix in x]) 
+        counts.drop(drop_cols, axis=1, inplace=True)
 
         # Turn any floats into counts
         for col in self.columns:
