@@ -27,7 +27,6 @@ from src import datasets
 from src.evaluation.sklearn_utils import nanany
 from src.evaluation.physionet2019_score import compute_prediction_utility
 
-
 class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     """
     Transform method that takes dataset class, loads corresponding iterable dataloader and 
@@ -398,13 +397,24 @@ class IndicatorImputation(ParallelBaseIDTransformer):
     Adds indicator dimension for every channel to indicate if there was a nan
     IndicatorImputation still requires FillMissing afterwards!
     """
-    def __init__(self, n_jobs=4, **kwargs):
+    def __init__(self, n_jobs=4, suffix='_raw', imputation_value=None, **kwargs):
+        """
+        - imputation_value: (optional) value to impute at missing locations
+        """
+        self.col_suffix = suffix
+        self.imputation_value = imputation_value
+         
         super().__init__(n_jobs=n_jobs, **kwargs)
 
     def transform_id(self, df):
-        cols = ts_columns #we consider all time-series columns (for consistency with pytorch approach)
-        invalid_indicators = (df[cols].isnull()).astype(int).add_suffix('_indicator') 
-        df = pd.concat([df.fillna(0), invalid_indicators], axis=1)
+        cols = [x for x in df.columns if self.col_suffix in x]
+        used_df = df[cols]
+        used_df.columns = strip_cols(used_df.columns, [self.col_suffix])
+        invalid_indicators = (used_df.isnull()).astype(int).add_suffix('_indicator')
+        val = self.imputation_value
+        if val:
+            df = df.fillna(val) 
+        df = pd.concat([df, invalid_indicators], axis=1)
         return df
 
 class Normalizer(TransformerMixin, BaseEstimator):
@@ -462,12 +472,13 @@ class LookbackFeatures(DaskIDTransformer):
     """
     Simple statistical features including moments over a tunable look-back window.
     """
-    def __init__(self, stats=None, windows = [4, 8, 16], vm=None, **kwargs):
+    def __init__(self, stats=None, windows = [4, 8, 16], 
+        col_suffices=['_raw', '_derived'], vm=None,  **kwargs):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values)
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
-        self.col_suffices = ['_raw', '_derived'] #apply look-back stats to time series columns
+        self.col_suffices = col_suffices  #apply look-back stats to time series columns
         if stats is None:
             keys = ['min', 'max', 'mean', 'median', 'var']
             stats = []
@@ -488,14 +499,17 @@ class LookbackFeatures(DaskIDTransformer):
             [s in col for s in self.col_suffices] )]
 
         grouped = df[used_cols].rolling(window, min_periods=0)
-        stats = getattr(grouped, stat)().fillna(0)
-        # the first window is  computed in an expanding fashion. Still certain
-        # stats (e.g. var) leave nan in the start, replace it with 0s here. 
+        stats = getattr(grouped, stat)()
+        # the first window is  computed in an expanding fashion. Note that certain
+        # stats (e.g. var) leave nan in the start!
+        # first strip away old suffix:
+        stats.columns = strip_cols(stats.columns, self.col_suffices) 
         # rename the features by the statistic:
         stats = stats.add_suffix(f'_{stat}_{window}_hours') 
 
         return stats
-
+    
+    
     def transform_id(self, df):
         #compute all statistics in stats dictionary:
         features = [df]
@@ -697,10 +711,10 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
 class MeasurementCounter(DaskIDTransformer):
     """ Adds a count of the number of measurements up to the given timepoint. """
-    def __init__(self, n_jobs=4, **kwargs):
-        super().__init__(n_jobs=n_jobs, **kwargs)
+    def __init__(self, vm=None, suffix='_raw', **kwargs):
+        super().__init__(vm=vm, **kwargs)
         # we only count raw time series measurements 
-        self.col_suffix = '_raw' #apply look-back stats to time series columns
+        self.col_suffix = suffix #apply look-back stats to time series columns
 
     def fit(self, df, labels=None):
         return self
@@ -708,11 +722,11 @@ class MeasurementCounter(DaskIDTransformer):
     def transform_id(self, df):
         # Make a counts frame
         counts = deepcopy(df)
-        drop_cols = [x for x in df.columns if not self.col_suffix in x]) 
+        drop_cols = [x for x in df.columns if not self.col_suffix in x] 
         counts.drop(drop_cols, axis=1, inplace=True)
 
         # Turn any floats into counts
-        for col in self.columns:
+        for col in counts.columns:
             counts[col][~counts[col].isna()] = 1
         counts = counts.replace(np.nan, 0)
 
@@ -720,13 +734,14 @@ class MeasurementCounter(DaskIDTransformer):
         counts = counts.cumsum() 
 
         # Rename
-        counts.columns = [x + '_count' for x in counts.columns]
+        cols = strip_cols(counts.columns, [self.col_suffix])
+        counts.columns = [x + '_count' for x in cols]
 
         return pd.concat([df, counts], axis=1)
 
 class WaveletFeatures(ParallelBaseIDTransformer):
     """ Computes wavelet scattering up to given time per time series channel """
-    def __init__(self, n_jobs=4, T=32, J=2, Q=1, output_size=32, **kwargs):
+    def __init__(self, n_jobs=4, T=32, J=2, Q=1, output_size=32, suffix='_locf', **kwargs):
         """
         Running 1D wavelet scattering.
         Inputs:
@@ -740,7 +755,7 @@ class WaveletFeatures(ParallelBaseIDTransformer):
         super().__init__(n_jobs=n_jobs, **kwargs)
         # we process the raw time series measurements 
         self.T = T
-        self.columns = ts_columns
+        self.col_suffix = suffix 
         self.scatter = Scattering1D(J, T, Q) 
         self.output_size = output_size
 
@@ -750,7 +765,8 @@ class WaveletFeatures(ParallelBaseIDTransformer):
     def transform_id(self, df):
         """ process invididual patient """  
         inputs = deepcopy(df)
-        inputs.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+        drop_cols = [x for x in df.columns if self.col_suffix not in x]
+        inputs.drop(drop_cols, axis=1, inplace=True)
 
         # pad time series with T-1 0s (for getting online features of fixed window size)
         inputs = self._pad_df(inputs, n_pad=self.T-1)
@@ -773,6 +789,7 @@ class WaveletFeatures(ParallelBaseIDTransformer):
         """ Loop over all columns, compute column-wise wavelet features
              and create wavelet output columns"""
         col_dfs = []
+        df.columns = strip_cols(df.columns, [self.col_suffix])
         for col in df.columns:
             col_df = self._process_column(df, col)
             col_dfs.append(col_df)
@@ -906,4 +923,19 @@ class SignatureFeatures(ParallelBaseIDTransformer):
         df[columns].rolling(window = self.look_back+1, axis=1).apply(self._rolling_function, 
             kwargs={'df': col_df, 'order': self.order-1 })
         return col_df
+
+
+def strip_cols(columns, suffices):
+    """
+    Utility function to sequentially strip suffices from columns.
+    Observed that removing _string directly leads to 
+    unexpected behaviour, therefore removing first string, then _.
+    Here, we assume that the suffices are provied as: '_<string>'
+    """
+    # removing '_' from suffix and adding it as a separate suffix to remove
+    suffices = [x.lstrip('_') for x in suffices]
+    suffices.append('_')
+    for suffix in suffices:
+        columns = columns.str.rstrip(suffix) 
+    return columns
 
