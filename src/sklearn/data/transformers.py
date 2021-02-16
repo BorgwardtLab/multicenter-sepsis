@@ -860,6 +860,7 @@ class SignatureFeatures(ParallelBaseIDTransformer):
  
         #assert df.shape[0] == signatures.shape[0]
         #signatures.index = df.index
+        
         assert df.shape[0] == mv_signatures.shape[0]
         mv_signatures.index = df.index
 
@@ -926,7 +927,8 @@ class SignatureFeatures(ParallelBaseIDTransformer):
         for group, columns in self.column_dict.items():
             col_df = self._process_group(df, group, columns)
             col_dfs.append(col_df)
-        return pd.concat(col_dfs, axis=1)
+        out = pd.concat(col_dfs, axis=1)
+        return out[self.look_back:]
 
     def _process_group(self, df, group, columns):
         """ Processing a group of columns. """
