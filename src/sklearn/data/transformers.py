@@ -473,12 +473,12 @@ class LookbackFeatures(DaskIDTransformer):
     Simple statistical features including moments over a tunable look-back window.
     """
     def __init__(self, stats=None, windows = [4, 8, 16], 
-        col_suffices=['_raw', '_derived'], vm=None,  **kwargs):
+        suffices=['_raw', '_derived'], vm=None,  **kwargs):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values)
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
-        self.col_suffices = col_suffices  #apply look-back stats to time series columns
+        self.col_suffices = suffices  #apply look-back stats to time series columns
         if stats is None:
             keys = ['min', 'max', 'mean', 'median', 'var']
             stats = []
@@ -781,9 +781,10 @@ class WaveletFeatures(ParallelBaseIDTransformer):
 
     def _pad_df(self, df, n_pad, value=0):
         """ util function to pad <n_pad> zeros at the start of the df 
+            and impute 0s at the remaining nans (of lcof imputation). 
         """
         x = np.concatenate([np.zeros([n_pad,df.shape[1]]), df.values]) 
-        return pd.DataFrame(x, columns=df.columns)
+        return pd.DataFrame(x, columns=df.columns).fillna(0)
 
     def _compute_wavelets(self, df):
         """ Loop over all columns, compute column-wise wavelet features
@@ -812,7 +813,8 @@ class WaveletFeatures(ParallelBaseIDTransformer):
 
 class SignatureFeatures(ParallelBaseIDTransformer):
     """ Computes signature features for a given look back window """
-    def __init__(self, n_jobs=4, look_back=7, order=3, **kwargs):
+    def __init__(self, n_jobs=4, look_back=7, order=3, 
+            suffices=['_locf', '_derived'], **kwargs):
         """
         Inputs:
             - n_jobs: for parallelization on the patient level
@@ -821,20 +823,21 @@ class SignatureFeatures(ParallelBaseIDTransformer):
             - order: signature truncation level of univariate signature features
                 --> for multivariate signatures (of groups of channels), we use order-1 
         """
+        n_jobs=1
         super().__init__(n_jobs=n_jobs, **kwargs)
         # we process the raw time series measurements 
         self.order = order
+        self.suffices = suffices
         self.look_back = look_back
-        self.columns = extended_ts_columns
-        #self.column_dict = {
-        #    'vitals': vital_columns,
-        #    'labs_chem': lab_columns_chemistry,
-        #    'labs_org': lab_columns_organs,
-        #    'labs_hemo': lab_columns_hemo,
-        #    'scores_inds': scores_and_indicators_columns
-        #}
-        self.output_size = iis.siglength(2, self.order) # channel + time = 2
-        self.output_size_all = iis.siglength(len(self.columns) + 1, self.order)    
+        #self.columns = extended_ts_columns
+        column_dict = { #concept variables
+            'vitals':  ['hr', 'o2sat', 'temp', 'map', 'resp', 'fio2'],
+            'labs': ['ph', 'lact', 'wbc', 'plt', 'ptt'],
+            'scores': ['ShockIndex', 'bun/cr', 'SOFA', 'SepticShock', 'MEWS'] 
+        }
+        self.column_dict = self._add_suffices(column_dict)
+        #self.output_size = iis.siglength(2, self.order) # channel + time = 2
+        #self.output_size_all = iis.siglength(len(self.columns) + 1, self.order)    
 
     def fit(self, df, labels=None):
         return self
@@ -842,29 +845,41 @@ class SignatureFeatures(ParallelBaseIDTransformer):
     def transform_id(self, df):
         """ process invididual patient """  
         inputs = deepcopy(df)
-        inputs.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+        drop_cols = [col for col in df.columns if not any(
+            [suffix in col for suffix in self.suffices ] )]
+        inputs.drop(drop_cols, axis=1, inplace=True)
 
         # pad time series with look_back size many 0s (for getting online features of fixed window size)
         inputs = self._pad_df(inputs, n_pad=self.look_back)
         
         #channel-wise signatures
-        signatures = self._compute_signatures(inputs)
+        #signatures = self._compute_signatures(inputs)
         
         #multivariable signatures over variable groups
-        #mv_signatures = self._compute_mv_signatures(inputs) 
+        mv_signatures = self._compute_mv_signatures(inputs) 
  
-        assert df.shape[0] == signatures.shape[0]
-        signatures.index = df.index
-        #assert df.shape[0] == mv_signatures.shape[0]
-        #mv_signatures.index = df.index
+        #assert df.shape[0] == signatures.shape[0]
+        #signatures.index = df.index
+        assert df.shape[0] == mv_signatures.shape[0]
+        mv_signatures.index = df.index
 
-        return pd.concat([df, signatures], axis=1) #mv_signatures
+        return pd.concat([df, mv_signatures], axis=1) #mv_signatures
+
+    def _add_suffices(self, col_dict):
+        out = {}
+        for key in col_dict.keys():
+            if 'scores' in key:
+                columns = [col + '_derived' for col in col_dict[key]]
+            else:
+                columns = [col + '_locf' for col in col_dict[key]]
+            out[key] = columns 
+        return out
 
     def _pad_df(self, df, n_pad, value=0):
         """ util function to pad <n_pad> zeros at the start of the df 
         """
         x = np.concatenate([np.zeros([n_pad,df.shape[1]]), df.values]) 
-        return pd.DataFrame(x, columns=df.columns)
+        return pd.DataFrame(x, columns=df.columns).fillna(0)
 
     def _to_path(self, X):
         """ Convert single, evenly spaced time series to path by adding time axis
@@ -898,7 +913,7 @@ class SignatureFeatures(ParallelBaseIDTransformer):
         return col_df
 
     def _rolling_function(self, window, df, order):
-        """actually compute wavelet scattering in a rolling window """
+        """compute univariate signatures of a pd.rolling window """
         path = self._to_path(window.values)
         df.loc[window.index.min()] = iis.sig(path, order)
         return 1 # rolling funcs need to return index.. 
@@ -915,14 +930,47 @@ class SignatureFeatures(ParallelBaseIDTransformer):
 
     def _process_group(self, df, group, columns):
         """ Processing a group of columns. """
-        group_output_size = iis.siglength(len(columns)+1, self.order-1)
+        group_output_size = iis.siglength(len(columns)+1, self.order)
         out_cols = [group + f'_signature_{i}' for i in range(group_output_size)]
-        col_df = pd.DataFrame(columns=out_cols)
+        #col_df = pd.DataFrame(columns=out_cols)
         # we go over input column and write result to col_df, which is a 
         # df gathering all features from the current col
-        df[columns].rolling(window = self.look_back+1, axis=1).apply(self._rolling_function, 
-            kwargs={'df': col_df, 'order': self.order-1 })
+        #df[columns].rolling(window = self.look_back+1, axis=1).apply(self._rolling_function, 
+        #    kwargs={'df': col_df, 'order': self.order })
+        func_kwargs = {'order': self.order } 
+        col_df = self._mv_rolling(df = df[columns],
+                                  cols = out_cols, 
+                                  window = self.look_back+1,
+                                  func = self._mv_rolling_function,
+                                  func_kwargs = func_kwargs
+        )
+                                    
         return col_df
+
+    def _mv_rolling(self, df, cols, window, func, func_kwargs={}):
+        """
+        Custom rolling operation for functions that 
+        require access to multiple columns.
+        Args:
+        - df: dataframe to roll over
+        - cols: list of output columns 
+        - window: window length (similar as pd.rolling)
+        - func: rolling function object (e.g. mean, max etc)
+        - func_kwargs: arguments to function 
+        """
+        col_df = df.copy()
+        col_df = col_df.reindex(columns = cols)
+        
+        for i in np.arange(window-1, len(df)):
+            start = i - window + 1
+            end = i + 1
+            col_df.iloc[i,:] = func(df.iloc[start:end, :], **func_kwargs)
+        return col_df
+    
+    def _mv_rolling_function(self, window, order):
+        """compute univariate signatures of a custom rolling window """
+        path = self._to_path(window.values)
+        return iis.sig(path, order)
 
 
 def strip_cols(columns, suffices):

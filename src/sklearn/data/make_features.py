@@ -48,7 +48,7 @@ def main():
         default=50,
         help='number of df partitions in dask')
     parser.add_argument('--n_chunks', type=int,
-        default=4,
+        default=1,
         help='number of df chunks for wavelet and signature extraction (relevant for eICU)')
     parser.add_argument('--var_config_path', 
         default='config/variables.json',
@@ -91,7 +91,6 @@ def main():
         ])
         df = data_pipeline.fit_transform(None)
         
-        ## TODO: CAME UNTIL HERE
         print(f'.. finished. Took {time() - start} seconds.')
        
         ## 1.B) Filtering for deep learning pipeline:
@@ -122,13 +121,11 @@ def main():
         start = time()
         dask_pipeline = Pipeline([
             ('lookback_features', LookbackFeatures(vm=vm,  
-                col_suffices=['_raw', '_derived'])), ####concat_output=True)),
+                suffices=['_raw', '_derived'])), ####concat_output=True)),
             ('measurement_counts', MeasurementCounter(vm=vm, suffix='_raw')),
         #    ('filter_invalid_times', InvalidTimesFiltration()),
         ])
         df = dask_pipeline.fit_transform(df).compute()
-
-        from IPython import embed; embed(); sys.exit()
 
         # For sklearn pipe, we need proper multi index format once again 
         df.reset_index(inplace=True)
@@ -143,29 +140,31 @@ def main():
         # clear large df from memory: 
         del df 
         #TODO: add invalid times filtration! 
-        sklearn_pipe =  Pipeline([
+        pandas_pipeline =  Pipeline([
             ('imputation', IndicatorImputation(n_jobs=n_jobs, suffix='_raw', concat_output=True)),
-            # wavelets require imputed data! 
+            # wavelets require imputed data --> we pad 0s in locf nans on the fly 
             ('wavelet_features', WaveletFeatures(n_jobs=n_jobs, suffix='_locf', concat_output=True)), #n_jobs=5, concat_output=True 
-            ('signatures', SignatureFeatures(n_jobs=n_jobs, concat_output=True)), #n_jobs=2
+            ('signatures', SignatureFeatures(n_jobs=n_jobs, 
+                suffices=['_locf', '_derived'], concat_output=True)), #n_jobs=2
             ])
         out_df_splits = []
         keys = list(df_splits.keys()) # dict otherwise doesnt like popping keys
         for key in keys:
-            out_df = sklearn_pipe.fit_transform(df_splits[key])
+            out_df = pandas_pipeline.fit_transform(df_splits[key])
             #free mem of current input df:
             df_splits.pop(key)
             out_df_splits.append(out_df) 
-        df_sklearn = pd.concat(out_df_splits)
+        df = pd.concat(out_df_splits)
 
         print(f'.. finished. Took {time() - start} seconds.')
         
+        from IPython import embed; embed(); sys.exit() 
         #All models assume time as column and only id as index (multi-index would cause problem with dask models)
         ##df_deep2 = ensure_single_index(df_deep2)
-        df_sklearn = ensure_single_index(df_sklearn) 
+        df = ensure_single_index(df) 
 
         # Save
-        save_pickle(df_sklearn, os.path.join(out_dir, f'X_extended_features_{split}.pkl'))
+        #save_pickle(df_sklearn, os.path.join(out_dir, f'X_extended_features_{split}.pkl'))
         #save_pickle(df_deep2, os.path.join(out_dir, f'X_extended_features_no_imp_{split}.pkl'))
 
     client.close()
