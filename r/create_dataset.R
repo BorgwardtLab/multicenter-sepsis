@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
 #BSUB -W 1:00
-#BSUB -n 1
-#BSUB -R rusage[mem=24000]
+#BSUB -n 2
+#BSUB -R rusage[mem=16000]
 #BSUB -J cohorts
 #BSUB -o results/cohorts_%J.out
 
@@ -15,7 +15,7 @@ args <- parse_args(src_opt, out_dir)
 src <- check_src(args, "challenge")
 dir <- check_dir(args)
 
-msg("\n\nUsing {data.table::getDTthreads()} OMP threads\n\n")
+msg("\n\nUsing {data.table::getDTthreads()} OMP thread{?s}\n\n")
 
 for (x in src) {
   msg("\n\nexporting data for {x}\n\n")

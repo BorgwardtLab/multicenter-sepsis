@@ -34,7 +34,8 @@ read_var_json <- function(path = cfg_path("variables.json")) {
     callenge = get_chr(cfg, 2L),
     col_spec = I(lapply(col, do.call, list())),
     name = get_chr(cfg, 4L),
-    category = get_chr(cfg, 5L)
+    category = get_chr(cfg, 5L),
+    stringsAsFactors = FALSE
   )
 }
 
