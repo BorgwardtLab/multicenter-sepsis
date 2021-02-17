@@ -91,8 +91,8 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
              get(index_var(new)) <= max_onset, ]
 
   msg("--> removing {tmp - nrow(new)} patients due to onsets",
-      " outside of [{format(min_onset, units = 'hours')},",
-      " {format(max_onset, units = 'hours')}].\n")
+      " outside of [{format_unit(min_onset)},",
+      " {format_unit(max_onset)}].\n")
 
   flt <- setdiff(id_col(sep), id_col(new))
 
@@ -104,9 +104,9 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
     is.na(sep3_time), pmin(outtime, cut_ctrl), sep3_time + cut_case
   )]
 
-  msg("--> removing up to {format(sum(win$outtime - win$cuttime))} due",
-      " to censoring data {format(cut_case, units = 'hours')} after onsets",
-      " and {format(cut_ctrl, units = 'hours')} into stays.\n")
+  msg("--> removing up to {sum(win$outtime - win$cuttime)} due",
+      " to censoring data {format_unit(cut_case)} after onsets",
+      " and {format_unit(cut_ctrl)} into stays.\n")
 
   win <- rm_cols(win, c("intime", "outtime", "sep3_time"), by_ref = TRUE)
   dat <- lapply(dat, truncate_dat, win, flt)
@@ -179,12 +179,33 @@ augment <- function(x, fun, suffix,
 
     fix_inf <- FALSE
 
+    id_cols <- id_vars(x)
+    ind_col <- index_var(x)
+
+    tmp_col <- c("tmp_ind_1", "tmp_ind_2")
+
+    wins <- x[,
+      c(mget(id_cols), list(min_time = get(ind_col) - win,
+                            max_time = get(ind_col)))
+    ]
+
+    x <- x[, c(tmp_col) := list(get(ind_col), get(ind_col))]
+    on.exit(rm_cols(x, tmp_col, by_ref = TRUE))
+
+    join <- paste(c(id_cols, tmp_col),
+                  c(rep("==", length(id_cols)), "<=", ">="),
+                  c(id_cols, "max_time", "min_time"))
+
     res <- withCallingHandlers({
       switch(fun,
-        min  = slide(x, lapply(.SD, min,  ...), win, .SDcols = c(cols)),
-        max  = slide(x, lapply(.SD, max,  ...), win, .SDcols = c(cols)),
-        mean = slide(x, lapply(.SD, mean, ...), win, .SDcols = c(cols)),
-        var  = slide(x, lapply(.SD, var,  ...), win, .SDcols = c(cols))
+        min  = x[wins, lapply(.SD, min,  ...), .SDcols = cols, on = join,
+                 by = .EACHI],
+        max  = x[wins, lapply(.SD, max,  ...), .SDcols = cols, on = join,
+                 by = .EACHI],
+        mean = x[wins, lapply(.SD, mean, ...), .SDcols = cols, on = join,
+                 by = .EACHI],
+        var  = x[wins, lapply(.SD, var,  ...), .SDcols = cols, on = join,
+                 by = .EACHI]
       )
     }, warning = function(w) {
 
@@ -195,6 +216,8 @@ augment <- function(x, fun, suffix,
         invokeRestart("muffleWarning")
       }
     })
+
+    res <- rm_cols(res, tmp_col, by_ref = TRUE)
 
     if (fix_inf) {
       res <- res[, c(cols) := lapply(.SD, inf_to_na), .SDcols = c(cols)]
@@ -226,7 +249,7 @@ augment_prof <- function(...) {
 
   msg("    Runtime: {format(Sys.time() - tim, digits = 4)}")
   if (length(cil)) msg("    Memory ceiling increased by: {as.character(cil)}")
-  msg("    Current memory usage: {as.character(cur)}\n")
+  msg("    Current memory usage: {as.character(cur)}")
 
   res
 }
