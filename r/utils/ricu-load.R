@@ -296,24 +296,11 @@ export_data <- function(src, dest_dir = data_path("export"),
   lof <- augment_prof(dat, data.table::nafill, "locf", tsv, by = id_vars(dat),
                       type = "locf")
 
-  funs <- c("min", "max", "mean", "var")
-  wins <- c(4L, 8L, 16L)
-
-  lbk <- Map(augment_prof,
-    list(dat),
-    fun = rep(funs, length(wins)),
-    suffix = paste0(rep(funs, length(wins)), rep(wins, each = length(funs))),
-    cols = list(tsv),
-    win = hours(rep(wins, each = length(funs))),
-    na.rm = TRUE
-  )
-
   dat <- dat[, c(index_var(dat)) := as.double(
     get(index_var(dat)), units = "hours"
   )]
 
-  lbk <- do.call("c", lbk)
-  res <- c(dat, ind, lof, lbk)
+  res <- c(dat, ind, lof)
   res <- data.table::setDT(res)
 
   create_parquet(res, file.path(dest_dir, src))
