@@ -292,6 +292,8 @@ export_data <- function(src, dest_dir = data_path("export"),
   tsv <- paste0(tsn, "_raw")
   dat <- rename_cols(dat, tsv, tsn, by_ref = TRUE)
 
+  dat <- fill_gaps(dat)
+
   ind <- augment_prof(dat, Negate(is.na), "ind", tsv)
   lof <- augment_prof(dat, data.table::nafill, "locf", tsv, by = id_vars(dat),
                       type = "locf")
