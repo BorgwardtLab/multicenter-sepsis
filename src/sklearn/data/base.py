@@ -9,8 +9,8 @@ class BaseIDTransformer(TransformerMixin, BaseEstimator):
     """
     Base class when performing transformations over ids. One must implement a transform_id method.
     """
-    def __init__(self):
-        pass
+    def __init__(self, vm):
+        self.vm = vm
 
     def __init_subclass__(cls, *args, **kwargs):
         if not hasattr(cls, 'transform_id'):
@@ -22,9 +22,9 @@ class BaseIDTransformer(TransformerMixin, BaseEstimator):
 
     def transform(self, df):
         if isinstance(df, pd.DataFrame):
-            df_transformed = df.groupby(['id'], as_index=False).apply(self.transform_id)
+            df_transformed = df.groupby([self.vm('id')], as_index=False).apply(self.transform_id)
         elif isinstance(df, pd.Series):
-            df_transformed = df.groupby(['id']).apply(self.transform_id)
+            df_transformed = df.groupby([self.vm('id')]).apply(self.transform_id)
 
         # Sometimes creates a None level
         if None in df_transformed.index.names:
@@ -88,8 +88,9 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
     """
     Dask-based Parallelized Base class when performing transformations over ids. The child class requires to have a transform_id method.
     """
-    def __init__(self, **kwargs):
+    def __init__(self, vm, **kwargs):
         print('Got unused args:', kwargs)
+        self.vm = vm
 
     def __init_subclass__(cls, *args, **kwargs):
         if not hasattr(cls, 'transform_id'):
@@ -102,5 +103,6 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
     def transform(self, dask_df):
         """ Parallelized transform
         """
-        result = dask_df.groupby('id', group_keys=False).apply(self.transform_id)
+        result = dask_df.groupby( self.vm('id'),
+             group_keys=False).apply(self.transform_id)
         return result

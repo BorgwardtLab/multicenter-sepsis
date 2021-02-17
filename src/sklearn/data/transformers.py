@@ -27,7 +27,6 @@ from src import datasets
 from src.evaluation.sklearn_utils import nanany
 from src.evaluation.physionet2019_score import compute_prediction_utility
 
-
 class DataframeFromDataloader(TransformerMixin, BaseEstimator):
     """
     Transform method that takes dataset class, loads corresponding iterable dataloader and 
@@ -81,6 +80,35 @@ class DataframeFromDataloader(TransformerMixin, BaseEstimator):
         print('Done with DataframeFromDataloader')
         return output
 
+class DataframeFromParquet(TransformerMixin, BaseEstimator):
+    """
+    This transform allows to load data directly from parquet to 
+    a pandas dataframe.
+    """
+    def __init__(self, path, vm=None):
+        """
+        Args:
+            - path: path to parquet data file
+            - vm: variable mapping object
+        """
+        self.path = path
+        self.vm = vm
+
+    def fit(self, df, labels=None):
+        return self
+
+    def transform(self, df=None):
+        df = pd.read_parquet(self.path, engine='pyarrow', columns=self.vm.core_set) 
+
+        # convert bools to float
+        bool_cols = [col for col in df.columns if df[col].dtype == bool]        
+        df[bool_cols] = df[bool_cols].astype(float)
+        vm = self.vm
+        df.set_index([vm('id'), vm('time')], inplace=True)
+        
+        df.sort_index(ascending=True, inplace=True)
+
+        return df 
 
 class CalculateUtilityScores(ParallelBaseIDTransformer):
     """Calculate utility scores from patient.
@@ -113,7 +141,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         label : str
             Indicates which column to use for the sepsis label.
 
-        score_name : str
+        )score_name : str
             Indicates the name of the column that will contain the
             calculated utility score. If `passthrough` is set, the
             column name will only be used in the result data frame
@@ -205,28 +233,6 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
 
         return df
 
-
-class DropLabels(TransformerMixin, BaseEstimator):
-    """
-    Remove label information, which was required for filtering steps.
-    """
-    def __init__(self, label='sep3', save=True, data_dir=None, split=None):
-        self.label = label
-        self.save = save
-        self.data_dir = data_dir
-        self.split = split
-
-    def fit(self, df, labels=None):
-        return self
-
-    def transform(self, df):
-        if self.save:
-            labels = df[self.label]
-            save_pickle(labels, os.path.join(self.data_dir, f'y_{self.split}.pkl'))
-        df = df.drop(self.label, axis=1)
-
-        print('Done with DropLabels')
-        return df
 
 class DropColumns(TransformerMixin, BaseEstimator):
     """
@@ -391,13 +397,24 @@ class IndicatorImputation(ParallelBaseIDTransformer):
     Adds indicator dimension for every channel to indicate if there was a nan
     IndicatorImputation still requires FillMissing afterwards!
     """
-    def __init__(self, n_jobs=4, **kwargs):
+    def __init__(self, n_jobs=4, suffix='_raw', imputation_value=None, **kwargs):
+        """
+        - imputation_value: (optional) value to impute at missing locations
+        """
+        self.col_suffix = suffix
+        self.imputation_value = imputation_value
+         
         super().__init__(n_jobs=n_jobs, **kwargs)
 
     def transform_id(self, df):
-        cols = ts_columns #we consider all time-series columns (for consistency with pytorch approach)
-        invalid_indicators = (df[cols].isnull()).astype(int).add_suffix('_indicator') 
-        df = pd.concat([df.fillna(0), invalid_indicators], axis=1)
+        cols = [x for x in df.columns if self.col_suffix in x]
+        used_df = df[cols]
+        used_df.columns = strip_cols(used_df.columns, [self.col_suffix])
+        invalid_indicators = (used_df.isnull()).astype(int).add_suffix('_indicator')
+        val = self.imputation_value
+        if val:
+            df = df.fillna(val) 
+        df = pd.concat([df, invalid_indicators], axis=1)
         return df
 
 class Normalizer(TransformerMixin, BaseEstimator):
@@ -455,12 +472,13 @@ class LookbackFeatures(DaskIDTransformer):
     """
     Simple statistical features including moments over a tunable look-back window.
     """
-    def __init__(self, stats=None, windows = [4, 8, 16],**kwargs):
+    def __init__(self, stats=None, windows = [4, 8, 16], 
+        suffices=['_raw', '_derived'], vm=None,  **kwargs):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values)
             to compute each stat for each time series variable. 
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
-        self.cols = extended_ts_columns #apply look-back stats to time series columns
+        self.col_suffices = suffices  #apply look-back stats to time series columns
         if stats is None:
             keys = ['min', 'max', 'mean', 'median', 'var']
             stats = []
@@ -468,7 +486,7 @@ class LookbackFeatures(DaskIDTransformer):
                 for window in windows:
                     stats.append( (key, window) )
         self.stats = stats
-        super().__init__(**kwargs)
+        super().__init__(vm, **kwargs)
 
     def _compute_stat(self, df, stat, window):
         """ Computes current statistic over look-back window for all time series variables
@@ -477,16 +495,21 @@ class LookbackFeatures(DaskIDTransformer):
         # first get the function to compute the statistic:
         # determine available columns (which could be a subset of the
         # predefined cols, depending on the setup):
-        used_cols = [col for col in self.cols if col in df.columns]
+        used_cols = [col for col in df.columns if any(
+            [s in col for s in self.col_suffices] )]
+
         grouped = df[used_cols].rolling(window, min_periods=0)
-        stats = getattr(grouped, stat)().fillna(0)
-        # the first window is  computed in an expanding fashion. Still certain
-        # stats (e.g. var) leave nan in the start, replace it with 0s here. 
+        stats = getattr(grouped, stat)()
+        # the first window is  computed in an expanding fashion. Note that certain
+        # stats (e.g. var) leave nan in the start!
+        # first strip away old suffix:
+        stats.columns = strip_cols(stats.columns, self.col_suffices) 
         # rename the features by the statistic:
         stats = stats.add_suffix(f'_{stat}_{window}_hours') 
 
         return stats
-
+    
+    
     def transform_id(self, df):
         #compute all statistics in stats dictionary:
         features = [df]
@@ -496,7 +519,6 @@ class LookbackFeatures(DaskIDTransformer):
         df_out = pd.concat(features, axis=1)
         return df_out
 
-#TODO adjust variable names!
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
     This class is based on J. Morill's code base: 
@@ -509,21 +531,35 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
     # Can add renal and neruologic sofa
     """
-    def __init__(self):
-        pass
+    def __init__(self, vm=None, suffix='locf'):
+        """
+        Args: 
+            - vm: variable mapping object
+            - suffix: which variables to use [raw or locf]    
+        """
+        vm.suffix = suffix
+        self.vm = vm
 
     def fit(self, df, y=None):
         return self
 
-    @staticmethod
-    def sirs_criteria(df):
+    def sirs_criteria(self, df):
         # Create a dataframe that stores true false for each category
         df_sirs = pd.DataFrame(index=df.index, columns=['temp', 'hr', 'rr.paco2', 'wbc_'])
-        df_sirs['temp'] = ((df['temp'] > 38) | (df['temp'] < 36))
-        df_sirs['hr'] = df['hr'] > 90
-        df_sirs['rr.paco2'] = ((df['resp'] > 20) | (df['pco2'] < 32))
-        #TODO: wbc is not available anymore!
-        df_sirs['wbc_'] = ((df['wbc'] < 4) | (df['wbc'] > 12))
+
+        # determine variables:
+        vm = self.vm
+        temp = vm('temp')
+        hr = vm('hr')
+        resp = vm('resp')
+        pco2 = vm('pco2')
+        wbc = vm('wbc')
+ 
+        # Calculate score: 
+        df_sirs['temp'] = ((df[temp] > 38) | (df[temp] < 36))
+        df_sirs[hr] = df[hr] > 90
+        df_sirs['rr.paco2'] = ((df[resp] > 20) | (df[pco2] < 32))
+        df_sirs['wbc_'] = ((df[wbc] < 4) | (df[wbc] > 12))
 
         # Sum each row, if >= 2 then mar as SIRS
         sirs = pd.to_numeric((df_sirs.sum(axis=1) >= 2) * 1)
@@ -534,19 +570,24 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
         return sirs_df
 
-    @staticmethod
-    def mews_score(df):
+    def mews_score(self, df):
         mews = np.zeros(shape=df.shape[0])
-
+        # determine variables:
+        vm = self.vm
+        sbp = vm('sbp') 
+        hr = vm('hr')
+        resp = vm('resp')
+        temp = vm('temp') 
+ 
         # sbp
-        sbp = df['sbp'].values
+        sbp = df[sbp].values
         mews[sbp <= 70] += 3
         mews[(70 < sbp) & (sbp <= 80)] += 2
         mews[(80 < sbp) & (sbp <= 100)] += 1
         mews[sbp >= 200] += 2
 
         # hr
-        hr = df['hr'].values
+        hr = df[hr].values
         mews[hr < 40] += 2
         mews[(40 < hr) & (hr <= 50)] += 1
         mews[(100 < hr) & (hr <= 110)] += 1
@@ -554,33 +595,41 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         mews[hr >= 130] += 3
 
         # resp
-        resp = df['resp'].values
+        resp = df[resp].values
         mews[resp < 9] += 2
         mews[(15 < resp) & (resp <= 20)] += 1
         mews[(20 < resp) & (resp < 30)] += 2
         mews[resp >= 30] += 3
 
         # temp
-        temp = df['temp'].values
+        temp = df[temp].values
         mews[temp < 35] += 2
         mews[(temp >= 35) & (temp < 38.5 ) ] += 0
         mews[temp >= 38.5] += 2
         
         return mews
 
-    @staticmethod
-    def qSOFA(df):
+    def qSOFA(self, df):
+        vm = self.vm
+        resp = vm('resp')
+        sbp = vm('sbp')
+
         qsofa = np.zeros(shape=df.shape[0])
-        qsofa[df['resp'].values >= 22] += 1
-        qsofa[df['sbp'].values <= 100] += 1
+        qsofa[df[resp].values >= 22] += 1
+        qsofa[df[sbp].values <= 100] += 1
         return qsofa
 
-    @staticmethod
-    def SOFA(df):
+    def SOFA(self, df):
+        vm = self.vm
+        plt = vm('plt')
+        bili = vm('bili')
+        map = vm('map')
+        crea = vm('crea')
+ 
         sofa = np.zeros(shape=df.shape[0])
-
+        
         # Coagulation
-        platelets = df['plt'].values
+        platelets = df[plt].values
         sofa[platelets >= 150] += 0
         sofa[(100 <= platelets) & (platelets < 150)] += 1
         sofa[(50 <= platelets) & (platelets < 100)] += 2
@@ -588,7 +637,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         sofa[platelets < 20] += 4
 
         # Liver
-        bilirubin = df['bili'].values
+        bilirubin = df[bili].values
         sofa[bilirubin < 1.2] += 0
         sofa[(1.2 <= bilirubin) & (bilirubin <= 1.9)] += 1
         sofa[(1.9 < bilirubin) & (bilirubin <= 5.9)] += 2
@@ -596,12 +645,12 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         sofa[bilirubin > 11.9] += 4
 
         # Cardiovascular
-        map = df['map'].values
+        map = df[map].values
         sofa[map >= 70] += 0
         sofa[map < 70] += 1
 
         # crea
-        creatinine = df['crea'].values
+        creatinine = df[crea].values
         sofa[creatinine < 1.2] += 0
         sofa[(1.2 <= creatinine) & (creatinine <= 1.9)] += 1
         sofa[(1.9 < creatinine) & (creatinine <= 3.4)] += 2
@@ -610,75 +659,62 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
         return sofa
 
-    @staticmethod
-    def SOFA_max_24(s):
-        """ Get the max value of the SOFA score over the prev 24 hrs """
-        def find_24_hr_max(s):
-            prev_24_hrs = pd.concat([s.shift(i) for i in range(24)], axis=1).values[:, ::-1]
-            return pd.Series(index=s.index, data=np.nanmax(prev_24_hrs, axis=1))
-        sofa_24 = s.groupby('id').apply(find_24_hr_max)
-        return sofa_24
-
-    @staticmethod
-    def SOFA_deterioration_new(s):
-        def check_24hr_deterioration(s):
-            """ Check the max deterioration over the last 24 hours, if >= 2 then mark as a 1"""
-            prev_24_hrs = pd.concat([s.shift(i) for i in range(24)], axis=1).values[:, ::-1]
-
-            def max_deteriorate(arr):
-                return np.nanmin([arr[i] - np.nanmax(arr[i+1:]) for i in range(arr.shape[-1]-1)])
-
-            tfr_hr_min = np.apply_along_axis(max_deteriorate, 1, prev_24_hrs)
-            return pd.Series(index=s.index, data=tfr_hr_min)
-        sofa_det = s.groupby('id').apply(check_24hr_deterioration)
-        return sofa_det
-
-    @staticmethod
-    def SOFA_deterioration(s):
+    def SOFA_deterioration(self, s):
         def check_24hr_deterioration(s):
             """ Check the max deterioration over the last 24 hours, if >= 2 then mark as a 1"""
             prev_23_hrs = pd.concat([s.shift(i) for i in range(1, 24)], axis=1).values
             tfr_hr_min = np.nanmin(prev_23_hrs, axis=1)
             return pd.Series(index=s.index, data=(s.values - tfr_hr_min))
-        sofa_det = s.groupby('id').apply(check_24hr_deterioration)
+        sofa_det = s.groupby(
+            self.vm('id')).apply(check_24hr_deterioration)
         sofa_det[sofa_det < 0] = 0
         sofa_det = sofa_det
         return sofa_det
 
-    @staticmethod
-    def septic_shock(df):
+    def septic_shock(self, df):
+        vm = self.vm
+        map = vm('map')
+        lact = vm('lact')
         shock = np.zeros(shape=df.shape[0])
-        shock[df['map'].values < 65] += 1
-        shock[df['lact'].values > 2] += 1
+        shock[df[map].values < 65] += 1
+        shock[df[lact].values > 2] += 1
         return shock
 
     def transform(self, df):
-        # Compute things
-        df['ShockIndex'] = df['hr'].values / df['sbp'].values
-        df['bun/cr'] = df['bun'].values / df['crea'].values
-        df['po2/fio2'] = df['po2'].values / df['fio2'].values #shouldnt it be PaO2/Fi ratio?
+        vm = self.vm
+        hr = vm('hr')
+        sbp = vm('sbp')
+        bun = vm('bun')
+        crea = vm('crea')
+        po2 = vm('po2')
+        fio2 = vm('fio2')
+        plt = vm('plt')
+        map = vm('map')
+        bili = vm('bili')
+ 
+        # Ratios:
+        df['ShockIndex_derived'] = df[hr].values / df[sbp].values
+        df['bun/cr_derived'] = df[bun].values / df[crea].values
+        df['po2/fio2_dervied'] = df[po2].values / df[fio2].values #shouldnt it be PaO2/Fi ratio?
 
         # SOFA
-        df['SOFA'] = self.SOFA(df[['plt', 'map', 'crea', 'bili']])
-        df['SOFA_deterioration'] = self.SOFA_deterioration(df['SOFA'])
-        #df['sofa_max_24hrs'] = self.SOFA_max_24(df['SOFA'])
-        df['qSOFA'] = self.qSOFA(df)
-        # df['SOFA_24hrmaxdet'] = self.SOFA_deterioration(df['SOFA_max_24hrs'])
-        # df['SOFA_deterioration_new'] = self.SOFA_deterioration_new(df['SOFA_max_24hrs'])
-        df['SepticShock'] = self.septic_shock(df)
+        df['SOFA_derived'] = self.SOFA(df[[plt, map, crea, bili]])
+        df['SOFA_deterioration_derived'] = self.SOFA_deterioration(df['SOFA_derived'])
+        df['qSOFA_derived'] = self.qSOFA(df)
+        df['SepticShock_derived'] = self.septic_shock(df)
 
         # Other scores
         sirs_df = self.sirs_criteria(df)
-        df['MEWS'] = self.mews_score(df)
-        df['SIRS'] = sirs_df['SIRS']
+        df['MEWS_derived'] = self.mews_score(df)
+        df['SIRS_derived'] = sirs_df['SIRS']
         return df
 
 class MeasurementCounter(DaskIDTransformer):
     """ Adds a count of the number of measurements up to the given timepoint. """
-    def __init__(self, n_jobs=4, **kwargs):
-        super().__init__(n_jobs=n_jobs, **kwargs)
+    def __init__(self, vm=None, suffix='_raw', **kwargs):
+        super().__init__(vm=vm, **kwargs)
         # we only count raw time series measurements 
-        self.columns = ts_columns
+        self.col_suffix = suffix #apply look-back stats to time series columns
 
     def fit(self, df, labels=None):
         return self
@@ -686,10 +722,11 @@ class MeasurementCounter(DaskIDTransformer):
     def transform_id(self, df):
         # Make a counts frame
         counts = deepcopy(df)
-        counts.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+        drop_cols = [x for x in df.columns if not self.col_suffix in x] 
+        counts.drop(drop_cols, axis=1, inplace=True)
 
         # Turn any floats into counts
-        for col in self.columns:
+        for col in counts.columns:
             counts[col][~counts[col].isna()] = 1
         counts = counts.replace(np.nan, 0)
 
@@ -697,13 +734,14 @@ class MeasurementCounter(DaskIDTransformer):
         counts = counts.cumsum() 
 
         # Rename
-        counts.columns = [x + '_count' for x in counts.columns]
+        cols = strip_cols(counts.columns, [self.col_suffix])
+        counts.columns = [x + '_count' for x in cols]
 
         return pd.concat([df, counts], axis=1)
 
 class WaveletFeatures(ParallelBaseIDTransformer):
     """ Computes wavelet scattering up to given time per time series channel """
-    def __init__(self, n_jobs=4, T=32, J=2, Q=1, output_size=32, **kwargs):
+    def __init__(self, n_jobs=4, T=32, J=2, Q=1, output_size=32, suffix='_locf', **kwargs):
         """
         Running 1D wavelet scattering.
         Inputs:
@@ -717,7 +755,7 @@ class WaveletFeatures(ParallelBaseIDTransformer):
         super().__init__(n_jobs=n_jobs, **kwargs)
         # we process the raw time series measurements 
         self.T = T
-        self.columns = ts_columns
+        self.col_suffix = suffix 
         self.scatter = Scattering1D(J, T, Q) 
         self.output_size = output_size
 
@@ -727,7 +765,8 @@ class WaveletFeatures(ParallelBaseIDTransformer):
     def transform_id(self, df):
         """ process invididual patient """  
         inputs = deepcopy(df)
-        inputs.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+        drop_cols = [x for x in df.columns if self.col_suffix not in x]
+        inputs.drop(drop_cols, axis=1, inplace=True)
 
         # pad time series with T-1 0s (for getting online features of fixed window size)
         inputs = self._pad_df(inputs, n_pad=self.T-1)
@@ -742,14 +781,16 @@ class WaveletFeatures(ParallelBaseIDTransformer):
 
     def _pad_df(self, df, n_pad, value=0):
         """ util function to pad <n_pad> zeros at the start of the df 
+            and impute 0s at the remaining nans (of lcof imputation). 
         """
         x = np.concatenate([np.zeros([n_pad,df.shape[1]]), df.values]) 
-        return pd.DataFrame(x, columns=df.columns)
+        return pd.DataFrame(x, columns=df.columns).fillna(0)
 
     def _compute_wavelets(self, df):
         """ Loop over all columns, compute column-wise wavelet features
              and create wavelet output columns"""
         col_dfs = []
+        df.columns = strip_cols(df.columns, [self.col_suffix])
         for col in df.columns:
             col_df = self._process_column(df, col)
             col_dfs.append(col_df)
@@ -772,7 +813,8 @@ class WaveletFeatures(ParallelBaseIDTransformer):
 
 class SignatureFeatures(ParallelBaseIDTransformer):
     """ Computes signature features for a given look back window """
-    def __init__(self, n_jobs=4, look_back=7, order=3, **kwargs):
+    def __init__(self, n_jobs=4, look_back=7, order=3, 
+            suffices=['_locf', '_derived'], **kwargs):
         """
         Inputs:
             - n_jobs: for parallelization on the patient level
@@ -781,20 +823,21 @@ class SignatureFeatures(ParallelBaseIDTransformer):
             - order: signature truncation level of univariate signature features
                 --> for multivariate signatures (of groups of channels), we use order-1 
         """
+        n_jobs=1
         super().__init__(n_jobs=n_jobs, **kwargs)
         # we process the raw time series measurements 
         self.order = order
+        self.suffices = suffices
         self.look_back = look_back
-        self.columns = extended_ts_columns
-        #self.column_dict = {
-        #    'vitals': vital_columns,
-        #    'labs_chem': lab_columns_chemistry,
-        #    'labs_org': lab_columns_organs,
-        #    'labs_hemo': lab_columns_hemo,
-        #    'scores_inds': scores_and_indicators_columns
-        #}
-        self.output_size = iis.siglength(2, self.order) # channel + time = 2
-        self.output_size_all = iis.siglength(len(self.columns) + 1, self.order)    
+        #self.columns = extended_ts_columns
+        column_dict = { #concept variables
+            'vitals':  ['hr', 'o2sat', 'temp', 'map', 'resp', 'fio2'],
+            'labs': ['ph', 'lact', 'wbc', 'plt', 'ptt'],
+            'scores': ['ShockIndex', 'bun/cr', 'SOFA', 'SepticShock', 'MEWS'] 
+        }
+        self.column_dict = self._add_suffices(column_dict)
+        #self.output_size = iis.siglength(2, self.order) # channel + time = 2
+        #self.output_size_all = iis.siglength(len(self.columns) + 1, self.order)    
 
     def fit(self, df, labels=None):
         return self
@@ -802,29 +845,42 @@ class SignatureFeatures(ParallelBaseIDTransformer):
     def transform_id(self, df):
         """ process invididual patient """  
         inputs = deepcopy(df)
-        inputs.drop([x for x in df.columns if x not in self.columns], axis=1, inplace=True)
+        drop_cols = [col for col in df.columns if not any(
+            [suffix in col for suffix in self.suffices ] )]
+        inputs.drop(drop_cols, axis=1, inplace=True)
 
         # pad time series with look_back size many 0s (for getting online features of fixed window size)
         inputs = self._pad_df(inputs, n_pad=self.look_back)
         
         #channel-wise signatures
-        signatures = self._compute_signatures(inputs)
+        #signatures = self._compute_signatures(inputs)
         
         #multivariable signatures over variable groups
-        #mv_signatures = self._compute_mv_signatures(inputs) 
+        mv_signatures = self._compute_mv_signatures(inputs) 
  
-        assert df.shape[0] == signatures.shape[0]
-        signatures.index = df.index
-        #assert df.shape[0] == mv_signatures.shape[0]
-        #mv_signatures.index = df.index
+        #assert df.shape[0] == signatures.shape[0]
+        #signatures.index = df.index
+        
+        assert df.shape[0] == mv_signatures.shape[0]
+        mv_signatures.index = df.index
 
-        return pd.concat([df, signatures], axis=1) #mv_signatures
+        return pd.concat([df, mv_signatures], axis=1) #mv_signatures
+
+    def _add_suffices(self, col_dict):
+        out = {}
+        for key in col_dict.keys():
+            if 'scores' in key:
+                columns = [col + '_derived' for col in col_dict[key]]
+            else:
+                columns = [col + '_locf' for col in col_dict[key]]
+            out[key] = columns 
+        return out
 
     def _pad_df(self, df, n_pad, value=0):
         """ util function to pad <n_pad> zeros at the start of the df 
         """
         x = np.concatenate([np.zeros([n_pad,df.shape[1]]), df.values]) 
-        return pd.DataFrame(x, columns=df.columns)
+        return pd.DataFrame(x, columns=df.columns).fillna(0)
 
     def _to_path(self, X):
         """ Convert single, evenly spaced time series to path by adding time axis
@@ -858,7 +914,7 @@ class SignatureFeatures(ParallelBaseIDTransformer):
         return col_df
 
     def _rolling_function(self, window, df, order):
-        """actually compute wavelet scattering in a rolling window """
+        """compute univariate signatures of a pd.rolling window """
         path = self._to_path(window.values)
         df.loc[window.index.min()] = iis.sig(path, order)
         return 1 # rolling funcs need to return index.. 
@@ -871,16 +927,65 @@ class SignatureFeatures(ParallelBaseIDTransformer):
         for group, columns in self.column_dict.items():
             col_df = self._process_group(df, group, columns)
             col_dfs.append(col_df)
-        return pd.concat(col_dfs, axis=1)
+        out = pd.concat(col_dfs, axis=1)
+        return out[self.look_back:]
 
     def _process_group(self, df, group, columns):
         """ Processing a group of columns. """
-        group_output_size = iis.siglength(len(columns)+1, self.order-1)
+        group_output_size = iis.siglength(len(columns)+1, self.order)
         out_cols = [group + f'_signature_{i}' for i in range(group_output_size)]
-        col_df = pd.DataFrame(columns=out_cols)
+        #col_df = pd.DataFrame(columns=out_cols)
         # we go over input column and write result to col_df, which is a 
         # df gathering all features from the current col
-        df[columns].rolling(window = self.look_back+1, axis=1).apply(self._rolling_function, 
-            kwargs={'df': col_df, 'order': self.order-1 })
+        #df[columns].rolling(window = self.look_back+1, axis=1).apply(self._rolling_function, 
+        #    kwargs={'df': col_df, 'order': self.order })
+        func_kwargs = {'order': self.order } 
+        col_df = self._mv_rolling(df = df[columns],
+                                  cols = out_cols, 
+                                  window = self.look_back+1,
+                                  func = self._mv_rolling_function,
+                                  func_kwargs = func_kwargs
+        )
+                                    
         return col_df
+
+    def _mv_rolling(self, df, cols, window, func, func_kwargs={}):
+        """
+        Custom rolling operation for functions that 
+        require access to multiple columns.
+        Args:
+        - df: dataframe to roll over
+        - cols: list of output columns 
+        - window: window length (similar as pd.rolling)
+        - func: rolling function object (e.g. mean, max etc)
+        - func_kwargs: arguments to function 
+        """
+        col_df = df.copy()
+        col_df = col_df.reindex(columns = cols)
+        
+        for i in np.arange(window-1, len(df)):
+            start = i - window + 1
+            end = i + 1
+            col_df.iloc[i,:] = func(df.iloc[start:end, :], **func_kwargs)
+        return col_df
+    
+    def _mv_rolling_function(self, window, order):
+        """compute univariate signatures of a custom rolling window """
+        path = self._to_path(window.values)
+        return iis.sig(path, order)
+
+
+def strip_cols(columns, suffices):
+    """
+    Utility function to sequentially strip suffices from columns.
+    Observed that removing _string directly leads to 
+    unexpected behaviour, therefore removing first string, then _.
+    Here, we assume that the suffices are provied as: '_<string>'
+    """
+    # removing '_' from suffix and adding it as a separate suffix to remove
+    suffices = [x.lstrip('_') for x in suffices]
+    suffices.append('_')
+    for suffix in suffices:
+        columns = columns.str.rstrip(suffix) 
+    return columns
 
