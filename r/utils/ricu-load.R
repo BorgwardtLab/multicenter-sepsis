@@ -192,7 +192,7 @@ augment <- function(x, fun, suffix,
                     "no non-missing arguments")) {
 
         fix_inf <<- TRUE
-        tryInvokeRestart("muffleWarning")
+        invokeRestart("muffleWarning")
       }
     })
 
