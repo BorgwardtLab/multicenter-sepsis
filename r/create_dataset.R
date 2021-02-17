@@ -15,6 +15,8 @@ args <- parse_args(src_opt, out_dir)
 src <- check_src(args, "challenge")
 dir <- check_dir(args)
 
+msg("\n\nUsing {data.table::getDTthreads()} OMP threads\n\n")
+
 for (x in src) {
   msg("\n\nexporting data for {x}\n\n")
   export_data(x, dest_dir = dir)

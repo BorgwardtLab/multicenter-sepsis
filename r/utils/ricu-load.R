@@ -1,5 +1,5 @@
 
-load_challenge <- function(dir = data_path("challenge"),
+load_challenge <- function(dir = data_path("physionet2019"),
                            cfg = cfg_path("variables.json")) {
 
   concepts <- read_var_json(cfg)
@@ -84,14 +84,15 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
   new <- sep[win, on = join, nomatch = NULL]
   tmp <- nrow(new)
 
-  msg("\n\n--> removing {nrow(sep) - tmp} patients due to onsets",
+  msg("--> removing {nrow(sep) - tmp} patients due to onsets",
       " outside of icu stay.\n")
 
   new <- new[get(index_var(new)) >= min_onset &
              get(index_var(new)) <= max_onset, ]
 
-  msg("\n\n--> removing {tmp - nrow(new)} patients due to onsets",
-      " outside of [{format(min_onset)}, {format(max_onset)}].\n")
+  msg("--> removing {tmp - nrow(new)} patients due to onsets",
+      " outside of [{format(min_onset, units = 'hours')},",
+      " {format(max_onset, units = 'hours')}].\n")
 
   flt <- setdiff(id_col(sep), id_col(new))
 
@@ -103,9 +104,9 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
     is.na(sep3_time), pmin(outtime, cut_ctrl), sep3_time + cut_case
   )]
 
-  msg("\n\n--> removing up to {format(sum(win$outtime - win$cuttime))} due",
-      " to censoring data {format(cut_case)} after onsets and",
-      " {format(cut_ctrl)} into stays.\n")
+  msg("--> removing up to {format(sum(win$outtime - win$cuttime))} due",
+      " to censoring data {format(cut_case, units = 'hours')} after onsets",
+      " and {format(cut_ctrl, units = 'hours')} into stays.\n")
 
   win <- rm_cols(win, c("intime", "outtime", "sep3_time"), by_ref = TRUE)
   dat <- lapply(dat, truncate_dat, win, flt)
@@ -150,7 +151,7 @@ sepsis3_crit <- function(source, pids = NULL,
                         patient_ids = pids)
   }
 
-  sep3(dat, si)
+  sep3(dat, si, si_window = "any")
 }
 
 augment <- function(x, fun, suffix,
@@ -160,7 +161,7 @@ augment <- function(x, fun, suffix,
 
   inf_to_na <- function(x) replace(x, is.infinite(x), NA)
 
-  msg("\n\n--> augmentation step {suffix}\n")
+  msg("--> augmentation step {suffix}")
 
   if (is.numeric(win)) {
     win <- as.difftime(win, units = "hours")
@@ -212,6 +213,24 @@ augment <- function(x, fun, suffix,
   res
 }
 
+augment_prof <- function(...) {
+
+  mem <- memuse::Sys.procmem()
+  tim <- Sys.time()
+
+  res <- augment(...)
+
+  cur <- memuse::Sys.procmem()
+  cil <- cur[["peak"]] - mem[["peak"]]
+  cur <- cur[["size"]] - mem[["size"]]
+
+  msg("    Runtime: {format(Sys.time() - tim, digits = 4)}")
+  if (length(cil)) msg("    Memory ceiling increased by: {as.character(cil)}")
+  msg("    Current memory usage: {as.character(cur)}\n")
+
+  res
+}
+
 export_data <- function(src, dest_dir = data_path("export"),
                         var_cfg = cfg_path("variables.json"), ...) {
 
@@ -224,6 +243,8 @@ export_data <- function(src, dest_dir = data_path("export"),
   } else {
     dat <- load_ricu(src, var_cfg = var_cfg, ...)
   }
+
+  dat <- rm_na(dat, meta_vars(dat), "any")
 
   dat <- dat[, onset := sep3]
   dat <- replace_na(dat, type = "locf", by_ref = TRUE, vars = "sep3",
@@ -248,14 +269,14 @@ export_data <- function(src, dest_dir = data_path("export"),
   tsv <- paste0(tsn, "_raw")
   dat <- rename_cols(dat, tsv, tsn, by_ref = TRUE)
 
-  ind <- augment(dat, Negate(is.na), "ind", tsv)
-  lof <- augment(dat, data.table::nafill, "locf", tsv, by = id_vars(dat),
-                 type = "locf")
+  ind <- augment_prof(dat, Negate(is.na), "ind", tsv)
+  lof <- augment_prof(dat, data.table::nafill, "locf", tsv, by = id_vars(dat),
+                      type = "locf")
 
   funs <- c("min", "max", "mean", "var")
   wins <- c(4L, 8L, 16L)
 
-  lbk <- Map(augment,
+  lbk <- Map(augment_prof,
     list(dat),
     fun = rep(funs, length(wins)),
     suffix = paste0(rep(funs, length(wins)), rep(wins, each = length(funs))),
