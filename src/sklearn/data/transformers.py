@@ -27,58 +27,6 @@ from src import datasets
 from src.evaluation.sklearn_utils import nanany
 from src.evaluation.physionet2019_score import compute_prediction_utility
 
-class DataframeFromDataloader(TransformerMixin, BaseEstimator):
-    """
-    Transform method that takes dataset class, loads corresponding iterable dataloader and 
-    returns (and saves if requested) the dataset in one large sklearn-ready pd dataframe 
-    format with patient and time multi-indices.
-    """
-    def __init__(self, dataset_cls=None, data_dir=None, split='train', n_jobs=10, concat_output=False, custom_path=None):
-        dataset_class = getattr(datasets, dataset_cls)
-        self.split = split
-        if custom_path:
-            #remove last two folders (framework-agnostic) from data_dir path to get to base_dir
-            custom_path = os.path.split(os.path.split(data_dir)[0])[0]
-        self.dataloader = dataset_class(split=split, as_dict=False, custom_path=custom_path)
-        self.n_jobs = n_jobs
-        self.concat_output = concat_output
- 
-    def fit(self, df, labels=None):
-        return self
-
-    def _load_index_and_prepare(self, index):
-        patient_id, df = self.dataloader[index]
-        df['id'] = patient_id
-        # Idx according to id and time
-        df = df.rename(columns={'stay_time': 'time'}) #rename for easier understanding
-        df.reset_index(drop=True, inplace=True)
-        df.set_index(['id', 'time'], inplace=True)
-        df.sort_index(ascending=True, inplace=True)
-
-        #Sanity check: ensure that bool cols are floats (checking all columns each time is costly, so wrote out the identified few)
-        bool_cols = ['sep3', 'vaso_ind', 'vent_ind'] 
-        df[bool_cols] = df[bool_cols].astype(float) #necessary, as ints would mess with categorical onehot encoder
-        
-        #Remove few columns which are not used at all (e.g. interventions)
-        df = df.drop(columns = colums_to_drop)
-        return df
-
-    def transform(self, df):
-        """
-        Takes dataset_cls (in self), loads iteratable instances and concatenates them to a multi-indexed 
-        pandas dataframe which is returned
-        """
-        # Make the dataframe
-        if self.n_jobs == 1: #also use parallel when n_jobs=-1
-            #this case prevents us from adding an additional argument for batchsize when using demo dataset
-            output = [self._load_index_and_prepare(i) for i in range(len(self.dataloader))]
-        else:  
-            output = Parallel(n_jobs=self.n_jobs, verbose=1, batch_size=1000)(
-                delayed(self._load_index_and_prepare)(i) for i in range(len(self.dataloader)))
-        if self.concat_output:
-            output = pd.concat(output)
-        print('Done with DataframeFromDataloader')
-        return output
 
 class DataframeFromParquet(TransformerMixin, BaseEstimator):
     """
@@ -123,7 +71,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
 
     def __init__(
         self,
-        passthrough=True,
+        passthrough=False,
         label='sep3',
         score_name='utility',
         shift=0,
@@ -141,7 +89,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         label : str
             Indicates which column to use for the sepsis label.
 
-        )score_name : str
+        score_name : str
             Indicates the name of the column that will contain the
             calculated utility score. If `passthrough` is set, the
             column name will only be used in the result data frame
@@ -356,12 +304,19 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         self.thres = thres
         self.label = vm('label')
         self.col_suffix = suffix
+        self.vm = vm
 
     def fit(self, df, labels=None):
         return self
 
     def _remove_pre_icu(self, df):
-        return df[df['time'] >= 0]
+        time = self.vm('time')
+        #check whether we are dealing with multi or single index df:
+        if time in df.columns:
+            x = df[time]  
+        elif time in df.index.names:
+            x = df.index.get_level_values(time)
+        return df[ x >= 0 ] 
 
     def _remove_too_few_observations(self, df, thres):
         """ in rare cases it is possible that Lookbackfeatures leak zeros into invalid nan rows (which makes time handling easier)
@@ -879,7 +834,6 @@ class SignatureFeatures(ParallelBaseIDTransformer):
             - order: signature truncation level of univariate signature features
                 --> for multivariate signatures (of groups of channels), we use order-1 
         """
-        n_jobs=1
         super().__init__(n_jobs=n_jobs, **kwargs)
         # we process the raw time series measurements 
         self.order = order

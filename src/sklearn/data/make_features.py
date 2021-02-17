@@ -101,7 +101,6 @@ def main():
         ('lookback_features', LookbackFeatures(vm=vm,  
             suffices=['_raw', '_derived'])), ####concat_output=True)),
         ('measurement_counts', MeasurementCounter(vm=vm, suffix='_raw')),
-    #    ('filter_invalid_times', InvalidTimesFiltration()),
     ])
     df = dask_pipeline.fit_transform(df).compute()
 
@@ -127,6 +126,8 @@ def main():
             concat_output=True)), #n_jobs=5, concat_output=True 
         ('signatures', SignatureFeatures(n_jobs=n_jobs, 
             suffices=['_locf', '_derived'], concat_output=True)), #n_jobs=2
+        ('calculate_target', CalculateUtilityScores(label=vm('label'))), 
+        ('filter_invalid_times', InvalidTimesFiltration(vm=vm, suffix='_raw'))
         ])
     out_df_splits = []
     keys = list(df_splits.keys()) # dict otherwise doesnt like popping keys
