@@ -27,58 +27,6 @@ from src import datasets
 from src.evaluation.sklearn_utils import nanany
 from src.evaluation.physionet2019_score import compute_prediction_utility
 
-class DataframeFromDataloader(TransformerMixin, BaseEstimator):
-    """
-    Transform method that takes dataset class, loads corresponding iterable dataloader and 
-    returns (and saves if requested) the dataset in one large sklearn-ready pd dataframe 
-    format with patient and time multi-indices.
-    """
-    def __init__(self, dataset_cls=None, data_dir=None, split='train', n_jobs=10, concat_output=False, custom_path=None):
-        dataset_class = getattr(datasets, dataset_cls)
-        self.split = split
-        if custom_path:
-            #remove last two folders (framework-agnostic) from data_dir path to get to base_dir
-            custom_path = os.path.split(os.path.split(data_dir)[0])[0]
-        self.dataloader = dataset_class(split=split, as_dict=False, custom_path=custom_path)
-        self.n_jobs = n_jobs
-        self.concat_output = concat_output
- 
-    def fit(self, df, labels=None):
-        return self
-
-    def _load_index_and_prepare(self, index):
-        patient_id, df = self.dataloader[index]
-        df['id'] = patient_id
-        # Idx according to id and time
-        df = df.rename(columns={'stay_time': 'time'}) #rename for easier understanding
-        df.reset_index(drop=True, inplace=True)
-        df.set_index(['id', 'time'], inplace=True)
-        df.sort_index(ascending=True, inplace=True)
-
-        #Sanity check: ensure that bool cols are floats (checking all columns each time is costly, so wrote out the identified few)
-        bool_cols = ['sep3', 'vaso_ind', 'vent_ind'] 
-        df[bool_cols] = df[bool_cols].astype(float) #necessary, as ints would mess with categorical onehot encoder
-        
-        #Remove few columns which are not used at all (e.g. interventions)
-        df = df.drop(columns = colums_to_drop)
-        return df
-
-    def transform(self, df):
-        """
-        Takes dataset_cls (in self), loads iteratable instances and concatenates them to a multi-indexed 
-        pandas dataframe which is returned
-        """
-        # Make the dataframe
-        if self.n_jobs == 1: #also use parallel when n_jobs=-1
-            #this case prevents us from adding an additional argument for batchsize when using demo dataset
-            output = [self._load_index_and_prepare(i) for i in range(len(self.dataloader))]
-        else:  
-            output = Parallel(n_jobs=self.n_jobs, verbose=1, batch_size=1000)(
-                delayed(self._load_index_and_prepare)(i) for i in range(len(self.dataloader)))
-        if self.concat_output:
-            output = pd.concat(output)
-        print('Done with DataframeFromDataloader')
-        return output
 
 class DataframeFromParquet(TransformerMixin, BaseEstimator):
     """
@@ -123,7 +71,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
 
     def __init__(
         self,
-        passthrough=True,
+        passthrough=False,
         label='sep3',
         score_name='utility',
         shift=0,
@@ -141,7 +89,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         label : str
             Indicates which column to use for the sepsis label.
 
-        )score_name : str
+        score_name : str
             Indicates the name of the column that will contain the
             calculated utility score. If `passthrough` is set, the
             column name will only be used in the result data frame
@@ -352,21 +300,29 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
         - time steps before ICU admission (i.e. negative timestamps) 
         - time steps with less than <thres> many observations. 
     """
-    def __init__(self, thres=1, label='sep3'):
+    def __init__(self, thres=1, vm=None, suffix='_raw'):
         self.thres = thres
-        self.label = label
+        self.label = vm('label')
+        self.col_suffix = suffix
+        self.vm = vm
 
     def fit(self, df, labels=None):
         return self
 
     def _remove_pre_icu(self, df):
-        return df[df['time'] >= 0]
+        time = self.vm('time')
+        #check whether we are dealing with multi or single index df:
+        if time in df.columns:
+            x = df[time]  
+        elif time in df.index.names:
+            x = df.index.get_level_values(time)
+        return df[ x >= 0 ] 
 
     def _remove_too_few_observations(self, df, thres):
         """ in rare cases it is possible that Lookbackfeatures leak zeros into invalid nan rows (which makes time handling easier)
             additionally drop those rows by identifying nan labels
         """
-        ind_to_keep = (~df[ts_columns].isnull()).sum(axis=1) >= thres
+        ind_to_keep = (~df[self.columns].isnull()).sum(axis=1) >= thres
         ind_labels = (~df[self.label].isnull()) #sanity check to prevent lookbackfeatures 0s to mess up nan rows
         ind_to_keep = np.logical_and(ind_to_keep, ind_labels)
         return df[ind_to_keep]
@@ -380,7 +336,9 @@ class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
     def transform(self, df):
         """ As this time filtering step also affects labels, for simplicity we load and adjust them too. 
         """
-        df = df.groupby('id', group_keys=False).apply(self._transform_id)
+        self.columns = [x for x in df.columns if self.col_suffix in x]
+
+        df = df.groupby(self.vm('id'), group_keys=False).apply(self._transform_id)
         
         print('Done with InvalidTimesFiltration')
         return df
@@ -419,16 +377,59 @@ class IndicatorImputation(ParallelBaseIDTransformer):
 
 class Normalizer(TransformerMixin, BaseEstimator):
     """
-    Performs normalization (z-scoring) of columns which are not explicitly excluded.
-    Caches stats of the train split for the remaining splits to use.
+    Performs normalization (z-scoring) of columns.
     """
-    def __init__(self, data_dir, split):
+    def __init__(self, split_info, split='dev', config_dir='config', 
+                 suffix=None, vm=None, save=False):
+        """
+        Args:
+        - split_info: dict containing split information of the current dataset
+        - split: which split to use for computing the normalization stats:
+            [dev, train_0, train_1, train_2, train_3, train_4] where 'dev' represents
+            the entire development data, and trainX the train part of 5 
+            train/val splits of dev.
+        - config_dir: directory for storing normalization stats 
+        - suffix: when provided all columns having this suffix are normalized.
+            otherwise, all but the excluded columns are normalized.
+        - vm: variable mapping object, required when no suffix is provided 
+            to determine exlucded columns.
+        - save: flag, whether fitted stats are written out to json. 
+        Note that column selection via suffix has precedence over column exclusion
+        (via vm) in case both are provided. 
+        """
+                 
+        self.split_info = split_info
         self.split = split
-        self.data_dir = data_dir
-        self.drop_cols = columns_not_to_normalize 
-        self.normalizer_dir = os.path.join(data_dir, 'normalizer')
-        self.normalizer_file = os.path.join(self.normalizer_dir, f'normalizer_stats.pkl')
- 
+        self.config_dir = config_dir
+        self.suffix = suffix
+        self.vm = vm
+        self.save = save
+        self._check_signature_and_set_mode()
+        self.ids = self._get_split_ids(split_info, split)
+        #self.normalizer_dir = os.path.join(data_dir, 'normalizer')
+        #self.normalizer_file = os.path.join(self.normalizer_dir, f'normalizer_stats.pkl')
+
+    def _check_signature_and_set_mode(self):
+        """ check that either suffix or vm is provided and split is among valid splits."""
+        try:
+            assert any([self.suffix, self.vm])
+        except:
+            raise ValueError('Either suffix or variable mapping must be provided!')
+        if self.suffix: 
+            self.mode = 'suffix'
+        elif self.vm:
+            self.mode = 'exclusion'
+        assert self.split in ['dev', 'train_0', 'train_1', 'train_2', 'train_3', 'train_4']
+        return self
+
+    def _get_split_ids(self, info, name):
+        if name == 'dev':
+            ids = info['dev']['total'] 
+        else:
+            prefix, count = name.split('_')
+            ids = info['dev'][f'split_{count}'][prefix] 
+        return np.array(ids) 
+  
     def _drop_columns(self, df, cols_to_drop):
         """ Utiliy function, to select available columns to 
             drop (the list can reach over different feature sets)
@@ -448,24 +449,34 @@ class Normalizer(TransformerMixin, BaseEstimator):
         return (df - means) / stds 
   
     def fit(self, df, labels=None):
-        if self.split == 'train':
-            df, _ = self._drop_columns(df, self.drop_cols)
-            self.stats = self._compute_stats(df)
-            os.makedirs(self.normalizer_dir, exist_ok=True)
-            save_pickle(self.stats, self.normalizer_file)
-        else:
-            try:
-                self.stats = load_pickle(self.normalizer_file) 
-            except:
-                raise ValueError('Normalization file not found. Compute normalization for train split first!') 
-            #TODO: assert that cols in loaded stats are the same as all_cols \ drop_cols
+        if self.mode == 'suffix':
+            suffix = self.suffix
+            if type(suffix) == str:
+                suffix = [suffix]
+            self.columns = [col for col in df.columns if any(
+                [s in col for s in suffix] )
+            ]
+        elif self.mode == 'exclusion':
+            vm = self.vm
+            drop_cols = vm.all_cat('baseline')
+            drop_cols.extend(
+                [ vm(var) for var in ['label', 'sex', 'time']]
+            )
+            self.columns = [col for col in df.columns if col not in drop_cols]
+
+        self.stats = self._compute_stats(df[self.columns])
+        if self.save:
+            raise NotImplementedError('TODO: implement saving of normalizer')
         return self
     
     def transform(self, df):
-        df_to_normalize, remaining_cols = self._drop_columns(df, self.drop_cols)
-        df_normalized = self._apply_normalizer(df_to_normalize, self.stats)
-        df_out = pd.concat([df_normalized, df[remaining_cols]], axis=1) 
-        return df_out
+        if not self.stats:
+            raise NotImplementedError('TODO: load from saved normalizer file')
+        df[self.columns] = self._apply_normalizer(df[self.columns], self.stats) 
+        #df_to_normalize, remaining_cols = self._drop_columns(df, self.drop_cols)
+        #df_normalized = self._apply_normalizer(df_to_normalize, self.stats)
+        #df_out = pd.concat([df_normalized, df[remaining_cols]], axis=1) 
+        return df
 
 
 class LookbackFeatures(DaskIDTransformer):
@@ -823,7 +834,6 @@ class SignatureFeatures(ParallelBaseIDTransformer):
             - order: signature truncation level of univariate signature features
                 --> for multivariate signatures (of groups of channels), we use order-1 
         """
-        n_jobs=1
         super().__init__(n_jobs=n_jobs, **kwargs)
         # we process the raw time series measurements 
         self.order = order

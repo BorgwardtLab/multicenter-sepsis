@@ -95,7 +95,7 @@ def main(args):
     #--------------------------------
     print('Dumping split info to json...')
     with open(out_file, 'w') as f:
-        json.dump(info, f)
+        json.dump(info, f, indent=4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

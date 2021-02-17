@@ -15,7 +15,11 @@ class VariableMapping:
     """
     def __init__(self, variable_file='config/variables.json', 
                  input_col='concept', output_col='name',
-                 keys={'id': 'stay_id', 'time':'stay_time', 'label': 'sep3'}):
+                 keys={ 'id': 'stay_id', 
+                        'time':'stay_time', 
+                        'label': 'sep3',
+                        'utility': 'utility'}
+    ):
         """
         Arguments:
             - variable_file: path to json file containing all variable mappings
@@ -97,7 +101,10 @@ class VariableMapping:
         """
         df = self.var_df
         df = df[~df[self.output_col].isnull()] # we are only interested in those cols
-        result = list(self.keys.values()) 
+        keys = self.keys.copy() # we modify keys locally
+        keys.pop('utility') #pop this key which remains fixed, for changing utility name,
+        # we need to change the *value* of the keys dict
+        result = list(keys.values()) 
         variables = df[self.output_col] 
         for i, suffix in enumerate(suffices):
             for v in variables:
