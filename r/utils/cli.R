@@ -81,3 +81,5 @@ check_dir <- function(opt) {
 
   res
 }
+
+format_unit <- function(x, units = "hours") format(`units<-`(x, units))
