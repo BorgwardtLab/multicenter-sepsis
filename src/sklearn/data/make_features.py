@@ -14,19 +14,20 @@ import pyarrow.parquet as pq
 from .transformers import *
 from .subsetters import ChallengeFeatureSubsetter 
 from src.variables.mapping import VariableMapping
+from src.datasets.utils import get_file_mapping
 
-file_mapping = {'demo': 'mimic_demo.parquet',
-                'mimic': 'mimic.parquet'
-}
 def to_parquet(df, path):
     """ utility function to dump pd df to parquet"""
     table = pa.Table.from_pandas(df)
     pq.write_table(table, path)
     return None 
 
-def ensure_single_index(df):
+def ensure_single_index(df, vm=None):
+    """converting potentially multi-index df to single index 
+       using variable mapping object vm
+    """
     df.reset_index(inplace=True)
-    df.set_index(['id'], inplace=True)
+    df.set_index([vm('id')], inplace=True)
     return df 
 
 def main():
@@ -58,13 +59,17 @@ def main():
     parser.add_argument('--split_config_path', 
         default='config/master_splits.json',
         help='path split info')
+    parser.add_argument('--version', default='0.3.0', 
+     help='data version')
+
 
     args = parser.parse_args()
     client = Client(n_workers=args.n_jobs, memory_limit='50GB', local_directory='/local0/tmp/dask')
     n_jobs = args.n_jobs
     overwrite = args.overwrite 
     dataset = args.dataset
-
+    version = args.version
+    file_mapping = get_file_mapping(version) 
     base_dir = os.path.join(args.data_dir, dataset, 'data')
 
     out_dir = os.path.join(base_dir, args.out_dir) 
@@ -82,7 +87,7 @@ def main():
     split_info = split_info[dataset] 
      
     data_path = os.path.join(
-        args.data_dir, 'datasets', 'downloads',
+        args.data_dir, 'downloads',
         file_mapping[dataset] 
     )
     
@@ -153,7 +158,7 @@ def main():
     print(f'.. finished. Took {time() - start} seconds.')
     
     #All models assume time as column and only id as index (multi-index would cause problem with dask models)
-    df = ensure_single_index(df) 
+    df = ensure_single_index(df, vm) 
 
     # Save
     out_file = os.path.join(out_dir, 'features.parquet')
