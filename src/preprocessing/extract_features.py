@@ -310,22 +310,76 @@ def check_time_sorted(df):
     return (df[VM_DEFAULT('time')].diff() <= 0).sum() == 0
 
 
+class Normalizer(TransformerMixin, BaseEstimator):
+    """
+    Performs normalization (z-scoring) of columns.
+    """
+
+    def __init__(self, patient_ids, suffix=None):
+        """
+        Args:
+        - patient_ids: Patient ids that should be used for computing
+          normalization statistics
+        - suffix: when provided all columns having this suffix are normalized.
+            otherwise, all but the excluded columns are normalized.
+        """
+
+        self.patient_ids = patient_ids
+        self.suffix = suffix
+
+    def _drop_columns(self, df, cols_to_drop):
+        """ Utiliy function, to select available columns to
+            drop (the list can reach over different feature sets)
+        """
+        drop_cols = [col for col in cols_to_drop if col in df.columns]
+        df = df.drop(columns=drop_cols)
+        return df, drop_cols
+
+    def _compute_stats(self, df):
+        return {
+            'means': df.loc[self.patient_ids].mean(),
+            'stds': df.loc[self.patient_ids].std()
+        }
+
+    def _apply_normalizer(self, df, stats):
+        means = stats['means']
+        stds = stats['stds']
+        return (df - means) / stds
+
+    def fit(self, df, labels=None):
+        if type(self.suffix) == str:
+            suffix = [self.suffix]
+        else:
+            suffix = self.suffix
+        self.columns = [col for col in df.columns if any(
+            [s in col for s in suffix])
+        ]
+
+        self.stats = self._compute_stats(df[self.columns])
+        return self
+
+    def transform(self, df):
+        normalized = self._apply_normalizer(df[self.columns], self.stats)
+        return df.assign(**{
+            col: normalized[col]
+            for col in normalized.columns
+        })
+
+
 def main(input_filename, split_filename, output_filename):
     raw_data = dask.dataframe.read_parquet(
         input_filename,
         columns=VM_DEFAULT.core_set,
         engine='pyarrow-dataset'
     )
-    # Sort fist according to time, then according to ID. This should lead to
-    # completely sorted partitions.
+    # Set id to be the index, then sort within each id to ensure correct time
+    # ordering.
     raw_data = raw_data \
         .set_index(VM_DEFAULT('id'), sorted=False, nparitions='auto')
-    ipdb.set_trace()
     raw_data = raw_data \
         .groupby(VM_DEFAULT('id'), group_keys=False) \
         .apply(sort_time, meta=raw_data) \
         .persist()
-    ipdb.set_trace()
     # Just to be sure, check that time is sorted
     sorted_check = raw_data \
         .groupby(VM_DEFAULT('id'), dropna=False) \
@@ -333,13 +387,18 @@ def main(input_filename, split_filename, output_filename):
         .compute()
     assert sorted_check.all()
     raw_data = convert_bool_to_float(raw_data).persist()
+    norm_ids = raw_data.index.head().to_list()
     data_pipeline = Pipeline([
         ('derived_features', DerivedFeatures(VM_DEFAULT, suffix='locf')),
         ('lookback_features', LookbackFeatures(
             vm=VM_DEFAULT, suffices=['_raw', '_derived'])),
-        ('measurement_counts', MeasurementCounter(vm=VM_DEFAULT, suffix='_raw'))
+        ('measurement_counts', MeasurementCounter(vm=VM_DEFAULT, suffix='_raw')),
+        ('imputation', IndicatorImputation(suffix='_raw')),
+        ('feature_normalizer', Normalizer(norm_ids,
+                                          suffix=['_locf', '_derived'])),
     ])
     raw_data = data_pipeline.fit_transform(raw_data)
+    ipdb.set_trace()
 
 
 if __name__ == '__main__':
