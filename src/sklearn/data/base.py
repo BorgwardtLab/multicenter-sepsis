@@ -148,11 +148,9 @@ class ChunkedTransformer(TransformerMixin, BaseEstimator):
         - id_fn: get_instance function
         - index_chunk: chunk of indices to apply transform_id
         """
-        out = []
-        for i in index_chunk:
-            out.append(
-                self.transform_id( id_fn(i)  )
-            )
+        out = [ self.transform_id( 
+            id_fn(i) ) for i in index_chunk
+        ]
         return pd.concat(out)
 
 
