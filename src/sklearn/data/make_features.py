@@ -143,8 +143,8 @@ def main():
             concat_output=True)), #n_jobs=5, concat_output=True 
         ('signatures', SignatureFeatures(n_jobs=n_jobs, 
             suffices=['_locf', '_derived'], concat_output=True)), #n_jobs=2
-        ('calculate_target', CalculateUtilityScores(label=vm('label'),
-            shift = -6)), 
+        ('calculate_target', CalculateUtilityScores(n_jobs=n_jobs, 
+            label=vm('label'), shift = -6)), 
         ('filter_invalid_times', InvalidTimesFiltration(vm=vm, suffix='_raw'))
         ])
     out_df_splits = []
