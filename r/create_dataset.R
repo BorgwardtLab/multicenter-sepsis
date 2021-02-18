@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
-#BSUB -W 1:00
-#BSUB -n 2
-#BSUB -R rusage[mem=16000]
+#BSUB -W 8:00
+#BSUB -n 4
+#BSUB -R rusage[mem=8000]
 #BSUB -J export
 #BSUB -o results/export_%J.out
 
