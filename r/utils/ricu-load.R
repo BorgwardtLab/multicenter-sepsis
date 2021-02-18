@@ -32,7 +32,11 @@ load_challenge <- function(dir = data_path("physionet2019"),
 
   dat <- rename_cols(dat, feats, names(feats), by_ref = TRUE)
 
-  merge(dat, sep, all = TRUE)
+  dat <- merge(dat, sep, all = TRUE)
+
+  msg("--> loading complete")
+
+  dat
 }
 
 load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
@@ -74,11 +78,6 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
   win <- stay_windows(source, id_type = "icustay", win_type = "icustay",
                       in_time = "intime", out_time = "outtime")
 
-  flt <- win[outtime < min_stay_length, ]
-
-  msg("--> removing {nrow(flt)} patients due to stay length <",
-      " {format_unit(min_stay_length)}].\n")
-
   dat <- load_concepts(feats, source, merge_data = FALSE,
                        id_type = "icustay", patient_ids = pids)
   sep <- sepsis3_crit(source, pids, dat)
@@ -99,6 +98,11 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
   msg("--> removing {tmp - nrow(new)} patients due to onsets",
       " outside of [{format_unit(min_onset)},",
       " {format_unit(max_onset)}].\n")
+
+  flt <- win[outtime < min_stay_length, ]
+
+  msg("--> removing {nrow(flt)} patients due to stay length <",
+      " {format_unit(min_stay_length)}].\n")
 
   flt <- c(id_col(flt), setdiff(id_col(sep), id_col(new)))
 
@@ -127,7 +131,11 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
     dat[[2L]] <- NULL
   }
 
-  merge(dat[[1L]], sep, all = TRUE)
+  dat <- merge(dat[[1L]], sep, all = TRUE)
+
+  msg("--> loading complete")
+
+  dat
 }
 
 sepsis3_crit <- function(source, pids = NULL,
@@ -317,5 +325,7 @@ export_data <- function(src, dest_dir = data_path("export"),
   res <- c(dat, ind, lof)
   res <- data.table::setDT(res)
 
-  create_parquet(res, file.path(dest_dir, src))
+  create_parquet(res,
+    file.path(dest_dir, paste(src, packageVersion("ricu"), sep = "_"))
+  )
 }
