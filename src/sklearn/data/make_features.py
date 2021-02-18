@@ -8,11 +8,21 @@ from time import time
 from dask.distributed import Client
 import dask.dataframe as dd
 import json
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from .transformers import *
 from .subsetters import ChallengeFeatureSubsetter 
 from src.variables.mapping import VariableMapping
 
+file_mapping = {'demo': 'mimic_demo.parquet',
+                'mimic': 'mimic.parquet'
+}
+def to_parquet(df, path):
+    """ utility function to dump pd df to parquet"""
+    table = pa.Table.from_pandas(df)
+    pq.write_table(table, path)
+    return None 
 
 def ensure_single_index(df):
     df.reset_index(inplace=True)
@@ -28,7 +38,7 @@ def main():
         default='datasets',
         help='path pointing to the dataset directory')
     parser.add_argument('--out_dir',
-        default='sklearn',
+        default='parquet',
         help='relative path from <dataset>/data dir, where processed dump will be written to') 
     parser.add_argument('--n_jobs', type=int,
         default=10,
@@ -57,8 +67,7 @@ def main():
 
     base_dir = os.path.join(args.data_dir, dataset, 'data')
 
-    data_dir = os.path.join(base_dir, 'extracted') #only used when creating df directly from psv
-    out_dir = os.path.join(base_dir, args.out_dir, 'processed')
+    out_dir = os.path.join(base_dir, args.out_dir) 
     var_config_path = args.var_config_path
     split_config_path = args.split_config_path
  
@@ -72,7 +81,10 @@ def main():
         split_info = json.load(f) 
     split_info = split_info[dataset] 
      
-    data_path = 'datasets/downloads/mimic_demo_int.parquet'
+    data_path = os.path.join(
+        args.data_dir, 'datasets', 'downloads',
+        file_mapping[dataset] 
+    )
     
     #1. Fixed Data Pipeline: Dataloading, Derived Features (non-parallel)
     #--------------------------------------------------------------------
@@ -140,12 +152,12 @@ def main():
 
     print(f'.. finished. Took {time() - start} seconds.')
     
-    from IPython import embed; embed(); sys.exit() 
     #All models assume time as column and only id as index (multi-index would cause problem with dask models)
-    ##df_deep2 = ensure_single_index(df_deep2)
     df = ensure_single_index(df) 
 
     # Save
+    out_file = os.path.join(out_dir, 'features.parquet')
+    to_parquet(df, out_file)
     #save_pickle(df_sklearn, os.path.join(out_dir, f'X_extended_features_{split}.pkl'))
     #save_pickle(df_deep2, os.path.join(out_dir, f'X_extended_features_no_imp_{split}.pkl'))
 
