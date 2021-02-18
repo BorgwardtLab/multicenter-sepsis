@@ -11,6 +11,19 @@ import json
 from sklearn.model_selection import StratifiedShuffleSplit
 from IPython import embed
 
+def filter_short_stays(df, thres=3):
+    out = pd.DataFrame()
+    ids = np.array(df.index.unique())
+    for i in ids:
+        x = df.loc[i]
+        if len(x.shape) == 1:
+            if thres > 1:
+                continue
+        elif thres > len(x):
+            continue
+        else:
+            out = out.append(x)
+    return out
 
 def main(args):
     #Unpack arguments:
@@ -22,7 +35,8 @@ def main(args):
     path = args.path
     out_file = args.out_file
     dataset = args.dataset
-    dataset_mapping = {'mimic': 'mimic_demo_int.parquet'}
+    dataset_mapping = { 'demo': 'mimic_demo.parquet',
+                        'mimic': 'mimic.parquet'}
     #dataset_mapping = {'mimic', '', 
     #                   'hirid': '', 
     #                   'eicu': '',
@@ -45,10 +59,14 @@ def main(args):
         )
         d = {}
         df = df.set_index('stay_id')
-        ids = np.array(df.index.unique()) 
-        labels = np.array(
-            [ df.loc[i]['sep3'].any().astype(int) for i in ids ]
-        )
+        df = filter_short_stays(df, thres=3)
+        ids = np.array(df.index.unique())
+        try: 
+            labels = np.array(
+                [ df.loc[i]['sep3'].any() * 1 for i in ids ]
+            )
+        except:
+            from IPython import embed; embed()
         # we write arrays (easier to subset) and write them out as lists (easier with json) 
         # first gather *all* ids and labels under 'total'
         d['total'] = {'ids': ids.tolist(), 'labels': labels.tolist()}
