@@ -37,6 +37,7 @@ load_challenge <- function(dir = data_path("physionet2019"),
 
 load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
                       coh_cfg = cfg_path("cohorts.json"),
+                      min_stay_length = hours(4L),
                       min_onset = hours(4L), max_onset = days(7L),
                       cut_case = hours(24L), cut_ctrl = max_onset + cut_case) {
 
@@ -73,6 +74,11 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
   win <- stay_windows(source, id_type = "icustay", win_type = "icustay",
                       in_time = "intime", out_time = "outtime")
 
+  flt <- win[outtime < min_stay_length, ]
+
+  msg("--> removing {nrow(flt)} patients due to stay length <",
+      " {format_unit(min_stay_length)}].\n")
+
   dat <- load_concepts(feats, source, merge_data = FALSE,
                        id_type = "icustay", patient_ids = pids)
   sep <- sepsis3_crit(source, pids, dat)
@@ -94,7 +100,7 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
       " outside of [{format_unit(min_onset)},",
       " {format_unit(max_onset)}].\n")
 
-  flt <- setdiff(id_col(sep), id_col(new))
+  flt <- c(id_col(flt), setdiff(id_col(sep), id_col(new)))
 
   sep <- rm_cols(new, setdiff(data_vars(new), "sep3"), by_ref = TRUE)
   sep <- rename_cols(sep, "sep3_time", index_var(sep))
@@ -236,12 +242,12 @@ augment <- function(x, fun, suffix,
   res
 }
 
-augment_prof <- function(...) {
+prof <- function(expr, envir = parent.frame()) {
 
   mem <- memuse::Sys.procmem()
   tim <- Sys.time()
 
-  res <- augment(...)
+  res <- eval(expr, envir = envir)
 
   cur <- memuse::Sys.procmem()
   cil <- cur[["peak"]] - mem[["peak"]]
@@ -261,13 +267,16 @@ export_data <- function(src, dest_dir = data_path("export"),
 
   assert(is.string(src), dir.exists(dir))
 
-  if (identical(src, "challenge")) {
-    dat <- load_challenge(cfg = var_cfg)
-  } else {
-    dat <- load_ricu(src, var_cfg = var_cfg, ...)
-  }
+  dat <- prof(
+    if (identical(src, "challenge")) {
+      load_challenge(cfg = var_cfg)
+    } else {
+      load_ricu(src, var_cfg = var_cfg, ...)
+    }
+  )
 
   dat <- rm_na(dat, meta_vars(dat), "any")
+  dat <- fill_gaps(dat)
 
   dat <- dat[, onset := sep3]
   dat <- replace_na(dat, type = "locf", by_ref = TRUE, vars = "sep3",
@@ -292,11 +301,14 @@ export_data <- function(src, dest_dir = data_path("export"),
   tsv <- paste0(tsn, "_raw")
   dat <- rename_cols(dat, tsv, tsn, by_ref = TRUE)
 
-  dat <- fill_gaps(dat)
+  ind <- prof(
+    augment(dat, Negate(is.na), "ind", tsv)
+  )
 
-  ind <- augment_prof(dat, Negate(is.na), "ind", tsv)
-  lof <- augment_prof(dat, data.table::nafill, "locf", tsv, by = id_vars(dat),
-                      type = "locf")
+  lof <- prof(
+    augment(dat, data.table::nafill, "locf", tsv, by = id_vars(dat),
+            type = "locf")
+  )
 
   dat <- dat[, c(index_var(dat)) := as.double(
     get(index_var(dat)), units = "hours"
