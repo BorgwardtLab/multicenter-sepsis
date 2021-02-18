@@ -97,8 +97,8 @@ def main():
     print('Running (fixed) data pipeline and dumping it..')
     start = time()
     data_pipeline = Pipeline([
-        ('create_dataframe', DataframeFromParquet(data_path, vm)),  
-        ('derived_features', DerivedFeatures(vm, suffix='locf')),
+        ('create_dataframe', DataframeFromParquet(data_path, vm=vm)),  
+        ('derived_features', DerivedFeatures(vm=vm, suffix='locf')),
     ])
     df = data_pipeline.fit_transform(None)
     
@@ -112,7 +112,7 @@ def main():
         axis='index', level=vm('id'), inplace=True, sort_remaining=True)
     df.reset_index(level=vm('time'), drop=False, inplace=True)
     df = dd.from_pandas(df, npartitions=args.n_partitions, sort=True)
-    print('Running (tunable) preprocessing pipeline and dumping it..')
+    print('Running dask pipeline..')
     start = time()
     dask_pipeline = Pipeline([
         ('lookback_features', LookbackFeatures(vm=vm,  
@@ -133,7 +133,7 @@ def main():
         df_splits[i] = df.loc[id_split]  # list comp. didn't find df in scope
     # clear large df from memory: 
     del df 
-    #TODO: add invalid times filtration! 
+    print('Running (chunked) feature extraction..') 
     pandas_pipeline =  Pipeline([
         ('imputation', IndicatorImputation(n_jobs=n_jobs, suffix='_raw', concat_output=True)),
         ('feature_normalizer', Normalizer(split_info, split='dev', 
@@ -143,7 +143,8 @@ def main():
             concat_output=True)), #n_jobs=5, concat_output=True 
         ('signatures', SignatureFeatures(n_jobs=n_jobs, 
             suffices=['_locf', '_derived'], concat_output=True)), #n_jobs=2
-        ('calculate_target', CalculateUtilityScores(label=vm('label'))), 
+        ('calculate_target', CalculateUtilityScores(label=vm('label'),
+            shift = -6)), 
         ('filter_invalid_times', InvalidTimesFiltration(vm=vm, suffix='_raw'))
         ])
     out_df_splits = []

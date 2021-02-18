@@ -74,7 +74,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         passthrough=False,
         label='sep3',
         score_name='utility',
-        shift=0,
+        shift=-6,
         **kwargs
     ):
         """Create new instance of class.
@@ -532,7 +532,7 @@ class LookbackFeatures(DaskIDTransformer):
 
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
-    This class is based on J. Morill's code base: 
+    This class is inspired by J. Morill's code base: 
     https://github.com/jambo6/physionet_sepsis_challenge_2019/blob/master/src/data/transformers.py 
 
     Adds any derived features thought to be useful
@@ -540,7 +540,6 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         - Bun/crea ratio: Bun/crea
         - Hepatic SOFA: Bilirubin SOFA score
 
-    # Can add renal and neruologic sofa
     """
     def __init__(self, vm=None, suffix='locf'):
         """
