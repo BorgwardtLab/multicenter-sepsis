@@ -1,23 +1,11 @@
 #!/bin/bash
 #Demo first:
-python -m src.sklearn.data.make_dataframe --dataset demo --n_jobs=10 --n_partitions=20 --overwrite
-python src/sklearn/data/create_instance_files.py --dataset demo
 
-#Process the full datasets:
-python -m src.sklearn.data.make_dataframe --dataset physionet2019 --n_jobs=50 --n_partitions=10000 --overwrite
-python src/sklearn/data/create_instance_files.py --dataset physionet2019
+# first generate splits from raw data
+python -m src.splits.create_splits
 
-python -m src.sklearn.data.make_dataframe --dataset mimic3 --n_jobs=50 --n_partitions=20000 --overwrite
-python src/sklearn/data/create_instance_files.py --dataset mimic3
+# then run preprocessing pipeline per dataset
+python -m src.sklearn.data.make_features --dataset demo --n_jobs=50 --n_partitions=20 --n_chunks=1
+python -m src.sklearn.data.make_features --dataset mimic --n_jobs=50 --n_partitions=20000 --n_chunks=1
 
-python -m src.sklearn.data.make_dataframe --dataset hirid --n_jobs=50 --n_partitions=20000 --overwrite
-python src/sklearn/data/create_instance_files.py --dataset hirid
 
-python -m src.sklearn.data.make_dataframe --dataset eicu --n_jobs=50 --n_partitions=40000 --overwrite
-python src/sklearn/data/create_instance_files.py --dataset eicu
-
-python -m src.sklearn.data.make_dataframe --dataset aumc --n_jobs=50 --n_partitions=10000 --overwrite
-python src/sklearn/data/create_instance_files.py --dataset aumc 
-
-# Sanity checks: 
-python scripts/check_splits.py
