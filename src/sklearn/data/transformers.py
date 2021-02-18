@@ -16,7 +16,7 @@ from kymatio.numpy import Scattering1D
 import iisignature as iis 
 
 from .utils import save_pickle, load_pickle 
-from .base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
+from .base import ChunkedTransformer, ParallelBaseIDTransformer, DaskIDTransformer
 from .extracted import (ts_columns, columns_not_to_normalize, extended_ts_columns, 
     colums_to_drop, baseline_cols, vital_columns, lab_columns_chemistry, 
     lab_columns_organs, lab_columns_hemo, scores_and_indicators_columns ) 
@@ -58,7 +58,7 @@ class DataframeFromParquet(TransformerMixin, BaseEstimator):
 
         return df 
 
-class CalculateUtilityScores(ParallelBaseIDTransformer):
+class CalculateUtilityScores(ChunkedTransformer):
     """Calculate utility scores from patient.
 
     Inspired by Morill et al. [1], this transformer calculates the
@@ -350,7 +350,7 @@ class CarryForwardImputation(DaskIDTransformer):
     def transform_id(self, df):
         return df.fillna(method='ffill').fillna(0)
 
-class IndicatorImputation(ParallelBaseIDTransformer):
+class IndicatorImputation(ChunkedTransformer):
     """
     Adds indicator dimension for every channel to indicate if there was a nan
     IndicatorImputation still requires FillMissing afterwards!
@@ -749,7 +749,7 @@ class MeasurementCounter(DaskIDTransformer):
 
         return pd.concat([df, counts], axis=1)
 
-class WaveletFeatures(ParallelBaseIDTransformer):
+class WaveletFeatures(ChunkedTransformer):
     """ Computes wavelet scattering up to given time per time series channel """
     def __init__(self, n_jobs=4, T=32, J=2, Q=1, output_size=32, suffix='_locf', **kwargs):
         """
@@ -821,7 +821,7 @@ class WaveletFeatures(ParallelBaseIDTransformer):
         return 1 # rolling funcs need to return index..  
   
 
-class SignatureFeatures(ParallelBaseIDTransformer):
+class SignatureFeatures(ChunkedTransformer):
     """ Computes signature features for a given look back window """
     def __init__(self, n_jobs=4, look_back=7, order=3, 
             suffices=['_locf', '_derived'], **kwargs):
