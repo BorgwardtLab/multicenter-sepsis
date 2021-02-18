@@ -9,7 +9,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.base import TransformerMixin, BaseEstimator
 
 from src.variables.mapping import VariableMapping
-from src.sklearn.data.transformers import LookbackFeatures, MeasurementCounter
+from src.sklearn.data.transformers import LookbackFeatures, MeasurementCounter, DaskIDTransformer, strip_cols
 
 import ipdb
 import warnings
@@ -19,6 +19,33 @@ VM_CONFIG_PATH = \
     str(Path(__file__).parent.parent.parent.joinpath('config/variables.json'))
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
+
+
+class IndicatorImputation(DaskIDTransformer):
+    """
+    Adds indicator dimension for every channel to indicate if there was a nan
+    IndicatorImputation still requires FillMissing afterwards!
+    """
+
+    def __init__(self, suffix='_raw', imputation_value=None):
+        """
+        - imputation_value: (optional) value to impute at missing locations
+        """
+        super().__init__(vm=VM_DEFAULT)
+        self.col_suffix = suffix
+        self.imputation_value = imputation_value
+
+    def transform_id(self, df):
+        cols = [x for x in df.columns if self.col_suffix in x]
+        used_df = df[cols]
+        used_df.columns = strip_cols(used_df.columns, [self.col_suffix])
+        invalid_indicators = (used_df.isnull()).astype(
+            int).add_suffix('_indicator')
+        val = self.imputation_value
+        if val:
+            df = df.fillna(val)
+        df = pd.concat([df, invalid_indicators], axis=1)
+        return df
 
 
 class DerivedFeatures(TransformerMixin, BaseEstimator):
@@ -73,7 +100,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
             [temp_data, hr_data, paco2_data, wbc_data], axis=1)
 
         # Sum each row, if >= 2 then mar as SIRS
-        sirs = (df_sirs.sum(axis=1) >= 2) * 1
+        sirs = (df_sirs.sum(axis=1) >= 2) * 1.
 
         # Leave the binary and the path sirs
         sirs_df = dask.dataframe.multi.concat(
@@ -98,10 +125,10 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # mews[(80 < sbp) & (sbp <= 100)] += 1
         # mews[sbp >= 200] += 2
         mews = (
-            (sbp <= 70) * 3
-            + ((70 < sbp) & (sbp <= 80)) * 2
-            + ((80 < sbp) & (sbp <= 100)) * 1
-            + (sbp >= 200) * 2
+            (sbp <= 70) * 3.
+            + ((70 < sbp) & (sbp <= 80)) * 2.
+            + ((80 < sbp) & (sbp <= 100)) * 1.
+            + (sbp >= 200) * 2.
         )
 
         # hr
@@ -112,10 +139,10 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # mews[(110 < hr) & (hr < 130)] += 2
         # mews[hr >= 130] += 3
         mews += (
-            ((40 < hr) & (hr <= 50)) * 1
-            + ((100 < hr) & (hr <= 110)) * 1
-            + ((110 < hr) & (hr < 130)) * 2
-            + (hr >= 130) * 3
+            ((40 < hr) & (hr <= 50)) * 1.
+            + ((100 < hr) & (hr <= 110)) * 1.
+            + ((110 < hr) & (hr < 130)) * 2.
+            + (hr >= 130) * 3.
         )
 
         # resp
@@ -125,10 +152,10 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # mews[(20 < resp) & (resp < 30)] += 2
         # mews[resp >= 30] += 3
         mews += (
-            (resp < 9) * 2
-            + ((15 < resp) & (resp <= 20)) * 1
-            + ((20 < resp) & (resp < 30)) * 2
-            + (resp >= 30) * 3
+            (resp < 9) * 2.
+            + ((15 < resp) & (resp <= 20)) * 1.
+            + ((20 < resp) & (resp < 30)) * 2.
+            + (resp >= 30) * 3.
         )
 
         # temp
@@ -137,8 +164,8 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # mews[(temp >= 35) & (temp < 38.5)] += 0
         # mews[temp >= 38.5] += 2
         mews += (
-            (temp < 35) * 2
-            + (temp >= 38.5) * 2
+            (temp < 35) * 2.
+            + (temp >= 38.5) * 2.
         )
         return mews
 
@@ -150,7 +177,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # qsofa = np.zeros(shape=df.shape[0])
         # qsofa[df[resp].values >= 22] += 1
         # qsofa[df[sbp].values <= 100] += 1
-        return (df[resp] >= 22) * 1 + (df[sbp] <= 100) * 1
+        return (df[resp] >= 22) * 1. + (df[sbp] <= 100) * 1.
 
     def SOFA(self, df):
         vm = self.vm
@@ -169,10 +196,10 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # sofa[(20 <= platelets) & (platelets < 50)] += 3
         # sofa[platelets < 20] += 4
         sofa = (
-            ((100 <= platelets) & (platelets < 150)) * 1
-            + ((50 <= platelets) & (platelets < 100)) * 2
-            + ((20 <= platelets) & (platelets < 50)) * 3
-            + (platelets < 20) * 4
+            ((100 <= platelets) & (platelets < 150)) * 1.
+            + ((50 <= platelets) & (platelets < 100)) * 2.
+            + ((20 <= platelets) & (platelets < 50)) * 3.
+            + (platelets < 20) * 4.
         )
 
         # Liver
@@ -184,17 +211,17 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # sofa[bilirubin > 11.9] += 4
 
         sofa += (
-            ((1.2 <= bilirubin) & (bilirubin <= 1.9)) * 1
-            + ((1.9 < bilirubin) & (bilirubin <= 5.9)) * 2
-            + ((5.9 < bilirubin) & (bilirubin <= 11.9)) * 3
-            + (bilirubin > 11.9) * 4
+            ((1.2 <= bilirubin) & (bilirubin <= 1.9)) * 1.
+            + ((1.9 < bilirubin) & (bilirubin <= 5.9)) * 2.
+            + ((5.9 < bilirubin) & (bilirubin <= 11.9)) * 3.
+            + (bilirubin > 11.9) * 4.
         )
 
         # Cardiovascular
         map = df[map]
         # sofa[map >= 70] += 0
         # sofa[map < 70] += 1
-        sofa += (map < 70) * 1
+        sofa += (map < 70) * 1.
 
         # crea
         creatinine = df[crea]
@@ -204,10 +231,10 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # sofa[(3.4 < creatinine) & (creatinine <= 4.9)] += 3
         # sofa[creatinine > 4.9] += 4
         sofa += (
-            ((1.2 <= creatinine) & (creatinine <= 1.9)) * 1
-            + ((1.9 < creatinine) & (creatinine <= 3.4)) * 2
-            + ((3.4 < creatinine) & (creatinine <= 4.9)) * 3
-            + (creatinine > 4.9) * 4
+            ((1.2 <= creatinine) & (creatinine <= 1.9)) * 1.
+            + ((1.9 < creatinine) & (creatinine <= 3.4)) * 2.
+            + ((3.4 < creatinine) & (creatinine <= 4.9)) * 3.
+            + (creatinine > 4.9) * 4.
         )
 
         return sofa
@@ -223,7 +250,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
             self.vm('id'),
             sort=False).apply(check_24hr_deterioration, meta=('SOFA_derived', 'f8'))
         # Remove negative sofa values
-        sofa_det = (sofa_det < 0) * 0 + (sofa_det >= 0) * sofa_det
+        sofa_det = (sofa_det < 0) * 0. + (sofa_det >= 0) * sofa_det
         return sofa_det
 
     def septic_shock(self, df):
