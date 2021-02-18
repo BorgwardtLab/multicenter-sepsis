@@ -105,4 +105,5 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
         """
         result = dask_df.groupby( self.vm('id'),
              group_keys=False).apply(self.transform_id)
+        print('Done with', self.__class__.__name__)
         return result
