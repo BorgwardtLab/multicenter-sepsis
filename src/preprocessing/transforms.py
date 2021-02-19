@@ -48,12 +48,19 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
     def fit(self, df, y=None):
         return self
 
+    def pre_transform(self, ddf):
+        return ddf
+
+    def post_transform(self, input_ddf, transformed_ddf):
+        return transformed_ddf
+
     def transform(self, dask_df):
-        """ Parallelized transform
-        """
-        result = dask_df.groupby(self.vm('id'),
-                                 group_keys=False).apply(self.transform_id)
-        return result
+        """ Parallelized transform."""
+        result = self.pre_transform(dask_df)\
+            .groupby(self.vm('id'), group_keys=False) \
+            .apply(self.transform_id)
+
+        return self.post_transform(dask_df, result)
 
 
 class MeasurementCounterandIndicators(BaseEstimator, TransformerMixin):
@@ -412,7 +419,7 @@ class WaveletFeatures(DaskIDTransformer):
 
     def pre_transform(self, ddf):
         drop_cols = [x for x in ddf.columns if self.col_suffix not in x]
-        return ddf.drop(drop_cols, axis=1).rename(lambda col: col[:-len(self.col_suffix)])
+        return ddf.drop(drop_cols, axis=1).rename(columns=lambda col: col[:-len(self.col_suffix)])
 
     def post_transform(self, input_ddf, transformed_ddf):
         return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
@@ -420,14 +427,12 @@ class WaveletFeatures(DaskIDTransformer):
     def transform_id(self, inputs):
         """ process invididual patient """
         # pad time series with T-1 0s (for getting online features of fixed window size)
-        inputs = self._pad_df(inputs, n_pad=self.T-1)
-        #inputs.reset_index(drop=True, inplace=True)
-
-        wavelets = self._compute_wavelets(inputs)
-
-        assert inputs.shape[0] == wavelets.shape[0]
-        wavelets.index = inputs.index
-        return wavelets
+        input_values = self._pad_df(inputs, n_pad=self.T-1).values
+        wavelets = self._compute_wavelets(input_values)
+        wavelet_columns = self._build_wavelet_column_names(inputs.columns)
+        out = pd.DataFrame(index=inputs.index,
+                           columns=wavelet_columns, data=wavelets)
+        return out
 
     def _pad_df(self, df, n_pad, value=0):
         """ util function to pad <n_pad> zeros at the start of the df 
@@ -436,26 +441,31 @@ class WaveletFeatures(DaskIDTransformer):
         x = np.concatenate([np.zeros([n_pad, df.shape[1]]), df.values])
         return pd.DataFrame(x, columns=df.columns).fillna(0)
 
-    def _compute_wavelets(self, df):
-        """ Loop over all columns, compute column-wise wavelet features
-             and create wavelet output columns"""
-        col_dfs = []
-        for col in df.columns:
-            col_df = self._process_column(df, col)
-            col_dfs.append(col_df)
-        return pd.concat(col_dfs, axis=1)
+    def _compute_wavelets(self, input_values):
+        # Should have shape n_tp x n_cols, shapelet computations expects tp to be
+        # be the last dimension and previous dimensions to be batches
+        input_values = np.transpose(input_values)  # Now n_cols x n_tp
+        # Now we want a rolling window over the values, we can use stride
+        # tricks for that
+        sliding_view = np.lib.stride_tricks.sliding_window_view(
+            input_values, self.T, axis=1)  # n_cols x n_tp x self.T
+        wavelets = self.scatter(sliding_view)  # n_cols x n_tp x wf1 x wf2
+        # Flatten wavelet dimension
+        wavelets = np.reshape(wavelets, wavelets.shape[:2] + (-1, ))
+        # n_cols x n_tp x n_wl
+        # Now we carefully need to permute the axis, such that our wavelet
+        # features and their derived columns match
+        wavelets = np.transpose(wavelets, [1, 0, 2])  # n_tp x n_col x n_wl
+        # Flatten wavelet features into columns, we should then have the
+        # following pattern: f1_wl1, f1_wl2, f1_wl3 ... f2_wl1, f2_wl2,...
+        wavelets = np.reshape(
+            wavelets, (wavelets.shape[0], wavelets.shape[1]*wavelets.shape[2]))
+        return wavelets
 
-    def _process_column(self, df, col):
-        """ Processing a single column. """
-        out_cols = [col + f'_wavelet_{i}' for i in range(self.output_size)]
-        col_df = pd.DataFrame(columns=out_cols)
-        # we go over input column and write result to col_df, which is a
-        # df gathering all features from the current col
-        df[col].rolling(window=self.T).apply(
-            self._rolling_function, kwargs={'df': col_df})
-        return col_df
-
-    def _rolling_function(self, window, df):
-        """actually compute wavelet scattering in a rolling window """
-        df.loc[window.index.min()] = self.scatter(window.values).flatten()
-        return 1  # rolling funcs need to return index..
+    def _build_wavelet_column_names(self, column_names):
+        # Build column names, a bit unusual, but should work
+        columns = np.array(column_names)[:, None] + \
+            np.array([
+                f'_wavelet_{i}' for i in range(self.output_size)])[None, :]
+        columns = np.ravel(columns)
+        return columns
