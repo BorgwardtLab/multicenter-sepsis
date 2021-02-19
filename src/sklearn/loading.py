@@ -68,7 +68,7 @@ class ParquetLoader:
         if pandas:
             return dataset.read().to_pandas()
         else: 
-            dataset.read()
+            return dataset.read()
 
  
 if __name__ == "__main__":
@@ -100,5 +100,5 @@ if __name__ == "__main__":
     pl = ParquetLoader(path)
     df = pl.load(ids)
     df2 = pl.load(ids, [f1])
- 
+    t = pl.load(ids,pandas=False) 
     from IPython import embed; embed()
