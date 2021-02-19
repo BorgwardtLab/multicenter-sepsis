@@ -701,7 +701,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # Ratios:
         df['ShockIndex_derived'] = df[hr].values / df[sbp].values
         df['bun/cr_derived'] = df[bun].values / df[crea].values
-        df['po2/fio2_dervied'] = df[po2].values / df[fio2].values #shouldnt it be PaO2/Fi ratio?
+        df['po2/fio2_derived'] = df[po2].values / df[fio2].values #shouldnt it be PaO2/Fi ratio?
 
         # SOFA
         df['SOFA_derived'] = self.SOFA(df[[plt, map, crea, bili]])
