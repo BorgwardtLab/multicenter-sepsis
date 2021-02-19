@@ -17,10 +17,6 @@ import iisignature as iis
 
 from .utils import save_pickle, load_pickle 
 from .base import ChunkedTransformer, ParallelBaseIDTransformer, DaskIDTransformer
-from .extracted import (ts_columns, columns_not_to_normalize, extended_ts_columns, 
-    colums_to_drop, baseline_cols, vital_columns, lab_columns_chemistry, 
-    lab_columns_organs, lab_columns_hemo, scores_and_indicators_columns ) 
-
 import dask.dataframe as dd
 
 from src import datasets
@@ -186,7 +182,7 @@ class DropColumns(TransformerMixin, BaseEstimator):
     """
     Drop and potentially save columns. By default we drop all baseline scores.
     """
-    def __init__(self, columns=baseline_cols, label='sep3', time='time', save=False, 
+    def __init__(self, columns=None, label='sep3', time='time', save=False, 
                  data_dir=None, split=None):
         self.columns = columns
         self.label = label
