@@ -705,7 +705,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
         # SOFA
         df['SOFA_derived'] = self.SOFA(df[[plt, map, crea, bili]])
-        df['SOFA_deterioration_derived'] = self.SOFA_deterioration(df['SOFA_derived'])
+        df['SOFAdeterioration_derived'] = self.SOFA_deterioration(df['SOFA_derived'])
         df['qSOFA_derived'] = self.qSOFA(df)
         df['SepticShock_derived'] = self.septic_shock(df)
 
