@@ -89,15 +89,15 @@ class ChunkedTransformer(TransformerMixin, BaseEstimator):
     Parallelized Base class when performing transformations over ids. 
     The child class requires to have a transform_id method.
     """
-    def __init__(self, n_jobs=4, n_chunks=500, **kwargs):
+    def __init__(self, n_jobs=4, chunk_size=10, **kwargs):
         """
         Args:
         - n_jobs: number of jobs for parallelism
-        - n_chunks: number of chunks that the dataset should be split
-            into for parallelism
+        - chunks_size: number of patients in a chunk that is processed
+            sequentially by one parallelized process. 
         """
         self.n_jobs = n_jobs
-        self.n_chunks = n_chunks
+        self.chunk_size = chunk_size
 
     def __init_subclass__(cls, *args, **kwargs):
         if not hasattr(cls, 'transform_id'):
@@ -110,7 +110,7 @@ class ChunkedTransformer(TransformerMixin, BaseEstimator):
     def transform(self, df_or_list):
         """ Parallelized transform
         """
-        n_chunks = self.n_chunks
+        chunk_size = self.chunk_size
 
         if isinstance(df_or_list, list):
             # Remove Nones
@@ -130,7 +130,8 @@ class ChunkedTransformer(TransformerMixin, BaseEstimator):
 
         else:
             raise ValueError('Unknown input: {}'.format(type(df_or_list)))
-        n_chunks = min(n_chunks, n)
+        chunk_size = min(chunk_size, n) #ensuring that we have n_chunks >=1
+        n_chunks = int(np.ceil(n / chunk_size)) 
         index_chunks = np.array_split(np.arange(n), n_chunks) 
 
         # Use multiprocessing as we can then share memory via fork.
