@@ -1,14 +1,16 @@
-"""Base Classes for Dataset Transformers, TODO: add copyright notice here!""" 
+"""Base Classes for Dataset Transformers, TODO: add copyright notice here!"""
 
 import numpy as np
 import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 from joblib import Parallel, delayed
 
+
 class BaseIDTransformer(TransformerMixin, BaseEstimator):
     """
     Base class when performing transformations over ids. One must implement a transform_id method.
     """
+
     def __init__(self, vm):
         self.vm = vm
 
@@ -22,9 +24,11 @@ class BaseIDTransformer(TransformerMixin, BaseEstimator):
 
     def transform(self, df):
         if isinstance(df, pd.DataFrame):
-            df_transformed = df.groupby([self.vm('id')], as_index=False).apply(self.transform_id)
+            df_transformed = df.groupby(
+                [self.vm('id')], as_index=False).apply(self.transform_id)
         elif isinstance(df, pd.Series):
-            df_transformed = df.groupby([self.vm('id')]).apply(self.transform_id)
+            df_transformed = df.groupby(
+                [self.vm('id')]).apply(self.transform_id)
 
         # Sometimes creates a None level
         if None in df_transformed.index.names:
@@ -34,11 +38,11 @@ class BaseIDTransformer(TransformerMixin, BaseEstimator):
         return df_transformed
 
 
-
 class ParallelBaseIDTransformer(TransformerMixin, BaseEstimator):
     """
     Parallelized Base class when performing transformations over ids. The child class requires to have a transform_id method.
     """
+
     def __init__(self, n_jobs=4, concat_output=False):
         self.n_jobs = n_jobs
         self.concat_output = concat_output
@@ -63,8 +67,9 @@ class ParallelBaseIDTransformer(TransformerMixin, BaseEstimator):
                 return df_or_list[index]
 
         elif isinstance(df_or_list, pd.DataFrame):
-            #we assume that instance ids are on the first level of the df multi-indices (id, time) 
-            ids = df_or_list.index.levels[0].tolist() #gather all instance ids 
+            # we assume that instance ids are on the first level of the df multi-indices (id, time)
+            # gather all instance ids
+            ids = df_or_list.index.levels[0].tolist()
             n = len(ids)
 
             def get_instance(index):
@@ -88,8 +93,8 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
     """
     Dask-based Parallelized Base class when performing transformations over ids. The child class requires to have a transform_id method.
     """
-    def __init__(self, vm, **kwargs):
-        print('Got unused args:', kwargs)
+
+    def __init__(self, vm):
         self.vm = vm
 
     def __init_subclass__(cls, *args, **kwargs):
@@ -100,9 +105,15 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
     def fit(self, df, y=None):
         return self
 
+    def pre_transform(self, ddf):
+        return ddf
+
+    def post_transform(self, input_ddf, transformed_ddf):
+        return transformed_ddf
+
     def transform(self, dask_df):
-        """ Parallelized transform
-        """
-        result = dask_df.groupby( self.vm('id'),
-             group_keys=False).apply(self.transform_id)
-        return result
+        """ Parallelized transform."""
+        result = self.pre_transform(dask_df)\
+            .groupby(self.vm('id'), group_keys=False) \
+            .apply(self.transform_id)
+        return self.post_transform(dask_df, result)

@@ -2,14 +2,13 @@
 import argparse
 from pathlib import Path
 
-import pandas as pd
-import numpy as np
-import dask.dataframe
+import dask.dataframe as dd
 from sklearn.pipeline import Pipeline
-from sklearn.base import TransformerMixin, BaseEstimator
 
 from src.variables.mapping import VariableMapping
-from src.sklearn.data.transformers import LookbackFeatures, MeasurementCounter, DaskIDTransformer, strip_cols
+from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures
+
+from src.sklearn.data.transformers import LookbackFeatures
 
 import ipdb
 import warnings
@@ -19,280 +18,6 @@ VM_CONFIG_PATH = \
     str(Path(__file__).parent.parent.parent.joinpath('config/variables.json'))
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
-
-
-class IndicatorImputation(DaskIDTransformer):
-    """
-    Adds indicator dimension for every channel to indicate if there was a nan
-    IndicatorImputation still requires FillMissing afterwards!
-    """
-
-    def __init__(self, suffix='_raw', imputation_value=None):
-        """
-        - imputation_value: (optional) value to impute at missing locations
-        """
-        super().__init__(vm=VM_DEFAULT)
-        self.col_suffix = suffix
-        self.imputation_value = imputation_value
-
-    def transform_id(self, df):
-        cols = [x for x in df.columns if self.col_suffix in x]
-        used_df = df[cols]
-        used_df.columns = strip_cols(used_df.columns, [self.col_suffix])
-        invalid_indicators = (used_df.isnull()).astype(
-            int).add_suffix('_indicator')
-        val = self.imputation_value
-        if val:
-            df = df.fillna(val)
-        df = pd.concat([df, invalid_indicators], axis=1)
-        return df
-
-
-class DerivedFeatures(TransformerMixin, BaseEstimator):
-    """
-    This class is based on J. Morill's code base:
-    https://github.com/jambo6/physionet_sepsis_challenge_2019/blob/master/src/data/transformers.py
-
-    Adds any derived features thought to be useful
-        - Shock Index: hr/sbp
-        - Bun/crea ratio: Bun/crea
-        - Hepatic SOFA: Bilirubin SOFA score
-
-    # Can add renal and neruologic sofa
-    """
-
-    def __init__(self, vm=None, suffix='locf'):
-        """
-        Args:
-            - vm: variable mapping object
-            - suffix: which variables to use [raw or locf]
-        """
-        vm.suffix = suffix
-        self.vm = vm
-
-    def fit(self, df, y=None):
-        return self
-
-    def sirs_criteria(self, df):
-        # Create a dataframe that stores true false for each category
-        # df_sirs = pd.DataFrame(index=df.index, columns=[
-        #                        'temp', 'hr', 'rr.paco2', 'wbc_'])
-
-        # determine variables:
-        vm = self.vm
-        temp = vm('temp')
-        hr = vm('hr')
-        resp = vm('resp')
-        pco2 = vm('pco2')
-        wbc = vm('wbc')
-
-        # Calculate score:
-        temp_data = ((df[temp] > 38) | (df[temp] < 36))
-        temp_data.name = 'temp'
-        hr_data = df[hr] > 90
-        hr_data.name = 'hr'
-        paco2_data = ((df[resp] > 20) | (df[pco2] < 32))
-        paco2_data.name = 'rr.paco2'
-        wbc_data = ((df[wbc] < 4) | (df[wbc] > 12))
-        wbc_data.name = 'wbc_'
-
-        df_sirs = dask.dataframe.multi.concat(
-            [temp_data, hr_data, paco2_data, wbc_data], axis=1)
-
-        # Sum each row, if >= 2 then mar as SIRS
-        sirs = (df_sirs.sum(axis=1) >= 2) * 1.
-
-        # Leave the binary and the path sirs
-        sirs_df = dask.dataframe.multi.concat(
-            [sirs, df_sirs.sum(axis=1)], axis=1)
-        sirs_df.columns = ['SIRS', 'SIRS_path']
-
-        return sirs_df
-
-    def mews_score(self, df):
-        # mews = np.zeros(shape=df.shape[0])
-        # determine variables:
-        vm = self.vm
-        sbp = vm('sbp')
-        hr = vm('hr')
-        resp = vm('resp')
-        temp = vm('temp')
-
-        # sbp
-        sbp = df[sbp]
-        # mews[sbp <= 70] += 3
-        # mews[(70 < sbp) & (sbp <= 80)] += 2
-        # mews[(80 < sbp) & (sbp <= 100)] += 1
-        # mews[sbp >= 200] += 2
-        mews = (
-            (sbp <= 70) * 3.
-            + ((70 < sbp) & (sbp <= 80)) * 2.
-            + ((80 < sbp) & (sbp <= 100)) * 1.
-            + (sbp >= 200) * 2.
-        )
-
-        # hr
-        hr = df[hr]
-        # mews[hr < 40] += 2
-        # mews[(40 < hr) & (hr <= 50)] += 1
-        # mews[(100 < hr) & (hr <= 110)] += 1
-        # mews[(110 < hr) & (hr < 130)] += 2
-        # mews[hr >= 130] += 3
-        mews += (
-            ((40 < hr) & (hr <= 50)) * 1.
-            + ((100 < hr) & (hr <= 110)) * 1.
-            + ((110 < hr) & (hr < 130)) * 2.
-            + (hr >= 130) * 3.
-        )
-
-        # resp
-        resp = df[resp]
-        # mews[resp < 9] += 2
-        # mews[(15 < resp) & (resp <= 20)] += 1
-        # mews[(20 < resp) & (resp < 30)] += 2
-        # mews[resp >= 30] += 3
-        mews += (
-            (resp < 9) * 2.
-            + ((15 < resp) & (resp <= 20)) * 1.
-            + ((20 < resp) & (resp < 30)) * 2.
-            + (resp >= 30) * 3.
-        )
-
-        # temp
-        temp = df[temp]
-        # mews[temp < 35] += 2
-        # mews[(temp >= 35) & (temp < 38.5)] += 0
-        # mews[temp >= 38.5] += 2
-        mews += (
-            (temp < 35) * 2.
-            + (temp >= 38.5) * 2.
-        )
-        return mews
-
-    def qSOFA(self, df):
-        vm = self.vm
-        resp = vm('resp')
-        sbp = vm('sbp')
-
-        # qsofa = np.zeros(shape=df.shape[0])
-        # qsofa[df[resp].values >= 22] += 1
-        # qsofa[df[sbp].values <= 100] += 1
-        return (df[resp] >= 22) * 1. + (df[sbp] <= 100) * 1.
-
-    def SOFA(self, df):
-        vm = self.vm
-        plt = vm('plt')
-        bili = vm('bili')
-        map = vm('map')
-        crea = vm('crea')
-
-        # sofa = np.zeros(shape=df.shape[0])
-
-        # Coagulation
-        platelets = df[plt]
-        # sofa[platelets >= 150] += 0
-        # sofa[(100 <= platelets) & (platelets < 150)] += 1
-        # sofa[(50 <= platelets) & (platelets < 100)] += 2
-        # sofa[(20 <= platelets) & (platelets < 50)] += 3
-        # sofa[platelets < 20] += 4
-        sofa = (
-            ((100 <= platelets) & (platelets < 150)) * 1.
-            + ((50 <= platelets) & (platelets < 100)) * 2.
-            + ((20 <= platelets) & (platelets < 50)) * 3.
-            + (platelets < 20) * 4.
-        )
-
-        # Liver
-        bilirubin = df[bili]
-        # sofa[bilirubin < 1.2] += 0
-        # sofa[(1.2 <= bilirubin) & (bilirubin <= 1.9)] += 1
-        # sofa[(1.9 < bilirubin) & (bilirubin <= 5.9)] += 2
-        # sofa[(5.9 < bilirubin) & (bilirubin <= 11.9)] += 3
-        # sofa[bilirubin > 11.9] += 4
-
-        sofa += (
-            ((1.2 <= bilirubin) & (bilirubin <= 1.9)) * 1.
-            + ((1.9 < bilirubin) & (bilirubin <= 5.9)) * 2.
-            + ((5.9 < bilirubin) & (bilirubin <= 11.9)) * 3.
-            + (bilirubin > 11.9) * 4.
-        )
-
-        # Cardiovascular
-        map = df[map]
-        # sofa[map >= 70] += 0
-        # sofa[map < 70] += 1
-        sofa += (map < 70) * 1.
-
-        # crea
-        creatinine = df[crea]
-        # sofa[creatinine < 1.2] += 0
-        # sofa[(1.2 <= creatinine) & (creatinine <= 1.9)] += 1
-        # sofa[(1.9 < creatinine) & (creatinine <= 3.4)] += 2
-        # sofa[(3.4 < creatinine) & (creatinine <= 4.9)] += 3
-        # sofa[creatinine > 4.9] += 4
-        sofa += (
-            ((1.2 <= creatinine) & (creatinine <= 1.9)) * 1.
-            + ((1.9 < creatinine) & (creatinine <= 3.4)) * 2.
-            + ((3.4 < creatinine) & (creatinine <= 4.9)) * 3.
-            + (creatinine > 4.9) * 4.
-        )
-
-        return sofa
-
-    def SOFA_deterioration(self, s):
-        def check_24hr_deterioration(s):
-            """ Check the max deterioration over the last 24 hours, if >= 2 then mark as a 1"""
-            prev_23_hrs = pd.concat([s.shift(i)
-                                     for i in range(1, 24)], axis=1).values
-            tfr_hr_min = np.nanmin(prev_23_hrs, axis=1)
-            return pd.Series(index=s.index, data=(s.values - tfr_hr_min))
-        sofa_det = s.groupby(
-            self.vm('id'),
-            sort=False).apply(check_24hr_deterioration, meta=('SOFA_derived', 'f8'))
-        # Remove negative sofa values
-        sofa_det = (sofa_det < 0) * 0. + (sofa_det >= 0) * sofa_det
-        return sofa_det
-
-    def septic_shock(self, df):
-        vm = self.vm
-        map = vm('map')
-        lact = vm('lact')
-
-        # shock = np.zeros(shape=df.shape[0])
-        # shock[df[map].values < 65] += 1
-        # shock[df[lact].values > 2] += 1
-        return (df[map] < 65) * 1 + (df[lact] > 2) * 1
-
-    def transform(self, df):
-        vm = self.vm
-        hr = vm('hr')
-        sbp = vm('sbp')
-        bun = vm('bun')
-        crea = vm('crea')
-        po2 = vm('po2')
-        fio2 = vm('fio2')
-        plt = vm('plt')
-        map = vm('map')
-        bili = vm('bili')
-
-        # Ratios:
-        df['ShockIndex_derived'] = df[hr] / df[sbp]
-        df['bun/cr_derived'] = df[bun] / df[crea]
-        df['po2/fio2_dervied'] = df[po2] / \
-            df[fio2]  # shouldnt it be PaO2/Fi ratio?
-
-        # SOFA
-        df['SOFA_derived'] = self.SOFA(df[[plt, map, crea, bili]])
-        df['SOFA_deterioration_derived'] = self.SOFA_deterioration(
-            df['SOFA_derived'])
-        df['qSOFA_derived'] = self.qSOFA(df)
-        df['SepticShock_derived'] = self.septic_shock(df)
-
-        # Other scores
-        sirs_df = self.sirs_criteria(df)
-        df['MEWS_derived'] = self.mews_score(df)
-        df['SIRS_derived'] = sirs_df['SIRS']
-        return df
 
 
 def convert_bool_to_float(ddf):
@@ -310,64 +35,8 @@ def check_time_sorted(df):
     return (df[VM_DEFAULT('time')].diff() <= 0).sum() == 0
 
 
-class Normalizer(TransformerMixin, BaseEstimator):
-    """
-    Performs normalization (z-scoring) of columns.
-    """
-
-    def __init__(self, patient_ids, suffix=None):
-        """
-        Args:
-        - patient_ids: Patient ids that should be used for computing
-          normalization statistics
-        - suffix: when provided all columns having this suffix are normalized.
-            otherwise, all but the excluded columns are normalized.
-        """
-
-        self.patient_ids = patient_ids
-        self.suffix = suffix
-
-    def _drop_columns(self, df, cols_to_drop):
-        """ Utiliy function, to select available columns to
-            drop (the list can reach over different feature sets)
-        """
-        drop_cols = [col for col in cols_to_drop if col in df.columns]
-        df = df.drop(columns=drop_cols)
-        return df, drop_cols
-
-    def _compute_stats(self, df):
-        return {
-            'means': df.loc[self.patient_ids].mean(),
-            'stds': df.loc[self.patient_ids].std()
-        }
-
-    def _apply_normalizer(self, df, stats):
-        means = stats['means']
-        stds = stats['stds']
-        return (df - means) / stds
-
-    def fit(self, df, labels=None):
-        if type(self.suffix) == str:
-            suffix = [self.suffix]
-        else:
-            suffix = self.suffix
-        self.columns = [col for col in df.columns if any(
-            [s in col for s in suffix])
-        ]
-
-        self.stats = self._compute_stats(df[self.columns])
-        return self
-
-    def transform(self, df):
-        normalized = self._apply_normalizer(df[self.columns], self.stats)
-        return df.assign(**{
-            col: normalized[col]
-            for col in normalized.columns
-        })
-
-
 def main(input_filename, split_filename, output_filename):
-    raw_data = dask.dataframe.read_parquet(
+    raw_data = dd.read_parquet(
         input_filename,
         columns=VM_DEFAULT.core_set,
         engine='pyarrow-dataset'
@@ -381,24 +50,33 @@ def main(input_filename, split_filename, output_filename):
         .apply(sort_time, meta=raw_data) \
         .persist()
     # Just to be sure, check that time is sorted
-    sorted_check = raw_data \
-        .groupby(VM_DEFAULT('id'), dropna=False) \
-        .apply(check_time_sorted, meta=bool) \
-        .compute()
-    assert sorted_check.all()
+    # sorted_check = raw_data \
+    #     .groupby(VM_DEFAULT('id'), dropna=False) \
+    #     .apply(check_time_sorted, meta=bool) \
+    #     .compute()
+    # assert sorted_check.all()
     raw_data = convert_bool_to_float(raw_data).persist()
     norm_ids = raw_data.index.head().to_list()
     data_pipeline = Pipeline([
         ('derived_features', DerivedFeatures(VM_DEFAULT, suffix='locf')),
+        # ('persist_features', DaskPersist()),
         ('lookback_features', LookbackFeatures(
             vm=VM_DEFAULT, suffices=['_raw', '_derived'])),
-        ('measurement_counts', MeasurementCounter(vm=VM_DEFAULT, suffix='_raw')),
-        ('imputation', IndicatorImputation(suffix='_raw')),
+        ('measurement_counts', MeasurementCounterandIndicators(suffix='_raw')),
+        ('persist_pernorm', DaskPersist()),
         ('feature_normalizer', Normalizer(norm_ids,
                                           suffix=['_locf', '_derived'])),
+        # ('persist_normalized', DaskPersist()),
+        ('wavelet_features', WaveletFeatures(suffix='_locf', vm=VM_DEFAULT)),
+        # ('signatures', SignatureFeatures(n_jobs=n_jobs,
+        #                                  suffices=['_locf', '_derived'], concat_output=True)),  # n_jobs=2
+        # ('calculate_target', CalculateUtilityScores(label=vm('label'))),
+        # ('filter_invalid_times', InvalidTimesFiltration(vm=vm, suffix='_raw'))
     ])
-    raw_data = data_pipeline.fit_transform(raw_data)
-    ipdb.set_trace()
+    import time
+    start = time.time()
+    raw_data = data_pipeline.fit_transform(raw_data).compute()
+    print(time.time() - start)
 
 
 if __name__ == '__main__':
