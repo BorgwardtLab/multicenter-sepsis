@@ -6,6 +6,7 @@ import numpy as np
 
 from kymatio.numpy import Scattering1D
 import iisignature as iis
+from src.evaluation.physionet2019_score import compute_prediction_utility
 
 
 def strip_cols(columns, suffices):
@@ -565,3 +566,82 @@ class SignatureFeatures(DaskIDTransformer):
         signature = iis.sig(sliding_window_view, self.order)
         return pd.DataFrame(
             data=signature, index=df.index[self.look_back:], columns=np.arange(group_output_size))
+
+
+class CalculateUtilityScores(DaskIDTransformer):
+    """Calculate utility scores from patient.
+
+    Inspired by Morill et al. [1], this transformer calculates the
+    utility target U(1) - U(0) of a patient.  It can either function
+    as a passthrough class that stores data internally or as a
+    transformer class that extends a given data frame.
+
+    [1]: http://www.cinc.org/archives/2019/pdf/CinC2019-014.pdf
+    """
+
+    def __init__(
+        self,
+        label='sep3',
+        score_name='utility',
+        shift=0,
+        **kwargs
+    ):
+        """Create new instance of class.
+
+        Parameters
+        ----------
+        label : str
+            Indicates which column to use for the sepsis label.
+
+        score_name : str
+            Indicates the name of the column that will contain the
+            calculated utility score. If `passthrough` is set, the
+            column name will only be used in the result data frame
+            instead of being used as a new column for the *input*.
+
+        shift : int
+            Number of hours to shift the sepsis label into the future.
+            This makes it possible to compensate for label propagation
+            if need be.
+
+        **kwargs:
+            Optional keyword arguments that will be passed to the
+            parent class.
+        """
+        super().__init__(**kwargs)
+
+        self.label = label
+        self.score_name = score_name
+        self.shift = shift
+
+    def pre_transform(self, ddf):
+        return ddf[self.label]
+
+    def post_transform(self, input_ddf, transformed_ddf):
+        return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
+
+    def transform_id(self, labels):
+        """Calculate utility score differences for each patient."""
+        n = len(labels)
+
+        zeros = compute_prediction_utility(
+            labels.values,
+            np.zeros(shape=n),
+            shift_labels=self.shift,
+            return_all_scores=True
+        )
+
+        ones = compute_prediction_utility(
+            labels.values,
+            np.ones(shape=n),
+            shift_labels=self.shift,
+            return_all_scores=True
+        )
+
+        scores = pd.DataFrame(
+            index=labels.index,
+            data=ones - zeros,
+            columns=[self.score_name]
+        )
+
+        return scores

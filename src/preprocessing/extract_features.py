@@ -7,7 +7,7 @@ import dask.dataframe as dd
 from sklearn.pipeline import Pipeline
 
 from src.variables.mapping import VariableMapping
-from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures
+from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures, CalculateUtilityScores
 
 from src.sklearn.data.transformers import LookbackFeatures
 
@@ -72,7 +72,8 @@ def main(input_filename, split_filename, output_filename):
         ('wavelet_features', WaveletFeatures(suffix='_locf', vm=VM_DEFAULT)),
         ('signatures', SignatureFeatures(
             suffices=['_locf', '_derived'], vm=VM_DEFAULT)),  # n_jobs=2
-        # ('calculate_target', CalculateUtilityScores(label=vm('label'))),
+        ('calculate_target', CalculateUtilityScores(
+            label=VM_DEFAULT('label'), vm=VM_DEFAULT)),
         # ('filter_invalid_times', InvalidTimesFiltration(vm=vm, suffix='_raw'))
     ])
     import time
