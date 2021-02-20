@@ -396,7 +396,7 @@ class Normalizer(TransformerMixin, BaseEstimator):
 
 
 class WaveletFeatures(DaskIDTransformer):
-    """ Computes wavelet scattering up to given time per time series channel """
+    """Computes wavelet scattering up to given time per time series channel."""
 
     def __init__(self, T=32, J=2, Q=1, output_size=32, suffix='_locf', **kwargs):
         """
@@ -412,6 +412,8 @@ class WaveletFeatures(DaskIDTransformer):
         super().__init__(**kwargs)
         # we process the raw time series measurements
         self.T = T
+        self.J = J
+        self.Q = Q
         self.col_suffix = suffix
         self.scatter = Scattering1D(J, T, Q)
         self.output_size = output_size
@@ -645,3 +647,43 @@ class CalculateUtilityScores(DaskIDTransformer):
         )
 
         return scores
+
+
+class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
+    """Remove invalid rows.
+
+    This transform removes invalid time steps right before training
+    / prediction phase (final step of preprocessing).
+        - time steps before ICU admission (i.e. negative timestamps)
+        - time steps with less than <thres> many observations.
+    """
+
+    def __init__(self, vm, thres=1, suffix='_raw'):
+        self.vm = vm
+        self.thres = thres
+        self.col_suffix = suffix
+
+    def fit(self, df, labels=None):
+        return self
+
+    def _remove_pre_icu(self, ddf):
+        time = self.vm('time')
+        return ddf[ddf[time] >= 0]
+
+    def _remove_too_few_observations(self, ddf, columns):
+        """Remove rows with too few observations.
+
+        In rare cases it is possible that Lookbackfeatures leak zeros into
+        invalid nan rows (which makes time handling easier) additionally drop
+        those rows by identifying nan labels.
+        """
+        ind_to_keep = (~ddf[columns].isnull()).sum(axis=1) >= self.thres
+        # sanity check to prevent lookbackfeatures 0s to mess up nan rows
+        ind_labels = (~ddf[self.vm('label')].isnull())
+        return ddf[ind_to_keep & ind_labels]
+
+    def transform(self, ddf):
+        columns = [x for x in ddf.columns if self.col_suffix in x]
+        ddf = self._remove_pre_icu(ddf)
+        ddf = self._remove_too_few_observations(ddf, columns)
+        return ddf

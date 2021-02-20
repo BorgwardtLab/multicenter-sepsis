@@ -1,13 +1,15 @@
 """Feature extraction pipeline."""
 import argparse
 from pathlib import Path
+import time
 
 import dask
 import dask.dataframe as dd
+from dask.distributed import Client, as_completed
 from sklearn.pipeline import Pipeline
 
 from src.variables.mapping import VariableMapping
-from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures, CalculateUtilityScores
+from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures, CalculateUtilityScores, InvalidTimesFiltration
 
 from src.sklearn.data.transformers import LookbackFeatures
 
@@ -38,6 +40,8 @@ def check_time_sorted(df):
 
 
 def main(input_filename, split_filename, output_filename):
+    start = time.time()
+    client = Client()
     raw_data = dd.read_parquet(
         input_filename,
         columns=VM_DEFAULT.core_set,
@@ -74,12 +78,24 @@ def main(input_filename, split_filename, output_filename):
             suffices=['_locf', '_derived'], vm=VM_DEFAULT)),  # n_jobs=2
         ('calculate_target', CalculateUtilityScores(
             label=VM_DEFAULT('label'), vm=VM_DEFAULT)),
-        # ('filter_invalid_times', InvalidTimesFiltration(vm=vm, suffix='_raw'))
+        ('filter_invalid_times', InvalidTimesFiltration(
+            vm=VM_DEFAULT, suffix='_raw'))
     ])
-    import time
-    start = time.time()
-    raw_data = data_pipeline.fit_transform(raw_data).compute()
-    print(time.time() - start)
+    preprocessed_data = data_pipeline.fit_transform(raw_data)
+    # Get future objects, and trigger computation
+    # future_partitions = client.compute(
+    #     preprocessed_data.to_delayed(optimize_graph=True))
+    # for future, result in as_completed(future_partitions, with_results=True):
+    #     print(result.shape)
+
+    dd.to_parquet(
+        preprocessed_data,
+        output_filename,
+        engine='pyarrow',
+        write_index=True
+    )
+    print('Preprocessing completed after {:.2f} seconds'.format(
+        time.time() - start))
 
 
 if __name__ == '__main__':
@@ -100,7 +116,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--output',
         type=str,
-        # required=True,
+        required=True,
         help='Output file path to write parquet file with features.'
     )
     args = parser.parse_args()
