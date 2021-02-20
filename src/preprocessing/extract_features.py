@@ -2,17 +2,19 @@
 import argparse
 from pathlib import Path
 
+import dask
 import dask.dataframe as dd
 from sklearn.pipeline import Pipeline
 
 from src.variables.mapping import VariableMapping
-from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures
+from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures
 
 from src.sklearn.data.transformers import LookbackFeatures
 
 import ipdb
 import warnings
 # warnings.filterwarnings("error")
+# dask.config.set(scheduler='single-threaded')
 
 VM_CONFIG_PATH = \
     str(Path(__file__).parent.parent.parent.joinpath('config/variables.json'))
@@ -68,8 +70,8 @@ def main(input_filename, split_filename, output_filename):
                                           suffix=['_locf', '_derived'])),
         # ('persist_normalized', DaskPersist()),
         ('wavelet_features', WaveletFeatures(suffix='_locf', vm=VM_DEFAULT)),
-        # ('signatures', SignatureFeatures(n_jobs=n_jobs,
-        #                                  suffices=['_locf', '_derived'], concat_output=True)),  # n_jobs=2
+        ('signatures', SignatureFeatures(
+            suffices=['_locf', '_derived'], vm=VM_DEFAULT)),  # n_jobs=2
         # ('calculate_target', CalculateUtilityScores(label=vm('label'))),
         # ('filter_invalid_times', InvalidTimesFiltration(vm=vm, suffix='_raw'))
     ])

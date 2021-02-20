@@ -5,12 +5,13 @@ import dask.dataframe as dd
 import numpy as np
 
 from kymatio.numpy import Scattering1D
+import iisignature as iis
 
 
 def strip_cols(columns, suffices):
     """
     Utility function to sequentially strip suffices from columns.
-    Observed that removing _string directly leads to 
+    Observed that removing _string directly leads to
     unexpected behaviour, therefore removing first string, then _.
     Here, we assume that the suffices are provied as: '_<string>'
     """
@@ -435,8 +436,8 @@ class WaveletFeatures(DaskIDTransformer):
         return out
 
     def _pad_df(self, df, n_pad, value=0):
-        """ util function to pad <n_pad> zeros at the start of the df 
-            and impute 0s at the remaining nans (of lcof imputation). 
+        """ util function to pad <n_pad> zeros at the start of the df
+            and impute 0s at the remaining nans (of lcof imputation).
         """
         x = np.concatenate([np.zeros([n_pad, df.shape[1]]), df.values])
         return pd.DataFrame(x, columns=df.columns).fillna(0)
@@ -469,3 +470,98 @@ class WaveletFeatures(DaskIDTransformer):
                 f'_wavelet_{i}' for i in range(self.output_size)])[None, :]
         columns = np.ravel(columns)
         return columns
+
+
+class SignatureFeatures(DaskIDTransformer):
+    """ Computes signature features for a given look back window """
+
+    def __init__(self, look_back=7, order=3, suffices=['_locf', '_derived'], **kwargs):
+        """
+        Inputs:
+            - n_jobs: for parallelization on the patient level
+            - lock_back: how many hours to look into the past
+                (default 7 following Morril et al.)
+            - order: signature truncation level of univariate signature features
+                --> for multivariate signatures (of groups of channels), we use order-1
+        """
+        super().__init__(**kwargs)
+        # we process the raw time series measurements
+        self.order = order
+        self.suffices = suffices
+        self.look_back = look_back
+        # self.columns = extended_ts_columns
+        column_dict = {  # concept variables
+            'vitals':  ['hr', 'o2sat', 'temp', 'map', 'resp', 'fio2'],
+            'labs': ['ph', 'lact', 'wbc', 'plt', 'ptt'],
+            'scores': ['ShockIndex', 'bun/cr', 'SOFA', 'SepticShock', 'MEWS']
+        }
+        self.column_dict = self._add_suffices(column_dict)
+        # self.output_size = iis.siglength(2, self.order) # channel + time = 2
+        # self.output_size_all = iis.siglength(len(self.columns) + 1, self.order)
+
+    def fit(self, df, labels=None):
+        return self
+
+    def pre_transform(self, ddf):
+        drop_cols = [
+            col for col in ddf.columns
+            if not any([suffix in col for suffix in self.suffices])
+        ]
+        return ddf.drop(drop_cols, axis=1)
+
+    def post_transform(self, input_ddf, transformed_ddf):
+        return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
+
+    def transform_id(self, df):
+        """ process invididual patient """
+        # pad time series with look_back size many 0s (for getting online features of fixed window size)
+        inputs = self._pad_df(df, n_pad=self.look_back)
+        inputs['path'] = np.arange(inputs.shape[0])
+
+        # channel-wise signatures
+        # signatures = self._compute_signatures(inputs)
+
+        # multivariable signatures over variable groups
+        mv_signatures = self._compute_mv_signatures(inputs)
+        mv_signatures.index = df.index
+        return mv_signatures
+
+    def _add_suffices(self, col_dict):
+        out = {}
+        for key in col_dict.keys():
+            if 'scores' in key:
+                columns = [col + '_derived' for col in col_dict[key]]
+            else:
+                columns = [col + '_locf' for col in col_dict[key]]
+            out[key] = columns
+        return out
+
+    def _pad_df(self, df, n_pad, value=0):
+        """ util function to pad <n_pad> zeros at the start of the df
+        """
+        x = np.concatenate([np.zeros([n_pad, df.shape[1]]), df.values])
+        return pd.DataFrame(x, columns=df.columns).fillna(0)
+
+    # multivariate / multi channel signatures:
+    def _compute_mv_signatures(self, df):
+        """ Loop over columns groups compute multivariate signature features
+             and create output columns"""
+        col_dfs = []
+        for group, columns in self.column_dict.items():
+            col_df = self._process_group(df[['path'] + columns])
+            col_df.rename(
+                columns=lambda col: f'{group}_signature_{col}', inplace=True)
+            col_dfs.append(col_df)
+        out = pd.concat(col_dfs, axis=1)
+        return out
+
+    def _process_group(self, df):
+        """ Processing a group of columns. """
+        group_output_size = iis.siglength(len(df.columns), self.order)
+
+        sliding_window_view = np.lib.stride_tricks.sliding_window_view(
+            df.values, self.look_back+1, axis=0)
+        sliding_window_view = np.transpose(sliding_window_view, [0, 2, 1])
+        signature = iis.sig(sliding_window_view, self.order)
+        return pd.DataFrame(
+            data=signature, index=df.index[self.look_back:], columns=np.arange(group_output_size))
