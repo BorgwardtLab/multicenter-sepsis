@@ -12,11 +12,9 @@ from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 
 from src.variables.mapping import VariableMapping
-from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures, CalculateUtilityScores, InvalidTimesFiltration
+from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures, CalculateUtilityScores, InvalidTimesFiltration, LookbackFeatures
+# from src.sklearn.data.transformers import LookbackFeatures
 
-from src.sklearn.data.transformers import LookbackFeatures
-
-import ipdb
 import warnings
 # warnings.filterwarnings("error")
 # dask.config.set(scheduler='single-threaded')
@@ -68,7 +66,7 @@ def main(input_filename, split_filename, output_filename):
     norm_ids = raw_data.index.head().to_list()
     data_pipeline = Pipeline([
         ('derived_features', DerivedFeatures(VM_DEFAULT, suffix='locf')),
-        # ('persist_features', DaskPersist()),
+        ('persist_features', DaskPersist()),
         ('lookback_features', LookbackFeatures(
             vm=VM_DEFAULT, suffices=['_raw', '_derived'])),
         ('measurement_counts', MeasurementCounterandIndicators(suffix='_raw')),

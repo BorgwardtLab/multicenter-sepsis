@@ -65,6 +65,49 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
         return self.post_transform(dask_df, result)
 
 
+class LookbackFeatures(DaskIDTransformer):
+    """
+    Simple statistical features including moments over a tunable look-back window.
+    """
+
+    def __init__(self, stats=None, windows=[4, 8, 16],
+                 suffices=['_raw', '_derived'],  **kwargs):
+        """ takes dictionary of stats (keys) and corresponding look-back windows (values)
+            to compute each stat for each time series variable. 
+            Below a default stats dictionary of look-back 5 hours is implemented.
+        """
+        super().__init__(**kwargs)
+        self.col_suffices = suffices  # apply look-back stats to time series columns
+        self.stats = stats if stats is not None else [
+            'min', 'max', 'mean', 'median', 'var']
+        self.windows = windows
+
+    def pre_transform(self, ddf):
+        used_cols = [col for col in ddf.columns if any(
+            [s in col for s in self.col_suffices])]
+
+        def remove_suffix(col):
+            for suffix in self.col_suffices:
+                if col.endswith(suffix):
+                    return col[:-len(suffix)]
+        return ddf[used_cols].rename(columns=remove_suffix)
+
+    def post_transform(self, input_ddf, transformed_ddf):
+        return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
+
+    def transform_id(self, df):
+        features = []
+        for window in self.windows:
+            cur_features = df.rolling(
+                window, min_periods=0).agg(self.stats)
+            cur_features.columns = [
+                '_'.join(col).strip() + f'_{window}_hours'
+                for col in cur_features.columns.values]
+            features.append(cur_features)
+
+        return pd.concat(features, axis=1)
+
+
 class MeasurementCounterandIndicators(BaseEstimator, TransformerMixin):
     """ Adds a count of the number of measurements up to the given timepoint. """
 
