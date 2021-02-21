@@ -6,7 +6,10 @@ import time
 import dask
 import dask.dataframe as dd
 from dask.distributed import Client, as_completed
+import pyarrow
+import pyarrow.parquet as pq
 from sklearn.pipeline import Pipeline
+from tqdm import tqdm
 
 from src.variables.mapping import VariableMapping
 from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures, CalculateUtilityScores, InvalidTimesFiltration
@@ -82,18 +85,37 @@ def main(input_filename, split_filename, output_filename):
             vm=VM_DEFAULT, suffix='_raw'))
     ])
     preprocessed_data = data_pipeline.fit_transform(raw_data)
-    # Get future objects, and trigger computation
-    # future_partitions = client.compute(
-    #     preprocessed_data.to_delayed(optimize_graph=True))
-    # for future, result in as_completed(future_partitions, with_results=True):
-    #     print(result.shape)
+    # Move from dask dataframes to the delayed api, for conversion and writing
+    # of partitions
+    partitions = preprocessed_data.to_delayed(optimize_graph=False)
+    pyarrow_partitions = [
+        dask.delayed(pyarrow.Table.from_pandas)(partition, preserve_index=True)
+        for partition in partitions
+    ]
 
-    dd.to_parquet(
-        preprocessed_data,
-        output_filename,
-        engine='pyarrow',
-        write_index=True
-    )
+    # Initialize output file
+    # Get future objects, and trigger computation
+    future_partitions = client.compute(pyarrow_partitions)
+
+    output_file = None
+    try:
+        for future, result in tqdm(
+                as_completed(future_partitions, with_results=True),
+                total=len(future_partitions)):
+            if output_file is None:
+                # Initialize writer here, as we now have access to the table
+                # schema
+                output_file = pq.ParquetWriter(
+                    output_filename,
+                    result.schema,
+                    write_statistics=[VM_DEFAULT('id')]
+                )
+            # Write partition as row group
+            output_file.write_table(result)
+    finally:
+        # Close output file
+        if output_file is not None:
+            output_file.close()
     print('Preprocessing completed after {:.2f} seconds'.format(
         time.time() - start))
 
