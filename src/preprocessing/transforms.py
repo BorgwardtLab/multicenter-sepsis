@@ -428,10 +428,10 @@ class Normalizer(TransformerMixin, BaseEstimator):
 
     def _compute_stats(self, df):
         patients = df.loc[self.patient_ids]
-        means, stds = dask.compute(patients.mean(), patients.std())
+        # means, stds = dask.compute(patients.mean(), patients.std())
         self.stats = {
-            'means': means,
-            'stds': stds
+            'means': patients.mean().persist(),
+            'stds': patients.std().persist()
         }
 
     def _apply_normalization(self, df):

@@ -1,6 +1,4 @@
 """Feature extraction pipeline."""
-import warnings
-from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures, CalculateUtilityScores, InvalidTimesFiltration, LookbackFeatures, DaskRepartition
 from src.preprocessing.transforms import (
     DerivedFeatures,
     MeasurementCounterandIndicators,
@@ -24,6 +22,7 @@ import pyarrow
 import pyarrow.parquet as pq
 from sklearn.pipeline import Pipeline
 from tqdm import tqdm
+import warnings
 
 from src.variables.mapping import VariableMapping
 
@@ -56,44 +55,45 @@ def check_time_sorted(df):
 def main(input_filename, split_filename, output_filename):
     start = time.time()
     client = Client(
-        n_workers=60, memory_limit="120GB", local_directory="/local0/tmp/dask"
+        n_workers=55, memory_limit="60GB", local_directory="/local0/tmp/dask"
     )
     raw_data = dd.read_parquet(
-        input_filename, columns=VM_DEFAULT.core_set, engine="pyarrow-dataset"
+        input_filename,
+        columns=VM_DEFAULT.core_set,
+        engine="pyarrow-dataset",
+        chunksize=1,
     )
     # Set id to be the index, then sort within each id to ensure correct time
     # ordering.
-    raw_data = raw_data \
-        .set_index(VM_DEFAULT('id'), sorted=False, nparitions='auto')
-    raw_data = raw_data \
-        .groupby(VM_DEFAULT('id'), group_keys=False) \
+    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False, npartitions=50)
+    raw_data = (
+        raw_data.groupby(VM_DEFAULT("id"), group_keys=False)
         .apply(sort_time, meta=raw_data)
-    raw_data = convert_bool_to_float(raw_data).persist()
-    norm_ids = raw_data.index.head().to_list()
+        .persist()
+    )
+    raw_data = convert_bool_to_float(raw_data)
+    norm_ids = raw_data.get_partition(0).index.head().to_list()
     data_pipeline = Pipeline(
         [
+            # ("repartition1", DaskRepartition(npartitions=200)),
             ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
-            ('persist_features', DaskPersist()),
+            # ("persist_features", DaskPersist()),
             (
                 "lookback_features",
                 LookbackFeatures(vm=VM_DEFAULT, suffices=["_raw", "_derived"]),
             ),
             ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
-            ('repartition', DaskRepartition(partition_size='150M')),
-            ("persist_pernorm", DaskPersist()),
-            ("feature_normalizer", Normalizer(
-                norm_ids, suffix=["_locf", "_derived"])),
-            # ('persist_normalized', DaskPersist()),
+            ("feature_normalizer", Normalizer(norm_ids, suffix=["_locf", "_derived"])),
+            ("repartition", DaskRepartition(partition_size="150M")),
+            ("persist_normalized", DaskPersist()),
             ("wavelet_features", WaveletFeatures(suffix="_locf", vm=VM_DEFAULT)),
             (
                 "signatures",
-                SignatureFeatures(
-                    suffices=["_locf", "_derived"], vm=VM_DEFAULT),
-            ),  # n_jobs=2
+                SignatureFeatures(suffices=["_locf", "_derived"], vm=VM_DEFAULT),
+            ),
             (
                 "calculate_target",
-                CalculateUtilityScores(
-                    label=VM_DEFAULT("label"), vm=VM_DEFAULT),
+                CalculateUtilityScores(label=VM_DEFAULT("label"), vm=VM_DEFAULT),
             ),
             (
                 "filter_invalid_times",
@@ -104,7 +104,7 @@ def main(input_filename, split_filename, output_filename):
     preprocessed_data = data_pipeline.fit_transform(raw_data)
     # Move from dask dataframes to the delayed api, for conversion and writing
     # of partitions
-    partitions = preprocessed_data.to_delayed(optimize_graph=False)
+    partitions = preprocessed_data.to_delayed(optimize_graph=True)
     pyarrow_partitions = [
         dask.delayed(pyarrow.Table.from_pandas)(partition, preserve_index=True)
         for partition in partitions
@@ -124,8 +124,7 @@ def main(input_filename, split_filename, output_filename):
                 # Initialize writer here, as we now have access to the table
                 # schema
                 output_file = pq.ParquetWriter(
-                    output_filename, result.schema, write_statistics=[
-                        VM_DEFAULT("id")]
+                    output_filename, result.schema, write_statistics=[VM_DEFAULT("id")]
                 )
             # Write partition as row group
             output_file.write_table(result)
@@ -133,8 +132,7 @@ def main(input_filename, split_filename, output_filename):
         # Close output file
         if output_file is not None:
             output_file.close()
-    print("Preprocessing completed after {:.2f} seconds".format(
-        time.time() - start))
+    print("Preprocessing completed after {:.2f} seconds".format(time.time() - start))
 
 
 if __name__ == "__main__":
