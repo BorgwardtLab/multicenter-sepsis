@@ -1,4 +1,18 @@
 """Feature extraction pipeline."""
+import warnings
+from src.preprocessing.transforms import DerivedFeatures, MeasurementCounterandIndicators, Normalizer, DaskPersist, WaveletFeatures, SignatureFeatures, CalculateUtilityScores, InvalidTimesFiltration, LookbackFeatures, DaskRepartition
+from src.preprocessing.transforms import (
+    DerivedFeatures,
+    MeasurementCounterandIndicators,
+    Normalizer,
+    DaskPersist,
+    DaskRepartition,
+    WaveletFeatures,
+    SignatureFeatures,
+    CalculateUtilityScores,
+    InvalidTimesFiltration,
+    LookbackFeatures,
+)
 import argparse
 from pathlib import Path
 import time
@@ -13,19 +27,6 @@ from tqdm import tqdm
 
 from src.variables.mapping import VariableMapping
 
-from src.preprocessing.transforms import (
-    DerivedFeatures,
-    MeasurementCounterandIndicators,
-    Normalizer,
-    DaskPersist,
-    WaveletFeatures,
-    SignatureFeatures,
-    CalculateUtilityScores,
-    InvalidTimesFiltration,
-    LookbackFeatures,
-)
-
-import warnings
 
 # warnings.filterwarnings("error")
 # dask.config.set(scheduler='single-threaded')
@@ -62,18 +63,11 @@ def main(input_filename, split_filename, output_filename):
     )
     # Set id to be the index, then sort within each id to ensure correct time
     # ordering.
-    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False, nparitions="auto")
-    raw_data = (
-        raw_data.groupby(VM_DEFAULT("id"), group_keys=False)
+    raw_data = raw_data \
+        .set_index(VM_DEFAULT('id'), sorted=False, nparitions='auto')
+    raw_data = raw_data \
+        .groupby(VM_DEFAULT('id'), group_keys=False) \
         .apply(sort_time, meta=raw_data)
-        .persist()
-    )
-    # Just to be sure, check that time is sorted
-    # sorted_check = raw_data \
-    #     .groupby(VM_DEFAULT('id'), dropna=False) \
-    #     .apply(check_time_sorted, meta=bool) \
-    #     .compute()
-    # assert sorted_check.all()
     raw_data = convert_bool_to_float(raw_data).persist()
     norm_ids = raw_data.index.head().to_list()
     data_pipeline = Pipeline(
@@ -85,17 +79,21 @@ def main(input_filename, split_filename, output_filename):
                 LookbackFeatures(vm=VM_DEFAULT, suffices=["_raw", "_derived"]),
             ),
             ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
+            ('repartition', DaskRepartition(partition_size='150M')),
             ("persist_pernorm", DaskPersist()),
-            ("feature_normalizer", Normalizer(norm_ids, suffix=["_locf", "_derived"])),
+            ("feature_normalizer", Normalizer(
+                norm_ids, suffix=["_locf", "_derived"])),
             # ('persist_normalized', DaskPersist()),
             ("wavelet_features", WaveletFeatures(suffix="_locf", vm=VM_DEFAULT)),
             (
                 "signatures",
-                SignatureFeatures(suffices=["_locf", "_derived"], vm=VM_DEFAULT),
+                SignatureFeatures(
+                    suffices=["_locf", "_derived"], vm=VM_DEFAULT),
             ),  # n_jobs=2
             (
                 "calculate_target",
-                CalculateUtilityScores(label=VM_DEFAULT("label"), vm=VM_DEFAULT),
+                CalculateUtilityScores(
+                    label=VM_DEFAULT("label"), vm=VM_DEFAULT),
             ),
             (
                 "filter_invalid_times",
@@ -126,7 +124,8 @@ def main(input_filename, split_filename, output_filename):
                 # Initialize writer here, as we now have access to the table
                 # schema
                 output_file = pq.ParquetWriter(
-                    output_filename, result.schema, write_statistics=[VM_DEFAULT("id")]
+                    output_filename, result.schema, write_statistics=[
+                        VM_DEFAULT("id")]
                 )
             # Write partition as row group
             output_file.write_table(result)
@@ -134,7 +133,8 @@ def main(input_filename, split_filename, output_filename):
         # Close output file
         if output_file is not None:
             output_file.close()
-    print("Preprocessing completed after {:.2f} seconds".format(time.time() - start))
+    print("Preprocessing completed after {:.2f} seconds".format(
+        time.time() - start))
 
 
 if __name__ == "__main__":

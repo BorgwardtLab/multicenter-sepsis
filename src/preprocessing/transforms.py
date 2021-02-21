@@ -34,6 +34,24 @@ class DaskPersist(TransformerMixin, BaseEstimator):
         return X.persist()
 
 
+class DaskRepartition(TransformerMixin, BaseEstimator):
+    """Repartition dask dataframe."""
+
+    def __init__(self, **kwargs):
+        """Initialize repartition transformer.
+
+        Args:
+            kwargs: Parameters to pass to dask.dataframe.repartition
+        """
+        self.kwargs = kwargs
+
+    def fit(self, X):
+        return self
+
+    def transform(self, X: dd.DataFrame):
+        return X.repartition(**self.kwargs)
+
+
 class DaskIDTransformer(TransformerMixin, BaseEstimator):
     """
     Dask-based Parallelized Base class when performing transformations over ids. The child class requires to have a transform_id method.
