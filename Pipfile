@@ -20,6 +20,7 @@ torch = "==1.6.0"
 lightgbm = "*"
 pytorch-lightning = "==1.0.5"
 dask = {extras = ["dataframe"],version = "*"}
+distributed = "*"
 dask-ml = "*"
 pyarrow = "*"
 seaborn = "*"
@@ -30,6 +31,7 @@ iisignature = "*"
 # dask-xgboost = "*"
 # dask-lightgbm = "*"  # merged into lightgbm
 # distributed = "*"
+parquet-tools = "*"
 
 [requires]
 python_version = "3.7"
