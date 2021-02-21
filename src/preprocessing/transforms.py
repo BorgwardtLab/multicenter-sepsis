@@ -98,12 +98,15 @@ class LookbackFeatures(DaskIDTransformer):
     def transform_id(self, df):
         features = []
         for window in self.windows:
-            cur_features = df.rolling(
-                window, min_periods=0).agg(self.stats)
-            cur_features.columns = [
-                '_'.join(col).strip() + f'_{window}_hours'
-                for col in cur_features.columns.values]
-            features.append(cur_features)
+            rolling_window = df.rolling(
+                window, min_periods=0)
+            for stat in self.stats:
+                feature_col = getattr(rolling_window, stat)()
+                feature_col.rename(
+                    columns=lambda col: col + f'_{stat}_{window}_hours',
+                    inplace=True
+                )
+                features.append(feature_col)
 
         return pd.concat(features, axis=1)
 
