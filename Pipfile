@@ -7,6 +7,7 @@ verify_ssl = true
 pytest = "*"
 ipdb = "*"
 ipython = "*"
+bokeh = "*"
 
 [packages]
 pandas = "*"
@@ -29,7 +30,6 @@ iisignature = "*"
 # dask-xgboost = "*"
 # dask-lightgbm = "*"  # merged into lightgbm
 # distributed = "*"
-# bokeh = "*"
 
 [requires]
 python_version = "3.7"
