@@ -331,10 +331,8 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
     def SOFA_deterioration(self, s):
         def check_24hr_deterioration(s):
             """ Check the max deterioration over the last 24 hours, if >= 2 then mark as a 1"""
-            prev_23_hrs = pd.concat([s.shift(i)
-                                     for i in range(1, 24)], axis=1).values
-            tfr_hr_min = np.nanmin(prev_23_hrs, axis=1)
-            return pd.Series(index=s.index, data=(s.values - tfr_hr_min))
+            min_prev_23_hrs = s.rolling(24, min_periods=0).apply(np.nanmin)
+            return s - min_prev_23_hrs
         sofa_det = s.groupby(
             self.vm('id'),
             sort=False).apply(check_24hr_deterioration, meta=('SOFA_derived', 'f8'))
