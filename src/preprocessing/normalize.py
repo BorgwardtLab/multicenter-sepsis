@@ -29,11 +29,12 @@ VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 def main(
     input_filename,
     split_filename,
-    output_filename,
     split_name,
+    repetition,
+    output_filename,
 ):
     """Perform normalization of input data, subject to a certain split."""
-    patient_ids = SplitInfo(split_filename)(split_name)
+    patient_ids = SplitInfo(split_filename)(split_name, repetition)
 
     progress_bar = dd.ProgressBar()
     progress_bar.register()
@@ -92,6 +93,12 @@ if __name__ == "__main__":
         choices=['train', 'test', 'val', 'dev'],
         help='Indicate split for which the normalization shall be performed.'
     )
+    parser.add_argument(
+        '-r', '--repetition',
+        type=int,
+        default=0,
+        help='Repetition of split to load'
+    )
 
     parser.add_argument(
         "--output-file",
@@ -119,6 +126,7 @@ if __name__ == "__main__":
     main(
         args.input_file,
         args.split_file,
-        args.output_file,
         args.split_name,
+        args.repetition,
+        args.output_file,
     )
