@@ -3,6 +3,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pandas as pd
 import json
+import os
 
 from src.variables.mapping import VariableMapping as VM
 
@@ -11,21 +12,17 @@ class SplitInfo:
     Class that handles split information and 
     returns patient ids.
     """
-    def __init__(self, dataset, split_path):
+    def __init__(self, split_path):
         """
         Args:
-        - dataset: name of used dataset
         - split_path: path to file containing split information
         """
         self.split_path = split_path
-        self.d = self._load_info(split_path, dataset)
+        self.d = self._load_info(split_path)
 
-    def _load_info(self, path, dataset=None):
+    def _load_info(self, path):
         with open(path, 'r') as f:
-            if dataset:
-                return json.load(f)[dataset]
-            else:
-                return json.load(f) 
+            return json.load(f) 
 
     def __call__(self, split='train', rep=0):
         """
@@ -79,7 +76,7 @@ if __name__ == "__main__":
                         default='demo')
     parser.add_argument('--split_path', 
                         help='path to split file', 
-                        default='config/master_splits.json')
+                        default='config/splits')
     parser.add_argument('--split', 
                         help='which data split to use', 
                         default='train')
@@ -89,11 +86,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     dataset_name = args.dataset 
     path = f'datasets/{dataset_name}/data/parquet/features.parquet'
-    split_path = args.split_path 
+    split_path = os.path.join(args.split_path, f'splits_{dataset_name}.json' ) 
     split = args.split 
     rep = args.rep
 
-    si = SplitInfo(dataset_name, split_path)
+    si = SplitInfo(split_path)
     ids = si(split, rep)
     f1 = ('age', '<', 70) 
      
