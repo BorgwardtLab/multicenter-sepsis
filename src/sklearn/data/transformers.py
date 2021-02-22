@@ -16,11 +16,7 @@ from kymatio.numpy import Scattering1D
 import iisignature as iis 
 
 from .utils import save_pickle, load_pickle 
-from .base import BaseIDTransformer, ParallelBaseIDTransformer, DaskIDTransformer
-from .extracted import (ts_columns, columns_not_to_normalize, extended_ts_columns, 
-    colums_to_drop, baseline_cols, vital_columns, lab_columns_chemistry, 
-    lab_columns_organs, lab_columns_hemo, scores_and_indicators_columns ) 
-
+from .base import ChunkedTransformer, ParallelBaseIDTransformer, DaskIDTransformer
 import dask.dataframe as dd
 
 from src import datasets
@@ -58,7 +54,7 @@ class DataframeFromParquet(TransformerMixin, BaseEstimator):
 
         return df 
 
-class CalculateUtilityScores(ParallelBaseIDTransformer):
+class CalculateUtilityScores(ChunkedTransformer):
     """Calculate utility scores from patient.
 
     Inspired by Morill et al. [1], this transformer calculates the
@@ -74,7 +70,7 @@ class CalculateUtilityScores(ParallelBaseIDTransformer):
         passthrough=False,
         label='sep3',
         score_name='utility',
-        shift=0,
+        shift=-6,
         **kwargs
     ):
         """Create new instance of class.
@@ -186,7 +182,7 @@ class DropColumns(TransformerMixin, BaseEstimator):
     """
     Drop and potentially save columns. By default we drop all baseline scores.
     """
-    def __init__(self, columns=baseline_cols, label='sep3', time='time', save=False, 
+    def __init__(self, columns=None, label='sep3', time='time', save=False, 
                  data_dir=None, split=None):
         self.columns = columns
         self.label = label
@@ -350,7 +346,7 @@ class CarryForwardImputation(DaskIDTransformer):
     def transform_id(self, df):
         return df.fillna(method='ffill').fillna(0)
 
-class IndicatorImputation(ParallelBaseIDTransformer):
+class IndicatorImputation(ChunkedTransformer):
     """
     Adds indicator dimension for every channel to indicate if there was a nan
     IndicatorImputation still requires FillMissing afterwards!
@@ -532,7 +528,7 @@ class LookbackFeatures(DaskIDTransformer):
 
 class DerivedFeatures(TransformerMixin, BaseEstimator):
     """
-    This class is based on J. Morill's code base: 
+    This class is inspired by J. Morill's code base: 
     https://github.com/jambo6/physionet_sepsis_challenge_2019/blob/master/src/data/transformers.py 
 
     Adds any derived features thought to be useful
@@ -540,7 +536,6 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         - Bun/crea ratio: Bun/crea
         - Hepatic SOFA: Bilirubin SOFA score
 
-    # Can add renal and neruologic sofa
     """
     def __init__(self, vm=None, suffix='locf'):
         """
@@ -706,11 +701,11 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
         # Ratios:
         df['ShockIndex_derived'] = df[hr].values / df[sbp].values
         df['bun/cr_derived'] = df[bun].values / df[crea].values
-        df['po2/fio2_dervied'] = df[po2].values / df[fio2].values #shouldnt it be PaO2/Fi ratio?
+        df['po2/fio2_derived'] = df[po2].values / df[fio2].values #shouldnt it be PaO2/Fi ratio?
 
         # SOFA
         df['SOFA_derived'] = self.SOFA(df[[plt, map, crea, bili]])
-        df['SOFA_deterioration_derived'] = self.SOFA_deterioration(df['SOFA_derived'])
+        df['SOFAdeterioration_derived'] = self.SOFA_deterioration(df['SOFA_derived'])
         df['qSOFA_derived'] = self.qSOFA(df)
         df['SepticShock_derived'] = self.septic_shock(df)
 
@@ -750,7 +745,7 @@ class MeasurementCounter(DaskIDTransformer):
 
         return pd.concat([df, counts], axis=1)
 
-class WaveletFeatures(ParallelBaseIDTransformer):
+class WaveletFeatures(ChunkedTransformer):
     """ Computes wavelet scattering up to given time per time series channel """
     def __init__(self, n_jobs=4, T=32, J=2, Q=1, output_size=32, suffix='_locf', **kwargs):
         """
@@ -822,7 +817,7 @@ class WaveletFeatures(ParallelBaseIDTransformer):
         return 1 # rolling funcs need to return index..  
   
 
-class SignatureFeatures(ParallelBaseIDTransformer):
+class SignatureFeatures(ChunkedTransformer):
     """ Computes signature features for a given look back window """
     def __init__(self, n_jobs=4, look_back=7, order=3, 
             suffices=['_locf', '_derived'], **kwargs):
