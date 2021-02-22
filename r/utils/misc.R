@@ -12,7 +12,7 @@ cfg_path <- function(file) file.path(root_dir, "config", file)
 
 is_lsf <- function() !is.na(Sys.getenv("LSB_JOBID", unset = NA))
 
-data_path <- function(type = c("export", "challenge")) {
+data_path <- function(type = c("export", "physionet2019")) {
 
   type <- match.arg(type)
 

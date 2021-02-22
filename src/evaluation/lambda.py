@@ -14,7 +14,7 @@ class LambdaCalculator:
     prevalence correction of clinical utility score.
 
     """
-    def __init__(self, n_jobs=10, n_chunks=50, u_fp=-0.05, early_window=12, vm=None):
+    def __init__(self, n_jobs=10, n_chunks=50, u_fp=-0.05, early_window=12, vm=None, shift=-6):
         """
         Inputs: 
             - n_jobs: number of jobs for parallelism
@@ -22,13 +22,15 @@ class LambdaCalculator:
             - early_window: duration from t_early to t_sepsis 
                 in util score
             - vm: Variable Mapping obj
+            - shift: label shift, default: -6 for 6 hours into the past
         """
         self.n_jobs = n_jobs
         self.n_chunks = n_chunks
         self.u_fp = u_fp
         self.early_window = early_window
         self.vm = vm 
-
+        self.shift = shift
+         
     def _process_chunk_of_patients(self, data):
         #initialize outputs:
         t_minus_tot = 0
@@ -61,11 +63,13 @@ class LambdaCalculator:
                 onset = np.argmax(y)
                 t_plus = max(0, onset - self.early_window)
                 g = compute_prediction_utility(
-                        y, np.ones(len(y)), u_fp=self.u_fp, return_all_scores=True)
+                        y, np.ones(len(y)), u_fp=self.u_fp, 
+                        return_all_scores=True, shift_labels=self.shift)
                 g = np.maximum(g,0) #here we only need the non-negative utilities
                 g = g.sum()
                 h = compute_prediction_utility(
-                        y, np.zeros(len(y)), u_fp=self.u_fp, return_all_scores=True)
+                        y, np.zeros(len(y)), u_fp=self.u_fp, 
+                        return_all_scores=True, shift_labels=self.shift)
                 h = h.sum()
             else: # if control
                 t_minus = len(y)
@@ -135,7 +139,7 @@ class SimplifiedLambdaCalculator:
         self.n_jobs = n_jobs
         self.u_fp = u_fp
         self.early_window = early_window
-        self.label = label 
+        self.label = label
 
     def _process_patient(self, df):
         t_minus = 0
