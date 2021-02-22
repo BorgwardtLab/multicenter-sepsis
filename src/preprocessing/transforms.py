@@ -398,9 +398,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
 
 
 class Normalizer(TransformerMixin, BaseEstimator):
-    """
-    Performs normalization (z-scoring) of columns.
-    """
+    """Performs normalization (z-scoring) of columns."""
 
     def __init__(self, patient_ids, suffix=None, drop_cols=None):
         """
@@ -409,8 +407,9 @@ class Normalizer(TransformerMixin, BaseEstimator):
           normalization statistics
         - suffix: when provided all columns having this suffix are normalized.
             otherwise, all but the excluded columns are normalized.
+        - drop_cols: optional list of columns to drop; must be valid
+          columns of the input data frame
         """
-
         self.patient_ids = patient_ids
         self.suffix = suffix
         self.drop_cols = drop_cols
@@ -430,7 +429,6 @@ class Normalizer(TransformerMixin, BaseEstimator):
 
     def _compute_stats(self, df):
         patients = df.loc[self.patient_ids]
-        # means, stds = dask.compute(patients.mean(), patients.std())
         self.stats = {
             'means': patients.mean().persist(),
             'stds': patients.std().persist()
