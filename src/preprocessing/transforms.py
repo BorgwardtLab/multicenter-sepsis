@@ -441,11 +441,11 @@ class Normalizer(TransformerMixin, BaseEstimator):
         return (df - self.stats['means']) / self.stats['stds']
 
     def fit(self, df, labels=None):
-        self._compute_stats(self._drop_cols(df[self.columns]))
+        self._compute_stats(self._drop_columns(df))
         return self
 
     def transform(self, df):
-        normalized = self._apply_normalization(df[self.columns])
+        normalized = self._apply_normalization(self._drop_columns(df))
         return df.assign(**{
             col: normalized[col]
             for col in normalized.columns
