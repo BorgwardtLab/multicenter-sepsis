@@ -201,6 +201,8 @@ if __name__ == "__main__":
         lam = calc(X)
         result[dataset] = lam
     print(result)
-    embed()
+    with open('config/lambdas.json', 'w') as f:
+        json.dump(results, f)
+
 
     
