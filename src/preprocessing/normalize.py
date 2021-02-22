@@ -1,16 +1,19 @@
 """Normalize input data set in parallel."""
 
 import argparse
+import dask
 import json
 import pathlib
 
 import dask.dataframe as dd
 import numpy as np
 
+from src.preprocessing.transforms import Normalizer
 from src.variables.mapping import VariableMapping
 
 
-# TODO: use environment variable here?
+# TODO: use environment variable here
+# TODO: might want to support the index as well
 VM_CONFIG_PATH = str(
     pathlib.Path(__file__).parent.parent.parent.joinpath(
         'config/variables.json'
@@ -18,23 +21,6 @@ VM_CONFIG_PATH = str(
 )
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
-
-
-# # read patient ids from split files
-# patient_ids = 
-# # read columns to drop
-# # do some stuff with the variable map
-# drop_cols = 
-# raw_data = dd.read_parquet(
-#     input_filename,
-#     columns=VM_DEFAULT.core_set,
-#     engine="pyarrow-dataset",
-#     chunksize=1,
-# )
-# norm = Normalizer(patient_ids, drop_cols=[])
-# norm = norm.fit(raw_data)
-# means, stds = dask.compute(norm.stats['means'], norm.stats['stds'])
-# # Write to json file
 
 
 def get_patient_ids_by_split(dataset, split_info, split_name):
@@ -79,11 +65,23 @@ def main(input_filename, split_filename, output_filename):
 
     raw_data = dd.read_parquet(
         input_filename,
-        # FIXME: missing columns?
-        #columns=VM_DEFAULT.core_set,
         engine="pyarrow-dataset",
         chunksize=1,
     )
+
+    drop_cols = [
+        VM_DEFAULT('label'),
+        VM_DEFAULT('sex'),
+        VM_DEFAULT('time'),
+    ]
+
+    norm = Normalizer(patient_ids, drop_cols=drop_cols)
+    norm = norm.fit(raw_data)
+    means, stds = dask.compute(
+        norm.stats['means'], norm.stats['stds']
+    )
+
+    print(means, stds)
 
 
 if __name__ == "__main__":
