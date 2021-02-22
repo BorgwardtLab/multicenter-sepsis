@@ -405,7 +405,7 @@ class Normalizer(TransformerMixin, BaseEstimator):
     Performs normalization (z-scoring) of columns.
     """
 
-    def __init__(self, patient_ids, suffix=None):
+    def __init__(self, patient_ids, suffix=None, drop_cols=None):
         """
         Args:
         - patient_ids: Patient ids that should be used for computing
@@ -416,15 +416,20 @@ class Normalizer(TransformerMixin, BaseEstimator):
 
         self.patient_ids = patient_ids
         self.suffix = suffix
+        self.drop_cols = drop_cols
         self.stats = None
 
-    def _drop_columns(self, df, cols_to_drop):
+    def _drop_columns(self, df):
         """ Utiliy function, to select available columns to
             drop (the list can reach over different feature sets)
         """
-        drop_cols = [col for col in cols_to_drop if col in df.columns]
-        df = df.drop(columns=drop_cols)
-        return df, drop_cols
+        if self.suffix is not None:
+            columns = [col for col in df.columns if any(
+                [s in col for s in self.suffix])
+            ]
+            return df[columns]
+        if self.drop_cols is not None:
+            return df.drop(columns=self.drop_cols)
 
     def _compute_stats(self, df):
         patients = df.loc[self.patient_ids]
@@ -439,14 +444,7 @@ class Normalizer(TransformerMixin, BaseEstimator):
         return (df - self.stats['means']) / self.stats['stds']
 
     def fit(self, df, labels=None):
-        if type(self.suffix) == str:
-            suffix = [self.suffix]
-        else:
-            suffix = self.suffix
-        self.columns = [col for col in df.columns if any(
-            [s in col for s in suffix])
-        ]
-        self._compute_stats(df[self.columns])
+        self._compute_stats(self._drop_cols(df[self.columns]))
         return self
 
     def transform(self, df):
