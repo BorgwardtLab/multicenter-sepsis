@@ -417,7 +417,7 @@ class Normalizer(TransformerMixin, BaseEstimator):
         self.stats = None
 
     def _drop_columns(self, df):
-        """ Utiliy function, to select available columns to
+        """ Utility function, to select available columns to
             drop (the list can reach over different feature sets)
         """
         if self.suffix is not None:
