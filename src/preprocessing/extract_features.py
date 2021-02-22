@@ -81,20 +81,23 @@ def main(input_filename, split_filename, output_filename):
             # ("persist_features", DaskPersist()),
             (
                 "lookback_features",
-                LookbackFeatures(vm=VM_DEFAULT, suffices=["_raw", "_derived"]),
+                LookbackFeatures(suffices=["_raw", "_derived"]),
             ),
             ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
-            ("feature_normalizer", Normalizer(norm_ids, suffix=["_locf", "_derived"])),
+            ("feature_normalizer", Normalizer(
+                norm_ids, suffix=["_locf", "_derived"])),
             ("repartition", DaskRepartition(partition_size="150M")),
             ("persist_normalized", DaskPersist()),
-            ("wavelet_features", WaveletFeatures(suffix="_locf", vm=VM_DEFAULT)),
+            ("wavelet_features", WaveletFeatures(suffix="_locf")),
             (
                 "signatures",
-                SignatureFeatures(suffices=["_locf", "_derived"], vm=VM_DEFAULT),
+                SignatureFeatures(
+                    suffices=["_locf", "_derived"]),
             ),
             (
                 "calculate_target",
-                CalculateUtilityScores(label=VM_DEFAULT("label"), vm=VM_DEFAULT),
+                CalculateUtilityScores(
+                    label=VM_DEFAULT("label")),
             ),
             (
                 "filter_invalid_times",
@@ -125,7 +128,8 @@ def main(input_filename, split_filename, output_filename):
                 # Initialize writer here, as we now have access to the table
                 # schema
                 output_file = pq.ParquetWriter(
-                    output_filename, result.schema, write_statistics=[VM_DEFAULT("id")]
+                    output_filename, result.schema, write_statistics=[
+                        VM_DEFAULT("id")]
                 )
             # Write partition as row group
             output_file.write_table(result)
@@ -133,7 +137,8 @@ def main(input_filename, split_filename, output_filename):
         # Close output file
         if output_file is not None:
             output_file.close()
-    print("Preprocessing completed after {:.2f} seconds".format(time.time() - start))
+    print("Preprocessing completed after {:.2f} seconds".format(
+        time.time() - start))
 
 
 if __name__ == "__main__":

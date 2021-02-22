@@ -57,9 +57,6 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
     Dask-based Parallelized Base class when performing transformations over ids. The child class requires to have a transform_id method.
     """
 
-    def __init__(self, vm):
-        self.vm = vm
-
     def __init_subclass__(cls, *args, **kwargs):
         if not hasattr(cls, 'transform_id'):
             raise TypeError('Class must take a transform_id method')
@@ -77,7 +74,7 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
     def transform(self, dask_df):
         """ Parallelized transform."""
         result = self.pre_transform(dask_df)\
-            .groupby(self.vm('id'), group_keys=False) \
+            .groupby(dask_df.index.name, sort=False, group_keys=False) \
             .apply(self.transform_id)
 
         return self.post_transform(dask_df, result)
@@ -352,7 +349,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
             min_prev_23_hrs = s.rolling(24, min_periods=0).apply(np.nanmin)
             return s - min_prev_23_hrs
         sofa_det = s.groupby(
-            self.vm('id'),
+            s.index.name,
             sort=False).apply(check_24hr_deterioration, meta=('SOFA_derived', 'f8'))
         # Remove negative sofa values
         sofa_det = (sofa_det < 0) * 0. + (sofa_det >= 0) * sofa_det
