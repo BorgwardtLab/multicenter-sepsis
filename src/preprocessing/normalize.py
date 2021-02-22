@@ -52,14 +52,16 @@ def get_patient_ids_by_split(dataset, split_info, split_name):
     return np.asarray(ids)
 
 
-def main(input_filename, split_filename, output_filename):
+def main(
+    input_filename,
+    split_filename,
+    output_filename,
+    split_name,
+    dataset  # TODO: deprecated parameter
+):
     """Perform normalization of input data, subject to a certain split."""
     with open(split_filename) as f:
         split_info = json.load(f)
-
-    # TODO: these variables need to come from somewhere else
-    dataset = 'demo'
-    split_name = 'dev'
 
     patient_ids = get_patient_ids_by_split(dataset, split_info, split_name)
 
@@ -81,7 +83,13 @@ def main(input_filename, split_filename, output_filename):
         norm.stats['means'], norm.stats['stds']
     )
 
-    print(means, stds)
+    results = {
+        'means': means.to_dict(),
+        'stds': stds.to_dict(),
+    }
+
+    with open(output_filename, 'w') as f:
+        json.dump(results, f, indent=4)
 
 
 if __name__ == "__main__":
@@ -93,6 +101,7 @@ if __name__ == "__main__":
         help="Path to parquet file or folder with parquet files containing "
              "the raw data.",
     )
+
     parser.add_argument(
         "--split-file",
         type=str,
@@ -102,10 +111,25 @@ if __name__ == "__main__":
              "normalization is only computed using the dev split.",
     )
     parser.add_argument(
-        "--output-file",
+        '--split-name',
         type=str,
         required=False,
+        default='dev',
+        help='Indicate split for which the normalization shall be performed.'
+    )
+
+    parser.add_argument(
+        "--output-file",
+        type=str,
+        required=True,
         help="Output file path to write parquet file with features.",
+    )
+
+    parser.add_argument(
+        '--dataset',
+        type=str,
+        required=False,
+        default='demo',
     )
 
     args = parser.parse_args()
@@ -113,4 +137,10 @@ if __name__ == "__main__":
     # TODO: perform additional sanity checks; do we want to overwrite
     # existing output files, for example?
 
-    main(args.input_file, args.split_file, args.output_file)
+    main(
+        args.input_file,
+        args.split_file,
+        args.output_file,
+        args.split_name,
+        args.dataset,
+    )
