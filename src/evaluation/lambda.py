@@ -3,8 +3,10 @@ import pandas as pd
 from joblib import Parallel, delayed
 
 from IPython import embed
+from src.variables.mapping import VariableMapping
 from src.sklearn.data.utils import load_pickle #save_pickle, index_check
 from .physionet2019_score import compute_prediction_utility 
+from .sklearn_utils import make_consecutive
 
 class LambdaCalculator:
     """
@@ -12,20 +14,20 @@ class LambdaCalculator:
     prevalence correction of clinical utility score.
 
     """
-    def __init__(self, n_jobs=10, n_chunks=50, u_fp=-0.05, early_window=12, label='sep3'):
+    def __init__(self, n_jobs=10, n_chunks=50, u_fp=-0.05, early_window=12, vm=None):
         """
         Inputs: 
             - n_jobs: number of jobs for parallelism
             - u_fp: U_{FP} value as used in util score
             - early_window: duration from t_early to t_sepsis 
                 in util score
+            - vm: Variable Mapping obj
         """
         self.n_jobs = n_jobs
         self.n_chunks = n_chunks
         self.u_fp = u_fp
         self.early_window = early_window
-        self.label = label
-         
+        self.vm = vm 
 
     def _process_chunk_of_patients(self, data):
         #initialize outputs:
@@ -38,12 +40,17 @@ class LambdaCalculator:
         ids = data.index.get_level_values(0).unique()
         for i in ids:
             df = data.loc[[i]] 
-            y = df[self.label]
+            df = df.reset_index().set_index(self.vm('time')) 
+ 
+            y = df[self.vm('label')]
 
             # we assume that there are no remaining NaNs! assert this
             n_nans = df.isnull().sum().sum()
             assert n_nans == 0
-
+            
+            # ensure that time series is consecutive:
+            y, _ = make_consecutive(y,y)
+ 
             is_septic = 0
             t_plus = 0
             t_minus = 0
@@ -180,13 +187,16 @@ class SimplifiedLambdaCalculator:
         return lam
 
 if __name__ == "__main__":
-    datasets = [ 'physionet2019', 'mimic3', 'hirid', 'aumc', 'eicu']
-    features_path = 'datasets/{}/data/sklearn/processed/X_features_train.pkl' 
     result = {}
+    datasets = ['demo']
+    path = 'datasets/{}/data/parquet/features.parquet'
+    vm = VariableMapping()
     for dataset in datasets:
-        X = load_pickle(features_path.format(dataset))
-        calc = LambdaCalculator(n_jobs=20)
+        X = pd.read_parquet(path.format(dataset), columns=['sep3', 'stay_time'])
+        calc = LambdaCalculator(n_jobs=1, vm=vm)
         lam = calc(X)
         result[dataset] = lam
     print(result)
     embed()
+
+    
