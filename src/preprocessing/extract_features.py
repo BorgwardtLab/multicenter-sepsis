@@ -65,14 +65,15 @@ def main(input_filename, split_filename, output_filename):
     )
     # Set id to be the index, then sort within each id to ensure correct time
     # ordering.
-    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False, npartitions=50)
+    raw_data = raw_data.set_index(
+        VM_DEFAULT("id"), sorted=False, npartitions=50)
     raw_data = (
-        raw_data.groupby(VM_DEFAULT("id"), group_keys=False)
+        raw_data.groupby(raw_data.index.name, sort=False, group_keys=False)
         .apply(sort_time, meta=raw_data)
         .persist()
     )
     raw_data = convert_bool_to_float(raw_data)
-    norm_ids = raw_data.get_partition(0).index.head().to_list()
+    norm_ids = raw_data.get_partition(0).index.unique().values.compute()
     data_pipeline = Pipeline(
         [
             # ("repartition1", DaskRepartition(npartitions=200)),
