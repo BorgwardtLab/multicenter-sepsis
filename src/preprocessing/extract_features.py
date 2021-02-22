@@ -14,6 +14,7 @@ from src.preprocessing.transforms import (
 import argparse
 from pathlib import Path
 import time
+import json
 
 import dask
 import dask.dataframe as dd
@@ -36,6 +37,11 @@ VM_CONFIG_PATH = str(
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
+def read_dev_split_patients(splitfile):
+    with open(splitfile, 'r') as f:
+        split_info = json.load(f)
+    return split_info['dev']['total']
+
 
 def convert_bool_to_float(ddf):
     bool_cols = [col for col in ddf.columns if ddf[col].dtype == bool]
@@ -54,6 +60,7 @@ def check_time_sorted(df):
 
 def main(input_filename, split_filename, output_filename):
     start = time.time()
+    norm_ids = read_dev_split_patients(split_filename)
     client = Client(
         n_workers=55, memory_limit="60GB", local_directory="/local0/tmp/dask"
     )
@@ -65,15 +72,14 @@ def main(input_filename, split_filename, output_filename):
     )
     # Set id to be the index, then sort within each id to ensure correct time
     # ordering.
-    raw_data = raw_data.set_index(
-        VM_DEFAULT("id"), sorted=False, npartitions=50)
+    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False)
     raw_data = (
         raw_data.groupby(raw_data.index.name, sort=False, group_keys=False)
         .apply(sort_time, meta=raw_data)
         .persist()
     )
     raw_data = convert_bool_to_float(raw_data)
-    norm_ids = raw_data.get_partition(0).index.unique().values.compute()
+
     data_pipeline = Pipeline(
         [
             # ("repartition1", DaskRepartition(npartitions=200)),
@@ -103,6 +109,7 @@ def main(input_filename, split_filename, output_filename):
         ]
     )
     preprocessed_data = data_pipeline.fit_transform(raw_data)
+
     # Move from dask dataframes to the delayed api, for conversion and writing
     # of partitions
     partitions = preprocessed_data.to_delayed(optimize_graph=True)
@@ -147,7 +154,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--split-file",
         type=str,
-        # required=True,
+        required=True,
         help="Json file containing split information. Needed to ensure "
         "normalization is only computed using the dev split.",
     )
@@ -157,8 +164,14 @@ if __name__ == "__main__":
         required=True,
         help="Output file path to write parquet file with features.",
     )
+    parser.add_argument(
+        "--n-workers",
+        default=30,
+        type=int,
+        help="Number of dask workers to start for parallel processing of data."
+    )
     args = parser.parse_args()
     assert Path(args.input_data).exists()
-    # assert os.path.exists(args.split_file)
-    # assert os.path.exists(os.path.dirname(args.output))
+    assert Path(args.split_file).exists()
+    assert Path(args.output).parent.exists()
     main(args.input_data, args.split_file, args.output)
