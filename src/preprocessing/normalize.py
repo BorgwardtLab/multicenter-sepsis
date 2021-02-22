@@ -5,7 +5,8 @@ import dask
 import json
 import pathlib
 
-import dask.dataframe as dd
+import dask.dataframe as ddf
+import dask.diagnostics as dd
 
 from src.sklearn.loading import SplitInfo
 
@@ -34,7 +35,10 @@ def main(
     """Perform normalization of input data, subject to a certain split."""
     patient_ids = SplitInfo(split_filename)(split_name)
 
-    raw_data = dd.read_parquet(
+    progress_bar = dd.ProgressBar()
+    progress_bar.register()
+
+    raw_data = ddf.read_parquet(
         input_filename,
         engine="pyarrow-dataset",
         chunksize=1,
@@ -48,6 +52,7 @@ def main(
 
     norm = Normalizer(patient_ids, drop_cols=drop_cols)
     norm = norm.fit(raw_data)
+
     means, stds = dask.compute(
         norm.stats['means'],
         norm.stats['stds']
@@ -95,10 +100,21 @@ if __name__ == "__main__":
         help="Output file path to write parquet file with features.",
     )
 
+    parser.add_argument(
+        '-f', '--force',
+        action='store_true',
+        help='If set, overwrites output files'
+    )
+
     args = parser.parse_args()
 
-    # TODO: perform additional sanity checks; do we want to overwrite
-    # existing output files, for example?
+    for p in [args.input_file, args.split_file]:
+        assert pathlib.Path(p).exists(), \
+            RuntimeError(f'Path {p} does not exist')
+
+    if pathlib.Path(args.output_file).exists() and not args.force:
+        raise RuntimeError(f'Refusing to overwrite {args.output_file} unless '
+                           f'`--force` is set.')
 
     main(
         args.input_file,
