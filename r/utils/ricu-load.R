@@ -326,6 +326,7 @@ export_data <- function(src, dest_dir = data_path("export"),
   res <- data.table::setDT(res)
 
   create_parquet(res,
-    file.path(dest_dir, paste(src, packageVersion("ricu"), sep = "_"))
+    file.path(dest_dir, paste(src, packageVersion("ricu"), sep = "_")),
+    chunk_size = 1e3
   )
 }
