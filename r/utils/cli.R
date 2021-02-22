@@ -52,9 +52,9 @@ check_src <- function(opt, extra = NULL) {
 
   demo <- c("mimic_demo", "eicu_demo")
   prod <- c("mimic", "eicu", "hirid", "aumc")
-  all  <- c(demo, prod)
+  all  <- c(demo, prod, extra)
 
-  data_opts <- c(all, "demo", "prod", "all", extra)
+  data_opts <- c(all, "demo", "prod", "all")
 
   assert(is.string(opt$src), opt$src %in% data_opts,
     msg = "\nSelect a data source among the following options:

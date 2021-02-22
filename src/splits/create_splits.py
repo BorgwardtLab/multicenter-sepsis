@@ -10,20 +10,7 @@ import time
 import json
 from sklearn.model_selection import StratifiedShuffleSplit
 from IPython import embed
-
-def filter_short_stays(df, thres=3):
-    out = pd.DataFrame()
-    ids = np.array(df.index.unique())
-    for i in ids:
-        x = df.loc[i]
-        if len(x.shape) == 1:
-            if thres > 1:
-                continue
-        elif thres > len(x):
-            continue
-        else:
-            out = out.append(x)
-    return out
+from src.datasets.utils import get_file_mapping
 
 def main(args):
     #Unpack arguments:
@@ -33,33 +20,27 @@ def main(args):
     n_test_splits = args.n_test_splits
     test_boost_size = args.test_boost_size 
     path = args.path
-    out_file = args.out_file
+    out_path = args.out_path
     dataset = args.dataset
-    dataset_mapping = { 'demo': 'mimic_demo.parquet',
-                        'mimic': 'mimic.parquet'}
-    #dataset_mapping = {'mimic', '', 
-    #                   'hirid': '', 
-    #                   'eicu': '',
-    #                   'aumc': '',
-    #                   'physionet2019': '' }
+    version = args.version
+    file_mapping = get_file_mapping(version)
+    adjusted_val_size = validation_size / ( 1 - test_size)  
+
     if dataset == 'all':
-        datasets = dataset_mapping.keys()
+        datasets = file_mapping.keys()
     else:
         datasets = [dataset]
-    # we gather all splitting info in this dict: 
-    info = {}
 
     # Loop over datasets:
     for dataset in datasets:
          
         # Load data 
         df = pd.read_parquet( 
-            os.path.join( path, dataset_mapping[dataset]),
+            os.path.join( path, file_mapping[dataset]),
             engine='pyarrow'
         )
         d = {}
         df = df.set_index('stay_id')
-        df = filter_short_stays(df, thres=3)
         ids = np.array(df.index.unique())
         try: 
             labels = np.array(
@@ -83,7 +64,7 @@ def main(args):
        
         # 2. we split the development split into train / val and this n_train_split times
         # adjust val_size due to having already removed test data
-        adjusted_val_size = validation_size / ( 1 - test_size) 
+        
         print(f'validation size of {validation_size} results in an adjusted val size of {adjusted_val_size}')
         sss_tv = StratifiedShuffleSplit(n_splits=n_train_splits, test_size=adjusted_val_size, random_state=42)
         
@@ -106,20 +87,20 @@ def main(args):
             te_ids = test_ids[te_ind]
             d['test'][f'split_{counter}'] = te_ids.tolist()
 
-        # Assign dataset specific info:
-        info[dataset] = d 
-        
-    #4. Dump split info to json file:
-    #--------------------------------
-    print('Dumping split info to json...')
-    with open(out_file, 'w') as f:
-        json.dump(info, f, indent=4)
+        #4. Dump split info to json file:
+        #--------------------------------
+        d['version'] = version 
+        print('Dumping split info to json...')
+        os.makedirs(out_path, exist_ok=True)
+        out_file = os.path.join(out_path, f'splits_{dataset}.json') 
+        with open(out_file, 'w') as f:
+            json.dump(d, f, indent=4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--path', default='datasets/downloads', 
      help='Path to data dir')
-    parser.add_argument('--out_file', default='config/master_splits.json', 
+    parser.add_argument('--out_path', default='config/splits', 
      help='Name of output file storing split information')
     parser.add_argument('--dataset', default='all', 
      help='which dataset to process [mimic, hirid, eicu, aumc, physionet2019, all]')
@@ -134,6 +115,9 @@ if __name__ == "__main__":
     help='Number of stratified shuffle test splits to generate')
     parser.add_argument('--test_boost_size', type=float, default=0.8, 
      help='Ratio of patients in test boosting splits')
+    parser.add_argument('--version', default='0.3.0', 
+     help='data version')
+
 
     args = parser.parse_args()
 
