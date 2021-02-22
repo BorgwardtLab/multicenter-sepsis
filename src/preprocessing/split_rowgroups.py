@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('input_filename', type=str)
     parser.add_argument('--output', type=str)
-    parser.add_argument('--chunksize', type=int, default=100)
+    parser.add_argument('--chunksize', type=int, default=500)
     args = parser.parse_args()
 
     main(args.input_filename, args.output, args.chunksize)
