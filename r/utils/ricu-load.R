@@ -1,5 +1,5 @@
 
-load_challenge <- function(dir = data_path("physionet2019"),
+load_physionet <- function(dir = data_path("physionet2019"),
                            cfg = cfg_path("variables.json")) {
 
   concepts <- read_var_json(cfg)
@@ -259,11 +259,10 @@ prof <- function(expr, envir = parent.frame()) {
 
   cur <- memuse::Sys.procmem()
   cil <- cur[["peak"]] - mem[["peak"]]
-  cur <- cur[["size"]] - mem[["size"]]
 
   msg("    Runtime: {format(Sys.time() - tim, digits = 4)}")
   if (length(cil)) msg("    Memory ceiling increased by: {as.character(cil)}")
-  msg("    Current memory usage: {as.character(cur)}")
+  msg("    Current memory usage: {as.character(cur[['size']])}")
 
   res
 }
@@ -276,8 +275,8 @@ export_data <- function(src, dest_dir = data_path("export"),
   assert(is.string(src), dir.exists(dir))
 
   dat <- prof(
-    if (identical(src, "challenge")) {
-      load_challenge(cfg = var_cfg)
+    if (identical(src, "physionet2019")) {
+      load_physionet(cfg = var_cfg)
     } else {
       load_ricu(src, var_cfg = var_cfg, ...)
     }
@@ -295,7 +294,8 @@ export_data <- function(src, dest_dir = data_path("export"),
   cfg <- read_var_json(var_cfg)
   cfg <- cfg[!is.na(cfg$concept), ]
 
-  dat <- rename_cols(dat, cfg$name, cfg$concept, by_ref = TRUE)
+  dat <- rename_cols(dat, cfg$name, cfg$concept, by_ref = TRUE,
+                     skip_absent = TRUE)
 
   missing <- !cfg$name %in% data_vars(dat)
 

@@ -12,7 +12,7 @@ invisible(
 
 args <- parse_args(src_opt, out_dir)
 
-src <- check_src(args, "challenge")
+src <- check_src(args, "physionet2019")
 dir <- check_dir(args)
 
 data.table::setDTthreads(n_cores())
