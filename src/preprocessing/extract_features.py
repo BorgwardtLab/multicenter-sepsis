@@ -1,6 +1,7 @@
 """Feature extraction pipeline."""
 from src.preprocessing.transforms import (
     CalculateUtilityScores,
+    DaskRepartition,
     DerivedFeatures,
     InvalidTimesFiltration,
     LookbackFeatures,
@@ -10,20 +11,19 @@ from src.preprocessing.transforms import (
     SignatureFeatures,
     WaveletFeatures,
 )
-import argparse
 from pathlib import Path
 import time
 import json
+import gc
 
-import dask
+from dask import delayed
 import dask.dataframe as dd
 from dask.distributed import Client, as_completed
 import pyarrow
 import pyarrow.parquet as pq
-from sklearn.pipeline import Pipeline
+import numpy as np
+# from sklearn.pipeline import Pipeline
 from tqdm import tqdm
-import warnings
-
 from src.variables.mapping import VariableMapping
 
 
@@ -58,23 +58,47 @@ def check_time_sorted(df):
     return (df[VM_DEFAULT("time")].diff() <= 0).sum() == 0
 
 
+def compute_patient_partitions(filename, max_rows_per_partition):
+    ids = pq.read_table(filename, columns=[VM_DEFAULT("id")])
+    unique_ids, counts = np.unique(ids, return_counts=True)
+
+    divisions = []
+    cur_count = 0
+    for patient_id, n_obs in zip(unique_ids, counts):
+        if (len(divisions) == 0) or (cur_count + n_obs > max_rows_per_partition and cur_count != 0):
+            # Either first partition or we cannot add more to the current
+            # partition
+            divisions.append(patient_id)
+            cur_count = n_obs
+        else:
+            cur_count += n_obs
+
+    if cur_count != 0:
+        divisions.append(unique_ids[-1])
+    del ids, unique_ids, counts
+    return divisions
+
+
 def main(
     input_filename, split_filename, output_filename, n_workers, max_partition_size
 ):
-    start = time.time()
-    norm_ids = read_dev_split_patients(split_filename)
     client = Client(
         n_workers=n_workers,
-        memory_limit="5GB",
-        nthreads=2,
+        memory_limit="20GB",
+        threads_per_worker=1,
         local_directory="/local0/tmp/dask2",
     )
-    raw_data = dd.read_parquet(
+    start = time.time()
+    print("Computing patient partitions...")
+    patient_partitions = compute_patient_partitions(
+        input_filename, max_partition_size)
+    norm_ids = read_dev_split_patients(split_filename)
+    data = dd.read_parquet(
         input_filename,
         columns=VM_DEFAULT.core_set[1:],
         engine="pyarrow",
         index=VM_DEFAULT("id"),
-        split_row_groups=25,
+        split_row_groups=10
     )
     # is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
     # assert all(is_sorted.compute())
@@ -86,61 +110,82 @@ def main(
         raw_data = raw_data.groupby(
             raw_data.index.name, sort=False, group_keys=False
         ).apply(sort_time, meta=raw_data)
-    raw_data = convert_bool_to_float(raw_data)
+    data = convert_bool_to_float(data)
 
-    data_pipeline = Pipeline(
-        [
-            ("patient_partitions", PatientPartitioning(max_partition_size)),
-            ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
-            (
-                "lookback_features",
-                LookbackFeatures(suffices=["_raw", "_derived"]),
-            ),
-            ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
-            ("feature_normalizer", Normalizer(norm_ids, suffix=["_locf", "_derived"])),
-            ("wavelet_features", WaveletFeatures(suffix="_locf")),
-            (
-                "signatures",
-                SignatureFeatures(suffices=["_locf", "_derived"]),
-            ),
-            (
-                "calculate_target",
-                CalculateUtilityScores(label=VM_DEFAULT("label")),
-            ),
-            (
-                "filter_invalid_times",
-                InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
-            ),
-        ]
-    )
-    preprocessed_data = data_pipeline.fit_transform(raw_data)
+    pipeline = [
+        DaskRepartition(divisions=patient_partitions),
+        DerivedFeatures(VM_DEFAULT, suffix="locf"),
+        LookbackFeatures(suffices=["_raw", "_derived"]),
+        MeasurementCounterandIndicators(suffix="_raw"),
+        Normalizer(norm_ids, suffix=["_locf", "_derived"]),
+        WaveletFeatures(suffix="_locf"),
+        SignatureFeatures(suffices=["_locf", "_derived"]),
+        CalculateUtilityScores(label=VM_DEFAULT("label")),
+        InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw")
+    ]
+    for stage in pipeline:
+        data = stage.fit_transform(data)
+
+    del pipeline
+
+    # data_pipeline = Pipeline(
+    #     [
+    #         ("patient_partitions", DaskRepartition(divisions=patient_partitions)),
+    #         ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
+    #         (
+    #             "lookback_features",
+    #             LookbackFeatures(suffices=["_raw", "_derived"]),
+    #         ),
+    #         ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
+    #         ("feature_normalizer", Normalizer(norm_ids, suffix=["_locf", "_derived"])),
+    #         ("wavelet_features", WaveletFeatures(suffix="_locf")),
+    #         (
+    #             "signatures",
+    #             SignatureFeatures(suffices=["_locf", "_derived"]),
+    #         ),
+    #         (
+    #             "calculate_target",
+    #             CalculateUtilityScores(label=VM_DEFAULT("label")),
+    #         ),
+    #         (
+    #             "filter_invalid_times",
+    #             InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
+    #         ),
+    #     ]
+    # )
+    # preprocessed_data = data_pipeline.fit_transform(raw_data)
 
     # Move from dask dataframes to the delayed api, for conversion and writing
     # of partitions
-    partitions = preprocessed_data.to_delayed(optimize_graph=True)
-    pyarrow_partitions = [
-        dask.delayed(pyarrow.Table.from_pandas)(partition, preserve_index=True)
-        for partition in partitions
-    ]
+    partitions = data.to_delayed(optimize_graph=True)
+    n_partitions = len(partitions)
+    del data
+    gc.collect()
 
     # Initialize output file
     # Get future objects, and trigger computation
-    future_partitions = client.compute(pyarrow_partitions)
-
     output_file = None
     try:
-        for future, result in tqdm(
-            as_completed(future_partitions, with_results=True),
-            total=len(future_partitions),
-        ):
-            if output_file is None:
-                # Initialize writer here, as we now have access to the table
-                # schema
-                output_file = pq.ParquetWriter(
-                    output_filename, result.schema, write_statistics=[VM_DEFAULT("id")]
-                )
-            # Write partition as row group
-            output_file.write_table(result)
+        with tqdm(desc='Writing row groups', total=n_partitions) as pbar:
+            for batch in as_completed(
+                    client.compute(partitions), with_results=True).batches():
+                for future, result in batch:
+                    result = pyarrow.Table.from_pandas(result)
+                    future.cancel()
+                    del future
+
+                    if output_file is None:
+                        # Initialize writer here, as we now have access to the table
+                        # schema
+                        output_file = pq.ParquetWriter(
+                            output_filename,
+                            result.schema,
+                            write_statistics=[VM_DEFAULT("id")],
+                            compression='SNAPPY'
+                        )
+                    # Write partition as row group
+                    output_file.write_table(result)
+                    pbar.update(1)
     finally:
         # Close output file
         if output_file is not None:
@@ -149,6 +194,7 @@ def main(
 
 
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "input_data",
