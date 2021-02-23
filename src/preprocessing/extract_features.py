@@ -70,8 +70,8 @@ def main(input_filename, split_filename, output_filename, n_workers, max_partiti
         index=VM_DEFAULT("id"),
         engine="pyarrow"
     )
-    is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
-    assert all(is_sorted.compute())
+    # is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
+    # assert all(is_sorted.compute())
     if False:
         # Set id to be the index, then sort within each id to ensure correct time
         # ordering.
