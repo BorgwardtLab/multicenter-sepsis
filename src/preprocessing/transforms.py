@@ -1,11 +1,10 @@
-from sklearn.base import TransformerMixin, BaseEstimator
+from sklearn.base import TransformerMixin
 import pandas as pd
-import dask
 import dask.dataframe as dd
 import numpy as np
 
 from kymatio.numpy import Scattering1D
-import iisignature as iis
+from iisignature import siglength, sig
 from src.evaluation.physionet2019_score import compute_prediction_utility
 
 
@@ -24,7 +23,7 @@ def strip_cols(columns, suffices):
     return columns
 
 
-class PatientPartitioning(TransformerMixin, BaseEstimator):
+class PatientPartitioning(TransformerMixin):
     """Create a partitioning where each patient is only in one partition."""
 
     def __init__(self, max_rows_per_partition):
@@ -59,7 +58,7 @@ class PatientPartitioning(TransformerMixin, BaseEstimator):
         return X.repartition(divisions=divisions)
 
 
-class DaskPersist(TransformerMixin, BaseEstimator):
+class DaskPersist(TransformerMixin):
     """Transform to persist a dask dataframe, i.e. to hold it in memory."""
 
     def fit(self, X):
@@ -69,7 +68,7 @@ class DaskPersist(TransformerMixin, BaseEstimator):
         return X.persist()
 
 
-class DaskRepartition(TransformerMixin, BaseEstimator):
+class DaskRepartition(TransformerMixin):
     """Repartition dask dataframe."""
 
     def __init__(self, **kwargs):
@@ -87,7 +86,7 @@ class DaskRepartition(TransformerMixin, BaseEstimator):
         return X.repartition(**self.kwargs)
 
 
-class DaskIDTransformer(TransformerMixin, BaseEstimator):
+class DaskIDTransformer(TransformerMixin):
     """
     Dask-based Parallelized Base class when performing transformations over ids. The child class requires to have a transform_id method.
     """
@@ -132,21 +131,29 @@ class LookbackFeatures(DaskIDTransformer):
             'min', 'max', 'mean', 'median', 'var']
         self.windows = windows
 
-    def pre_transform(self, ddf):
-        used_cols = [col for col in ddf.columns if any(
+    # def pre_transform(self, ddf):
+    #     used_cols = [col for col in ddf.columns if any(
+    #         [s in col for s in self.col_suffices])]
+
+    #     def remove_suffix(col):
+    #         for suffix in self.col_suffices:
+    #             if col.endswith(suffix):
+    #                 return col[:-len(suffix)]
+    #     return ddf[used_cols].rename(columns=remove_suffix)
+
+    # def post_transform(self, input_ddf, transformed_ddf):
+    #     return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
+
+    def transform_id(self, input_df):
+        used_cols = [col for col in input_df.columns if any(
             [s in col for s in self.col_suffices])]
 
         def remove_suffix(col):
             for suffix in self.col_suffices:
                 if col.endswith(suffix):
                     return col[:-len(suffix)]
-        return ddf[used_cols].rename(columns=remove_suffix)
-
-    def post_transform(self, input_ddf, transformed_ddf):
-        return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
-
-    def transform_id(self, df):
-        features = []
+        df = input_df[used_cols].rename(columns=remove_suffix)
+        features = [input_df]
         for window in self.windows:
             rolling_window = df.rolling(
                 window, min_periods=0)
@@ -161,7 +168,7 @@ class LookbackFeatures(DaskIDTransformer):
         return pd.concat(features, axis=1)
 
 
-class MeasurementCounterandIndicators(BaseEstimator, TransformerMixin):
+class MeasurementCounterandIndicators(TransformerMixin):
     """ Adds a count of the number of measurements up to the given timepoint. """
 
     def __init__(self, suffix='_raw'):
@@ -188,7 +195,7 @@ class MeasurementCounterandIndicators(BaseEstimator, TransformerMixin):
         return ddf.map_partitions(counter_and_indicators)
 
 
-class DerivedFeatures(TransformerMixin, BaseEstimator):
+class DerivedFeatures(TransformerMixin):
     """
     This class is based on J. Morill's code base:
     https://github.com/jambo6/physionet_sepsis_challenge_2019/blob/master/src/data/transformers.py
@@ -348,7 +355,7 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
     def transform(self, ddf):
         vm = self.vm
 
-        def partition_wise_function(df):
+        def derived_features(df):
             """Function to apply to each partition.
 
             This reduces the number of dask tasks that need to be created
@@ -371,8 +378,8 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
                     # Ratios:
                     "ShockIndex_derived": df[hr] / df[sbp],
                     "bun/cr_derived": df[bun] / df[crea],
-                    "po2/fio2_dervied": df[po2]
-                    / df[fio2],  # shouldnt it be PaO2/Fi ratio?
+                    "po2/fio2_dervied": df[po2] / df[fio2],
+                    # shouldnt it be PaO2/Fi ratio?
                     # SOFA
                     "SOFA_derived": sofa,
                     "SOFA_deterioration_derived": self.SOFA_deterioration(sofa),
@@ -384,10 +391,10 @@ class DerivedFeatures(TransformerMixin, BaseEstimator):
                 }
             )
 
-        return ddf.map_partitions(partition_wise_function)
+        return ddf.map_partitions(derived_features)
 
 
-class Normalizer(TransformerMixin, BaseEstimator):
+class Normalizer(TransformerMixin):
     """Performs normalization (z-scoring) of columns."""
 
     def __init__(self, patient_ids, suffix=None, drop_cols=None):
@@ -466,22 +473,17 @@ class WaveletFeatures(DaskIDTransformer):
     def fit(self, df, labels=None):
         return self
 
-    def pre_transform(self, ddf):
-        drop_cols = [x for x in ddf.columns if self.col_suffix not in x]
-        return ddf.drop(drop_cols, axis=1).rename(columns=lambda col: col[:-len(self.col_suffix)])
-
-    def post_transform(self, input_ddf, transformed_ddf):
-        return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
-
-    def transform_id(self, inputs):
+    def transform_id(self, df):
         """ process invididual patient """
+        drop_cols = [x for x in df.columns if self.col_suffix not in x]
+        inputs = df.drop(drop_cols, axis=1).rename(columns=lambda col: col[:-len(self.col_suffix)])
         # pad time series with T-1 0s (for getting online features of fixed window size)
         input_values = self._pad_df(inputs, n_pad=self.T-1).values
         wavelets = self._compute_wavelets(input_values)
         wavelet_columns = self._build_wavelet_column_names(inputs.columns)
         out = pd.DataFrame(index=inputs.index,
                            columns=wavelet_columns, data=wavelets)
-        return out
+        return pd.concat([df, out], axis=1)
 
     def _pad_df(self, df, n_pad, value=0):
         """ util function to pad <n_pad> zeros at the start of the df
@@ -550,20 +552,15 @@ class SignatureFeatures(DaskIDTransformer):
     def fit(self, df, labels=None):
         return self
 
-    def pre_transform(self, ddf):
+    def transform_id(self, input_df):
+        """ process individual patient """
         drop_cols = [
-            col for col in ddf.columns
+            col for col in input_df.columns
             if not any([suffix in col for suffix in self.suffices])
         ]
-        return ddf.drop(drop_cols, axis=1)
-
-    def post_transform(self, input_ddf, transformed_ddf):
-        return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
-
-    def transform_id(self, df):
-        """ process invididual patient """
+        df = input_df.drop(drop_cols, axis=1)
         # pad time series with look_back size many 0s (for getting online features of fixed window size)
-        inputs = self._pad_df(df, n_pad=self.look_back)
+        inputs = self._pad_df(input_df, n_pad=self.look_back)
         inputs['path'] = np.arange(inputs.shape[0])
 
         # channel-wise signatures
@@ -572,7 +569,7 @@ class SignatureFeatures(DaskIDTransformer):
         # multivariable signatures over variable groups
         mv_signatures = self._compute_mv_signatures(inputs)
         mv_signatures.index = df.index
-        return mv_signatures
+        return pd.concat([input_df, mv_signatures], axis=1)
 
     def _add_suffices(self, col_dict):
         out = {}
@@ -605,12 +602,12 @@ class SignatureFeatures(DaskIDTransformer):
 
     def _process_group(self, df):
         """ Processing a group of columns. """
-        group_output_size = iis.siglength(len(df.columns), self.order)
+        group_output_size = siglength(len(df.columns), self.order)
 
         sliding_window_view = np.lib.stride_tricks.sliding_window_view(
             df.values, self.look_back+1, axis=0)
         sliding_window_view = np.transpose(sliding_window_view, [0, 2, 1])
-        signature = iis.sig(sliding_window_view, self.order)
+        signature = sig(sliding_window_view, self.order)
         return pd.DataFrame(
             data=signature, index=df.index[self.look_back:], columns=np.arange(group_output_size))
 
@@ -661,14 +658,9 @@ class CalculateUtilityScores(DaskIDTransformer):
         self.score_name = score_name
         self.shift = shift
 
-    def pre_transform(self, ddf):
-        return ddf[self.label]
-
-    def post_transform(self, input_ddf, transformed_ddf):
-        return dd.multi.concat([input_ddf, transformed_ddf], axis=1)
-
-    def transform_id(self, labels):
+    def transform_id(self, inputs):
         """Calculate utility score differences for each patient."""
+        labels = inputs[self.label]
         n = len(labels)
 
         zeros = compute_prediction_utility(
@@ -691,10 +683,10 @@ class CalculateUtilityScores(DaskIDTransformer):
             columns=[self.score_name]
         )
 
-        return scores
+        return pd.concat([inputs, scores], axis=1)
 
 
-class InvalidTimesFiltration(TransformerMixin, BaseEstimator):
+class InvalidTimesFiltration(TransformerMixin):
     """Remove invalid rows.
 
     This transform removes invalid time steps right before training
