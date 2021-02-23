@@ -171,20 +171,21 @@ class MeasurementCounterandIndicators(BaseEstimator, TransformerMixin):
     def fit(self, df, labels=None):
         return self
 
-    def transform(self, df: dd.DataFrame):
+    def transform(self, ddf: dd.DataFrame):
         # Make a counts frame
-        drop_cols = [x for x in df.columns if self.col_suffix not in x]
+        cols = [x for x in ddf.columns if self.col_suffix in x]
 
-        indicators = (
-            ~(df.drop(drop_cols, axis=1).isna())).astype(int)
-        counts = indicators \
-            .groupby(indicators.index.name, sort=False, group_keys=False) \
-            .cumsum()
+        def counter_and_indicators(df):
+            indicators = (
+                ~(df[cols].isna())).astype(np.uint16)
+            counts = indicators \
+                .groupby(indicators.index.name, sort=False, group_keys=True) \
+                .cumsum()
+            indicators = indicators.rename(columns=lambda col: col+'_indicator')
+            counts = counts.rename(columns=lambda col: col+'_count')
+            return pd.concat([df, indicators, counts], axis=1)
 
-        indicators = indicators.rename(columns=lambda col: col+'_indicator')
-        counts = counts.rename(columns=lambda col: col+'_count')
-
-        return dd.multi.concat([df, indicators, counts], axis=1)
+        return ddf.map_partitions(counter_and_indicators)
 
 
 class DerivedFeatures(TransformerMixin, BaseEstimator):

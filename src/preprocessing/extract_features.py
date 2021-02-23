@@ -36,10 +36,11 @@ VM_CONFIG_PATH = str(
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
+
 def read_dev_split_patients(splitfile):
-    with open(splitfile, 'r') as f:
+    with open(splitfile, "r") as f:
         split_info = json.load(f)
-    return split_info['dev']['total']
+    return split_info["dev"]["total"]
 
 
 def convert_bool_to_float(ddf):
@@ -57,29 +58,34 @@ def check_time_sorted(df):
     return (df[VM_DEFAULT("time")].diff() <= 0).sum() == 0
 
 
-def main(input_filename, split_filename, output_filename, n_workers, max_partition_size):
+def main(
+    input_filename, split_filename, output_filename, n_workers, max_partition_size
+):
     start = time.time()
     norm_ids = read_dev_split_patients(split_filename)
-    client = Client(n_workers=n_workers, nthreads=2)
-    # client = Client(
-    #     n_workers=55, memory_limit="60GB", local_directory="/local0/tmp/dask"
-    # )
+    client = Client(
+        n_workers=n_workers,
+        memory_limit="5GB",
+        nthreads=2,
+        local_directory="/local0/tmp/dask2",
+    )
     raw_data = dd.read_parquet(
         input_filename,
         columns=VM_DEFAULT.core_set[1:],
+        engine="pyarrow",
         index=VM_DEFAULT("id"),
-        engine="pyarrow"
+        split_row_groups=25,
     )
     # is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
     # assert all(is_sorted.compute())
+    # raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=True)
     if False:
         # Set id to be the index, then sort within each id to ensure correct time
         # ordering.
         raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False)
-        raw_data = (
-            raw_data.groupby(raw_data.index.name, sort=False, group_keys=False)
-            .apply(sort_time, meta=raw_data)
-        )
+        raw_data = raw_data.groupby(
+            raw_data.index.name, sort=False, group_keys=False
+        ).apply(sort_time, meta=raw_data)
     raw_data = convert_bool_to_float(raw_data)
 
     data_pipeline = Pipeline(
@@ -167,16 +173,22 @@ if __name__ == "__main__":
         "--n-workers",
         default=30,
         type=int,
-        help="Number of dask workers to start for parallel processing of data."
+        help="Number of dask workers to start for parallel processing of data.",
     )
     parser.add_argument(
         "--max-partition-size",
         default=1000,
         type=int,
-        help="Number of dask workers to start for parallel processing of data."
+        help="Number of dask workers to start for parallel processing of data.",
     )
     args = parser.parse_args()
     assert Path(args.input_data).exists()
     assert Path(args.split_file).exists()
     assert Path(args.output).parent.exists()
-    main(args.input_data, args.split_file, args.output, args.n_workers, args.max_partition_size)
+    main(
+        args.input_data,
+        args.split_file,
+        args.output,
+        args.n_workers,
+        args.max_partition_size,
+    )
