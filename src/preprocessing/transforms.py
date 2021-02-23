@@ -42,6 +42,7 @@ class PatientPartitioning(TransformerMixin, BaseEstimator):
 
     def transform(self, X: dd.DataFrame):
         n_obs_per_patient = X.index.value_counts(sort=False).compute()
+        n_obs_per_patient.sort_index(inplace=True)
         divisions = []
         cur_count = 0
         for patient_id, n_obs in n_obs_per_patient.iteritems():
