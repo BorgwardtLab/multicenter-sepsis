@@ -45,10 +45,9 @@ class PatientPartitioning(TransformerMixin, BaseEstimator):
         divisions = []
         cur_count = 0
         for patient_id, n_obs in n_obs_per_patient.iteritems():
-            if len(divisions) == 0:
-                divisions.append(patient_id)
-                cur_count = n_obs
-            if cur_count + n_obs > self.max_rows_per_partition and cur_count != 0:
+            if (len(divisions) == 0) or (cur_count + n_obs > self.max_rows_per_partition and cur_count != 0):
+                # Either first partition or we cannot add more to the current
+                # partition
                 divisions.append(patient_id)
                 cur_count = n_obs
             else:
