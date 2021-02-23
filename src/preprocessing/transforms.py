@@ -24,6 +24,41 @@ def strip_cols(columns, suffices):
     return columns
 
 
+class PatientPartitioning(TransformerMixin, BaseEstimator):
+    """Create a partitioning where each patient is only in one partition."""
+
+    def __init__(self, max_rows_per_partition):
+        """Initialize patient partitioning transform.
+
+        Args:
+            max_rows_per_partition: Maximum number of rows per partition.
+               Ensure this is larger than the longest expected patient!
+        """
+        super().__init__()
+        self.max_rows_per_partition = max_rows_per_partition
+
+    def fit(self, X):
+        return self
+
+    def transform(self, X: dd.DataFrame):
+        n_obs_per_patient = X.index.value_counts(sort=False).compute()
+        divisions = []
+        cur_count = 0
+        for patient_id, n_obs in n_obs_per_patient.iteritems():
+            if len(divisions) == 0:
+                divisions.append(patient_id)
+                cur_count = n_obs
+            if cur_count + n_obs > self.max_rows_per_partition and cur_count != 0:
+                divisions.append(patient_id)
+                cur_count = n_obs
+            else:
+                cur_count += n_obs
+
+        if cur_count != 0:
+            divisions.append(n_obs_per_patient.index[-1])
+        return X.repartition(divisions=divisions)
+
+
 class DaskPersist(TransformerMixin, BaseEstimator):
     """Transform to persist a dask dataframe, i.e. to hold it in memory."""
 
@@ -73,7 +108,7 @@ class DaskIDTransformer(TransformerMixin, BaseEstimator):
 
     def transform(self, dask_df):
         """ Parallelized transform."""
-        result = self.pre_transform(dask_df)\
+        result = self.pre_transform(dask_df) \
             .groupby(dask_df.index.name, sort=False, group_keys=False) \
             .apply(self.transform_id)
 
@@ -88,7 +123,7 @@ class LookbackFeatures(DaskIDTransformer):
     def __init__(self, stats=None, windows=[4, 8, 16],
                  suffices=['_raw', '_derived'],  **kwargs):
         """ takes dictionary of stats (keys) and corresponding look-back windows (values)
-            to compute each stat for each time series variable. 
+            to compute each stat for each time series variable.
             Below a default stats dictionary of look-back 5 hours is implemented.
         """
         super().__init__(**kwargs)

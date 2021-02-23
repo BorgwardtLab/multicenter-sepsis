@@ -1,15 +1,14 @@
 """Feature extraction pipeline."""
 from src.preprocessing.transforms import (
-    DerivedFeatures,
-    MeasurementCounterandIndicators,
-    Normalizer,
-    DaskPersist,
-    DaskRepartition,
-    WaveletFeatures,
-    SignatureFeatures,
     CalculateUtilityScores,
+    DerivedFeatures,
     InvalidTimesFiltration,
     LookbackFeatures,
+    MeasurementCounterandIndicators,
+    Normalizer,
+    PatientPartitioning,
+    SignatureFeatures,
+    WaveletFeatures,
 )
 import argparse
 from pathlib import Path
@@ -58,41 +57,41 @@ def check_time_sorted(df):
     return (df[VM_DEFAULT("time")].diff() <= 0).sum() == 0
 
 
-def main(input_filename, split_filename, output_filename):
+def main(input_filename, split_filename, output_filename, n_workers, max_partition_size):
     start = time.time()
     norm_ids = read_dev_split_patients(split_filename)
-    client = Client(
-        n_workers=55, memory_limit="60GB", local_directory="/local0/tmp/dask"
-    )
+    client = Client(n_workers=n_workers, nthreads=2)
+    # client = Client(
+    #     n_workers=55, memory_limit="60GB", local_directory="/local0/tmp/dask"
+    # )
     raw_data = dd.read_parquet(
         input_filename,
-        columns=VM_DEFAULT.core_set,
-        engine="pyarrow-dataset",
-        chunksize=1,
+        columns=VM_DEFAULT.core_set[1:],
+        index=VM_DEFAULT("id"),
+        engine="pyarrow"
     )
-    # Set id to be the index, then sort within each id to ensure correct time
-    # ordering.
-    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False)
-    raw_data = (
-        raw_data.groupby(raw_data.index.name, sort=False, group_keys=False)
-        .apply(sort_time, meta=raw_data)
-        .persist()
-    )
+    is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
+    assert all(is_sorted.compute())
+    if False:
+        # Set id to be the index, then sort within each id to ensure correct time
+        # ordering.
+        raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False)
+        raw_data = (
+            raw_data.groupby(raw_data.index.name, sort=False, group_keys=False)
+            .apply(sort_time, meta=raw_data)
+        )
     raw_data = convert_bool_to_float(raw_data)
 
     data_pipeline = Pipeline(
         [
-            # ("repartition1", DaskRepartition(npartitions=200)),
+            ("patient_partitions", PatientPartitioning(max_partition_size)),
             ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
-            # ("persist_features", DaskPersist()),
             (
                 "lookback_features",
                 LookbackFeatures(suffices=["_raw", "_derived"]),
             ),
             ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
             ("feature_normalizer", Normalizer(norm_ids, suffix=["_locf", "_derived"])),
-            # ("repartition", DaskRepartition(partition_size="150M")),
-            # ("persist_normalized", DaskPersist()),
             ("wavelet_features", WaveletFeatures(suffix="_locf")),
             (
                 "signatures",
@@ -170,8 +169,14 @@ if __name__ == "__main__":
         type=int,
         help="Number of dask workers to start for parallel processing of data."
     )
+    parser.add_argument(
+        "--max-partition-size",
+        default=1000,
+        type=int,
+        help="Number of dask workers to start for parallel processing of data."
+    )
     args = parser.parse_args()
     assert Path(args.input_data).exists()
     assert Path(args.split_file).exists()
     assert Path(args.output).parent.exists()
-    main(args.input_data, args.split_file, args.output)
+    main(args.input_data, args.split_file, args.output, args.n_workers, args.max_partition_size)
