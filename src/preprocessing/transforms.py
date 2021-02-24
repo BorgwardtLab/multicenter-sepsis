@@ -386,7 +386,7 @@ class DerivedFeatures(TransformerMixin):
                     # shouldnt it be PaO2/Fi ratio?
                     # SOFA
                     "SOFA_derived": sofa,
-                    "SOFA_deterioration_derived": self.SOFA_deterioration(sofa),
+                    "SOFAdeterioration_derived": self.SOFA_deterioration(sofa),
                     "qSOFA_derived": self.qSOFA(df),
                     "SepticShock_derived": self.septic_shock(df),
                     # Other scores
