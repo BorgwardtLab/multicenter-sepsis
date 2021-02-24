@@ -192,7 +192,7 @@ class MeasurementCounterandIndicators(TransformerMixin):
                 columns=lambda col: col[:-len(self.col_suffix)]+'_indicator')
             counts = counts.rename(
                 columns=lambda col: col[:-len(self.col_suffix)]+'_count')
-            return pd.concat([df, indicators, counts], axis=1)
+            return pd.concat([df, 1-indicators, counts], axis=1)
 
         return ddf.map_partitions(counter_and_indicators)
 
