@@ -188,8 +188,10 @@ class MeasurementCounterandIndicators(TransformerMixin):
             counts = indicators \
                 .groupby(indicators.index.name, sort=False, group_keys=True) \
                 .cumsum()
-            indicators = indicators.rename(columns=lambda col: col+'_indicator')
-            counts = counts.rename(columns=lambda col: col+'_count')
+            indicators = indicators.rename(
+                columns=lambda col: col[:-len(self.col_suffix)]+'_indicator')
+            counts = counts.rename(
+                columns=lambda col: col[:-len(self.col_suffix)]+'_count')
             return pd.concat([df, indicators, counts], axis=1)
 
         return ddf.map_partitions(counter_and_indicators)
@@ -334,10 +336,12 @@ class DerivedFeatures(TransformerMixin):
     def SOFA_deterioration(self, s):
         def check_24hr_deterioration(s):
             """ Check the max deterioration over the last 24 hours, if >= 2 then mark as a 1"""
-            min_prev_23_hrs = s.rolling(24, min_periods=0).apply(np.nanmin, raw=True)
+            min_prev_23_hrs = s.rolling(
+                24, min_periods=0).apply(np.nanmin, raw=True)
             return s - min_prev_23_hrs
 
-        sofa_det = s.groupby(s.index.name, sort=False).apply(check_24hr_deterioration)
+        sofa_det = s.groupby(s.index.name, sort=False).apply(
+            check_24hr_deterioration)
         # Remove negative sofa values
         sofa_det = (sofa_det < 0) * 0.0 + (sofa_det >= 0) * sofa_det
         return sofa_det
@@ -476,7 +480,8 @@ class WaveletFeatures(DaskIDTransformer):
     def transform_id(self, df):
         """ process invididual patient """
         drop_cols = [x for x in df.columns if self.col_suffix not in x]
-        inputs = df.drop(drop_cols, axis=1).rename(columns=lambda col: col[:-len(self.col_suffix)])
+        inputs = df.drop(drop_cols, axis=1).rename(
+            columns=lambda col: col[:-len(self.col_suffix)])
         # pad time series with T-1 0s (for getting online features of fixed window size)
         input_values = self._pad_df(inputs, n_pad=self.T-1).values
         wavelets = self._compute_wavelets(input_values)
