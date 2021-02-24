@@ -632,7 +632,7 @@ class CalculateUtilityScores(DaskIDTransformer):
         self,
         label='sep3',
         score_name='utility',
-        shift=0,
+        shift=-6,
         **kwargs
     ):
         """Create new instance of class.
