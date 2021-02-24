@@ -378,7 +378,7 @@ class DerivedFeatures(TransformerMixin):
                     # Ratios:
                     "ShockIndex_derived": df[hr] / df[sbp],
                     "bun/cr_derived": df[bun] / df[crea],
-                    "po2/fio2_dervied": df[po2] / df[fio2],
+                    "po2/fio2_derived": df[po2] / df[fio2],
                     # shouldnt it be PaO2/Fi ratio?
                     # SOFA
                     "SOFA_derived": sofa,
