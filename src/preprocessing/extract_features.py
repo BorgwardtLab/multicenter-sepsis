@@ -77,7 +77,7 @@ def check_time_sorted(df):
 def main(input_filename, split_filename, output_filename, n_workers):
     client = Client(
         n_workers=n_workers,
-        memory_limit="5GB",
+        memory_limit="8GB",
         threads_per_worker=1,
         local_directory="/local0/tmp/dask2",
     )
@@ -133,15 +133,23 @@ def main(input_filename, split_filename, output_filename, n_workers):
         ]
     )
     data = data_pipeline.fit_transform(data)
+    # TODO: There is still an issue when writing the metadata file. It seems
+    # like the worker which should write out the metadata runs into memory
+    # issues. All in all we could try to do this in a separate step or collect
+    # the metadata in the main thread and write it after the cluster workers
+    # are killed. Then we would for sure have enough memory.
     all_done = data.to_parquet(
         output_filename, append=False, overwrite=True,
-        engine='pyarrow', write_metadata_file=True, compute=False,
-        compression='SNAPPY', write_statistics=[VM_DEFAULT("id")])
+        engine='pyarrow-dataset', write_metadata_file=False, compute=False,
+        compression='SNAPPY', write_statistics=[VM_DEFAULT("id")],
+        row_group_size=500, use_dictionary=False
+    )
     future = client.compute(all_done)
     progress(future)
     print()  # Don't overwrite the progressbar
     future.result()
     client.close()
+    # for file in t
     print("Preprocessing completed after {:.2f} seconds".format(
         time.time() - start))
 
