@@ -166,7 +166,7 @@ class LookbackFeatures(DaskIDTransformer):
         features = [input_df]
         for window in self.windows:
             rolling_window = df.rolling(
-                window, min_periods=0)
+                window, min_periods=1)
             for stat in self.stats:
                 feature_col = getattr(rolling_window, stat)()
                 feature_col.rename(
@@ -347,7 +347,7 @@ class DerivedFeatures(TransformerMixin):
         def check_24hr_deterioration(s):
             """ Check the max deterioration over the last 24 hours, if >= 2 then mark as a 1"""
             min_prev_23_hrs = s.rolling(
-                24, min_periods=0).apply(np.nanmin, raw=True)
+                24, min_periods=1).apply(np.nanmin, raw=True)
             return s - min_prev_23_hrs
 
         sofa_det = s.groupby(s.index.name, sort=False).apply(
