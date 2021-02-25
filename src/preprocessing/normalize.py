@@ -41,14 +41,20 @@ def main(
 
     raw_data = ddf.read_parquet(
         input_filename,
-        engine="pyarrow-dataset",
-        chunksize=1,
+        engine="pyarrow", #pyarrow-dataset
+        split_row_groups=10,
+        #chunksize=1,
     )
+    # hack for getting divisions (enabling indexing)
+    # raw_data = raw_data.reset_index().set_index(VM_DEFAULT('id'))
+    ind_cols = [col for col in raw_data.columns if '_indicator' in col]
 
     drop_cols = [
         VM_DEFAULT('label'),
         VM_DEFAULT('sex'),
         VM_DEFAULT('time'),
+        *VM_DEFAULT.all_cat('baseline'),
+        *ind_cols
     ]
 
     norm = Normalizer(patient_ids, drop_cols=drop_cols)
