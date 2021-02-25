@@ -13,19 +13,17 @@ from src.preprocessing.transforms import (
     SignatureFeatures,
     WaveletFeatures,
 )
+from src.preprocessing.dask_utils import to_single_file_parquet
 from pathlib import Path
 import time
 import json
-import gc
 
-from dask import delayed
 import dask.dataframe as dd
-from dask.distributed import Client, as_completed
-import pyarrow
-import pyarrow.parquet as pq
+from dask.distributed import Client, progress
+# import pyarrow
+# import pyarrow.parquet as pq
 import numpy as np
 from sklearn.pipeline import Pipeline
-from tqdm import tqdm
 from src.variables.mapping import VariableMapping
 
 
@@ -54,47 +52,54 @@ def check_time_sorted(df):
     return (df[VM_DEFAULT("time")].diff() <= 0).sum() == 0
 
 
-def compute_patient_partitions(filename, max_rows_per_partition):
-    ids = pq.read_table(filename, columns=[VM_DEFAULT("id")])
-    unique_ids, counts = np.unique(ids, return_counts=True)
+# def get_rows_per_patient(filename):
+#     ids = pq.read_table(filename, columns=[VM_DEFAULT("id")])
+#     unique_ids, counts = np.unique(ids, return_counts=True)
+#     return OrderedDict(zip(unique_ids, counts))
+# 
+# 
+# def compute_devisions(rows_per_patient, max_rows):
+#     divisions = []
+#     cur_count = 0
+#     for patient_id, n_obs in rows_per_patient.items():
+#         if (len(divisions) == 0) or (cur_count + n_obs > max_rows and cur_count != 0):
+#             # Either first partition or we cannot add more to the current
+#             # partition
+#             divisions.append(patient_id)
+#             cur_count = n_obs
+#         else:
+#             cur_count += n_obs
+# 
+#     if cur_count != 0:
+#         divisions.append(list(rows_per_patient.keys())[-1])
+#     return np.array(divisions)
 
-    divisions = []
-    cur_count = 0
-    for patient_id, n_obs in zip(unique_ids, counts):
-        if (len(divisions) == 0) or (cur_count + n_obs > max_rows_per_partition and cur_count != 0):
-            # Either first partition or we cannot add more to the current
-            # partition
-            divisions.append(patient_id)
-            cur_count = n_obs
-        else:
-            cur_count += n_obs
-
-    if cur_count != 0:
-        divisions.append(unique_ids[-1])
-    del ids, unique_ids, counts
-    return divisions
-
-
-def main(
-    input_filename, split_filename, output_filename, n_workers, max_partition_size
-):
+def main(input_filename, split_filename, output_filename, n_workers):
     client = Client(
         n_workers=n_workers,
-        memory_limit="20GB",
+        memory_limit="5GB",
         threads_per_worker=1,
         local_directory="/local0/tmp/dask2",
     )
     start = time.time()
-    print("Computing patient partitions...")
-    patient_partitions = compute_patient_partitions(
-        input_filename, max_partition_size)
+    # print("Computing patient partitions...")
+    # rows_per_patient = get_rows_per_patient(input_filename)
+    # # Initial divisions
+    # divisions1 = compute_devisions(rows_per_patient, max_partition_size)
+    # # After lookback features
+    # divisions2 = compute_devisions(rows_per_patient, max_partition_size // 5)
+    # # After wavelets
+    # divisions3 = compute_devisions(
+    #     rows_per_patient, (max_partition_size // 10) // 2)
+    # del rows_per_patient
+
     norm_ids = read_dev_split_patients(split_filename)
     data = dd.read_parquet(
         input_filename,
         columns=VM_DEFAULT.core_set[1:],
-        engine="pyarrow",
         index=VM_DEFAULT("id"),
-        split_row_groups=10
+        engine='pyarrow',
+        split_row_groups=5  # This assumes that there are approx 100 rows per row group
     )
     # is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
     # assert all(is_sorted.compute())
@@ -103,7 +108,6 @@ def main(
     data_pipeline = Pipeline(
         [
             ("bool_to_float", BoolToFloat()),
-            ("patient_partitions", DaskRepartition(divisions=patient_partitions)),
             ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
             (
                 "lookback_features",
@@ -129,43 +133,15 @@ def main(
         ]
     )
     data = data_pipeline.fit_transform(data)
-    del data_pipeline
-
-    # Move from dask dataframes to the delayed api, for conversion and writing
-    # of partitions
-    partitions = data.to_delayed(optimize_graph=True)
-    n_partitions = len(partitions)
-    del data
-    gc.collect()
-
-    # Initialize output file
-    # Get future objects, and trigger computation
-    output_file = None
-    try:
-        with tqdm(desc='Writing row groups', total=n_partitions) as pbar:
-            for batch in as_completed(
-                    client.compute(partitions), with_results=True).batches():
-                for future, result in batch:
-                    result = pyarrow.Table.from_pandas(result)
-                    future.cancel()
-                    del future
-
-                    if output_file is None:
-                        # Initialize writer here, as we now have access to the table
-                        # schema
-                        output_file = pq.ParquetWriter(
-                            output_filename,
-                            result.schema,
-                            write_statistics=[VM_DEFAULT("id")],
-                            compression='SNAPPY'
-                        )
-                    # Write partition as row group
-                    output_file.write_table(result)
-                    pbar.update(1)
-    finally:
-        # Close output file
-        if output_file is not None:
-            output_file.close()
+    all_done = data.to_parquet(
+        output_filename, append=False, overwrite=True,
+        engine='pyarrow', write_metadata_file=True, compute=False,
+        compression='SNAPPY', write_statistics=[VM_DEFAULT("id")])
+    future = client.compute(all_done)
+    progress(future)
+    print()  # Don't overwrite the progressbar
+    future.result()
+    client.close()
     print("Preprocessing completed after {:.2f} seconds".format(
         time.time() - start))
 
@@ -198,12 +174,6 @@ if __name__ == "__main__":
         type=int,
         help="Number of dask workers to start for parallel processing of data.",
     )
-    parser.add_argument(
-        "--max-partition-size",
-        default=1000,
-        type=int,
-        help="Number of dask workers to start for parallel processing of data.",
-    )
     args = parser.parse_args()
     assert Path(args.input_data).exists()
     assert Path(args.split_file).exists()
@@ -212,6 +182,5 @@ if __name__ == "__main__":
         args.input_data,
         args.split_file,
         args.output,
-        args.n_workers,
-        args.max_partition_size,
+        args.n_workers
     )
