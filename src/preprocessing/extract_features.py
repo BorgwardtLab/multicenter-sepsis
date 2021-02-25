@@ -141,7 +141,7 @@ def main(input_filename, split_filename, output_filename, n_workers):
     all_done = data.to_parquet(
         output_filename, append=False, overwrite=True,
         engine='pyarrow-dataset', write_metadata_file=False, compute=False,
-        compression='SNAPPY', write_statistics=[VM_DEFAULT("id")],
+        compression='SNAPPY', write_statistics=True,
         row_group_size=500, use_dictionary=False
     )
     future = client.compute(all_done)
