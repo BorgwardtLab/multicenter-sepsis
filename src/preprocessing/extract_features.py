@@ -1,5 +1,6 @@
 """Feature extraction pipeline."""
 from src.preprocessing.transforms import (
+    BoolToFloat,
     CalculateUtilityScores,
     DaskRepartition,
     DerivedFeatures,
@@ -22,7 +23,7 @@ from dask.distributed import Client, as_completed
 import pyarrow
 import pyarrow.parquet as pq
 import numpy as np
-# from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 from src.variables.mapping import VariableMapping
 
@@ -41,12 +42,6 @@ def read_dev_split_patients(splitfile):
     with open(splitfile, "r") as f:
         split_info = json.load(f)
     return split_info["dev"]["total"]
-
-
-def convert_bool_to_float(ddf):
-    bool_cols = [col for col in ddf.columns if ddf[col].dtype == bool]
-    ddf[bool_cols] = ddf[bool_cols].astype(float)
-    return ddf
 
 
 def sort_time(df):
@@ -103,57 +98,36 @@ def main(
     # is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
     # assert all(is_sorted.compute())
     # raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=True)
-    if False:
-        # Set id to be the index, then sort within each id to ensure correct time
-        # ordering.
-        raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False)
-        raw_data = raw_data.groupby(
-            raw_data.index.name, sort=False, group_keys=False
-        ).apply(sort_time, meta=raw_data)
-    data = convert_bool_to_float(data)
 
-    pipeline = [
-        DaskRepartition(divisions=patient_partitions),
-        DerivedFeatures(VM_DEFAULT, suffix="locf"),
-        LookbackFeatures(suffices=["_raw", "_derived"]),
-        MeasurementCounterandIndicators(suffix="_raw"),
-        Normalizer(norm_ids, suffix=["_locf", "_derived"]),
-        WaveletFeatures(suffix="_locf"),
-        SignatureFeatures(suffices=["_locf", "_derived"]),
-        CalculateUtilityScores(label=VM_DEFAULT("label")),
-        InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw")
-    ]
-    for stage in pipeline:
-        data = stage.fit_transform(data)
-
-    del pipeline
-
-    # data_pipeline = Pipeline(
-    #     [
-    #         ("patient_partitions", DaskRepartition(divisions=patient_partitions)),
-    #         ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
-    #         (
-    #             "lookback_features",
-    #             LookbackFeatures(suffices=["_raw", "_derived"]),
-    #         ),
-    #         ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
-    #         ("feature_normalizer", Normalizer(norm_ids, suffix=["_locf", "_derived"])),
-    #         ("wavelet_features", WaveletFeatures(suffix="_locf")),
-    #         (
-    #             "signatures",
-    #             SignatureFeatures(suffices=["_locf", "_derived"]),
-    #         ),
-    #         (
-    #             "calculate_target",
-    #             CalculateUtilityScores(label=VM_DEFAULT("label")),
-    #         ),
-    #         (
-    #             "filter_invalid_times",
-    #             InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
-    #         ),
-    #     ]
-    # )
-    # preprocessed_data = data_pipeline.fit_transform(raw_data)
+    data_pipeline = Pipeline(
+        [
+            ("bool_to_float", BoolToFloat()),
+            ("patient_partitions", DaskRepartition(divisions=patient_partitions)),
+            ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
+            (
+                "lookback_features",
+                LookbackFeatures(suffices=["_raw", "_derived"]),
+            ),
+            ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
+            ("feature_normalizer", Normalizer(
+                norm_ids, suffix=["_locf", "_derived"])),
+            ("wavelet_features", WaveletFeatures(suffix="_locf")),
+            (
+                "signatures",
+                SignatureFeatures(suffices=["_locf", "_derived"]),
+            ),
+            (
+                "calculate_target",
+                CalculateUtilityScores(label=VM_DEFAULT("label")),
+            ),
+            (
+                "filter_invalid_times",
+                InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
+            ),
+        ]
+    )
+    data = data_pipeline.fit_transform(data)
+    del data_pipeline
 
     # Move from dask dataframes to the delayed api, for conversion and writing
     # of partitions
@@ -190,7 +164,8 @@ def main(
         # Close output file
         if output_file is not None:
             output_file.close()
-    print("Preprocessing completed after {:.2f} seconds".format(time.time() - start))
+    print("Preprocessing completed after {:.2f} seconds".format(
+        time.time() - start))
 
 
 if __name__ == "__main__":

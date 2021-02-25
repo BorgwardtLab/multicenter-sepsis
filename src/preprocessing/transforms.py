@@ -23,6 +23,16 @@ def strip_cols(columns, suffices):
     return columns
 
 
+class BoolToFloat(TransformerMixin):
+    def fit(self, X):
+        return self
+
+    def transform(self, ddf):
+        bool_cols = [col for col in ddf.columns if ddf[col].dtype == bool]
+        ddf[bool_cols] = ddf[bool_cols].astype(float)
+        return ddf
+
+
 class PatientPartitioning(TransformerMixin):
     """Create a partitioning where each patient is only in one partition."""
 
