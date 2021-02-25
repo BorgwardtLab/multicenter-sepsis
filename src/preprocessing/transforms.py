@@ -33,6 +33,28 @@ class BoolToFloat(TransformerMixin):
         return ddf
 
 
+class ApplyOnNormalized(TransformerMixin):
+    """Apply transforms to a normalized version of the data."""
+
+    def __init__(self, normalizer, transforms):
+        self.normalizer = normalizer
+        self.transforms = transforms
+
+    def fit(self, X):
+        self.normalizer.fit(X)
+        for transform in self.transforms:
+            transform.fit(X)
+        return self
+
+    def transform(self, X):
+        X_transformed = self.normalizer.transform(X)
+        normalized_cols = X_transformed.columns
+        for transform in self.transforms:
+            X_transformed = transform.transform(X_transformed)
+        return dd.multi.concat(
+            [X, X_transformed.drop(columns=normalized_cols)], axis=1)
+
+
 class PatientPartitioning(TransformerMixin):
     """Create a partitioning where each patient is only in one partition."""
 
@@ -411,7 +433,7 @@ class DerivedFeatures(TransformerMixin):
 class Normalizer(TransformerMixin):
     """Performs normalization (z-scoring) of columns."""
 
-    def __init__(self, patient_ids, suffix=None, drop_cols=None):
+    def __init__(self, patient_ids, suffix=None, drop_cols=None, assign_values=True):
         """
         Args:
         - patient_ids: Patient ids that should be used for computing
@@ -420,11 +442,14 @@ class Normalizer(TransformerMixin):
             otherwise, all but the excluded columns are normalized.
         - drop_cols: optional list of columns to drop; must be valid
           columns of the input data frame
+        - assign_values: Assign the transformed values to the input dataframe.
+          If set to false will solely return the normalized columns.
         """
         self.patient_ids = patient_ids
         self.suffix = suffix
         self.drop_cols = drop_cols
         self.stats = None
+        self.assign_values = assign_values
 
     def _drop_columns(self, df):
         """ Utility function, to select available columns to
@@ -455,10 +480,13 @@ class Normalizer(TransformerMixin):
 
     def transform(self, df):
         normalized = self._apply_normalization(self._drop_columns(df))
-        return df.assign(**{
-            col: normalized[col]
-            for col in normalized.columns
-        })
+        if self.assign_values:
+            return df.assign(**{
+                col: normalized[col]
+                for col in normalized.columns
+            })
+        else:
+            return normalized
 
 
 class WaveletFeatures(DaskIDTransformer):

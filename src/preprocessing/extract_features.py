@@ -1,5 +1,6 @@
 """Feature extraction pipeline."""
 from src.preprocessing.transforms import (
+    ApplyOnNormalized,
     BoolToFloat,
     CalculateUtilityScores,
     DaskRepartition,
@@ -109,13 +110,14 @@ def main(
                 LookbackFeatures(suffices=["_raw", "_derived"]),
             ),
             ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
-            ("feature_normalizer", Normalizer(
-                norm_ids, suffix=["_locf", "_derived"])),
-            ("wavelet_features", WaveletFeatures(suffix="_locf")),
-            (
-                "signatures",
-                SignatureFeatures(suffices=["_locf", "_derived"]),
-            ),
+            ("normalized_feature_transforms", ApplyOnNormalized(
+                Normalizer(norm_ids, suffix=[
+                           "_locf", "_derived"], assign_values=False),
+                [
+                    WaveletFeatures(suffix="_locf"),
+                    SignatureFeatures(suffices=["_locf", "_derived"])
+                ]
+            )),
             (
                 "calculate_target",
                 CalculateUtilityScores(label=VM_DEFAULT("label")),
