@@ -4,32 +4,34 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+pytest = "*"
+ipdb = "*"
+ipython = "*"
+bokeh = "*"
 
 [packages]
 pandas = "*"
 ipykernel = "*"
-ipython = "*"
 tqdm = "*"
 matplotlib = "*"
-ipdb = "*"
-sklearn = "*"
+scikit-learn = "*"
 numpy = "*"
 torch = "==1.6.0"
-pytorch-lightning = "==1.0.5"
 lightgbm = "*"
-test-tube = "*"
-pytest = "*"
+pytorch-lightning = "==1.0.5"
 dask = {extras = ["dataframe"],version = "*"}
 distributed = "*"
-bokeh = "*"
 dask-ml = "*"
-dask-lightgbm = "*"
-dask-xgboost = "*"
 pyarrow = "*"
 seaborn = "*"
 kymatio = "*"
 plotille = "*"
 iisignature = "*"
+# test-tube = "*"
+# dask-xgboost = "*"
+# dask-lightgbm = "*"  # merged into lightgbm
+# distributed = "*"
+parquet-tools = "*"
 
 [requires]
 python_version = "3.7"

@@ -33,7 +33,7 @@ if __name__ == "__main__":
                         default='demo')
     parser.add_argument('--split_path', 
                         help='path to split file', 
-                        default='config/master_splits.json')
+                        default='config/splits/splits_{}.json')
     parser.add_argument('--split', 
                         help='which data split to use', 
                         default='train')
@@ -43,11 +43,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     dataset_name = args.dataset 
     path = f'datasets/{dataset_name}/data/parquet/features.parquet'
-    split_path = args.split_path 
+    split_path = args.split_path.format(dataset_name) 
     split = args.split 
     rep = args.rep
 
-    si = SplitInfo(dataset_name, split_path)
+    si = SplitInfo(split_path)
     ids = si(split, rep)
      
     pl = ParquetLoader(path)
