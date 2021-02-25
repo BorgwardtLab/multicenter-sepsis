@@ -4,6 +4,7 @@ Script to evaluate predictive performance for cached predictions on a patient-le
 
 import argparse
 import collections
+import itertools
 import json
 
 import numpy as np
@@ -31,15 +32,11 @@ def apply_threshold(scores, thres, pat_level=True):
             result.append(preds)
     return result 
 
+
 def flatten_list(x):
-    """
-    some evals require a flattened array, not a nested list
-    """
-    f = []
-    for pat in x:
-        for step in pat:
-            f.append(step)
-    return np.array(f)
+    """Fully unravel arbitrary list and return it as an `np.array`."""
+    return np.asarray(list(itertools.chain(*x)))
+
 
 def flatten_wrapper(func):
     """ due to nested list format, slightly customize sklearn metrics
