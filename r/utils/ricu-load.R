@@ -41,32 +41,27 @@ load_physionet <- function(dir = data_path("physionet2019"),
 
 load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
                       coh_cfg = cfg_path("cohorts.json"),
-                      min_stay_length = hours(4L),
+                      min_stay_length = hours(6L), min_n_meas = 4L,
                       min_onset = hours(4L), max_onset = days(7L),
                       cut_case = hours(24L), cut_ctrl = max_onset + cut_case) {
 
-  truncate_dat <- function(dat, win, flt) {
+  pmin_dt <- function(x, y) {
+    x[x > y] <- `units<-`(y, units(x))
+    x
+  }
 
-    if (length(flt) > 0L) {
-      dat <- dat[!get(id_var(dat)) %in% flt, ]
-    }
+  truncate_dat <- function(dat, win) {
 
-    if (is_ts_tbl(dat)) {
-      repl_meta <- c("stay_id", "stay_time")
-    } else {
-      repl_meta <- "stay_id"
-    }
-
-    dat <- rename_cols(dat, repl_meta, meta_vars(dat), by_ref = TRUE)
+    join <- paste(id_var(dat), "==", id_var(win))
+    vars <- c(meta_vars(dat), data_var(dat))
 
     if (is_ts_tbl(dat)) {
-
-      dat  <- dat[, c("join_time") := list(get("stay_time"))]
-
-      join <- c(paste("stay_id ==", id_vars(win)), "join_time <= cuttime")
-      dat <- dat[win, on = join, nomatch = NULL]
-      dat <- rm_cols(dat, "join_time", by_ref = TRUE)
+      dat  <- dat[, c("join_time") := list(get(index_var(dat)))]
+      join <- c(join, "join_time <= cuttime")
     }
+
+    dat <- dat[win, on = join, nomatch = NULL]
+    dat <- rm_cols(dat, setdiff(colnames(dat), vars))
 
     dat
   }
@@ -76,50 +71,47 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
   pids  <- unlist(jsonlite::read_json(coh_cfg)[[source]]$cohort)
 
   win <- stay_windows(source, id_type = "icustay", win_type = "icustay",
-                      in_time = "intime", out_time = "outtime")
+                      in_time = "intime", out_time = "outtime",
+                      patient_ids = pids)
 
   dat <- load_concepts(feats, source, merge_data = FALSE,
                        id_type = "icustay", patient_ids = pids)
   sep <- sepsis3_crit(source, pids, dat)
 
-  sep  <- sep[, c("join_time") := list(get(index_var(sep)))]
+  tmp <- rm_cols(sep, data_vars(sep))
+  tmp <- rename_cols(tmp, "sep_time", index_var(sep), by_ref = TRUE)
 
-  join <- c(paste(id_vars(sep), "==", id_vars(win)), "join_time >= intime",
-                                                     "join_time <= outtime")
-  new <- sep[win, on = join, nomatch = NULL]
-  tmp <- nrow(new)
+  win <- merge(win, tmp, all.x = TRUE)
+  tmp <- nrow(win)
 
-  msg("--> removing {nrow(sep) - tmp} patients due to onsets",
+  win <- win[is.na(sep_time) | (sep_time >= intime & sep_time <= outtime), ]
+
+  msg("--> removing {tmp - nrow(win)} patients due to onsets",
       " outside of icu stay.\n")
 
-  new <- new[get(index_var(new)) >= min_onset &
-             get(index_var(new)) <= max_onset, ]
+  tmp <- nrow(win)
+  win <- win[is.na(sep_time) | (sep_time >= min_onset &
+                                sep_time <= max_onset), ]
 
-  msg("--> removing {tmp - nrow(new)} patients due to onsets",
+  msg("--> removing {tmp - nrow(win)} patients due to onsets",
       " outside of [{format_unit(min_onset)},",
       " {format_unit(max_onset)}].\n")
 
-  flt <- win[outtime < min_stay_length, ]
+  tmp <- nrow(win)
+  win <- win[outtime > min_stay_length, ]
 
-  msg("--> removing {nrow(flt)} patients due to stay length <",
+  msg("--> removing {tmp - nrow(win)} patients due to stay length <",
       " {format_unit(min_stay_length)}].\n")
 
-  flt <- c(id_col(flt), setdiff(id_col(sep), id_col(new)))
-
-  sep <- rm_cols(new, setdiff(data_vars(new), "sep3"), by_ref = TRUE)
-  sep <- rename_cols(sep, "sep3_time", index_var(sep))
-  win <- merge(win, rm_cols(as_id_tbl(sep), "sep3", by_ref = TRUE),
-               all.x = TRUE)
   win <- win[, cuttime := data.table::fifelse(
-    is.na(sep3_time), pmin(outtime, cut_ctrl), sep3_time + cut_case
+    is.na(sep_time), pmin_dt(outtime, cut_ctrl), sep_time + cut_case
   )]
 
-  msg("--> removing up to {sum(win$outtime - win$cuttime)} due",
-      " to censoring data {format_unit(cut_case)} after onsets",
+  msg("--> removing up to {format_unit(sum(win$outtime - win$cuttime))}",
+      " due to censoring data {format_unit(cut_case)} after onsets",
       " and {format_unit(cut_ctrl)} into stays.\n")
 
-  win <- rm_cols(win, c("intime", "outtime", "sep3_time"), by_ref = TRUE)
-  dat <- lapply(dat, truncate_dat, win, flt)
+  dat <- lapply(c(dat, list(sep)), truncate_dat, win)
 
   is_ts <- vapply(dat, is_ts_tbl, logical(1L))
   is_id <- vapply(dat, is_id_tbl, logical(1L)) & ! is_ts
@@ -131,7 +123,23 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
     dat[[2L]] <- NULL
   }
 
-  dat <- merge(dat[[1L]], sep, all = TRUE)
+  dat <- dat[[1L]]
+  dat <- rename_cols(dat, c("stay_id", "stay_time"), meta_vars(dat),
+                     by_ref = TRUE)
+
+  dat <- rm_na(dat, meta_vars(dat), "any")
+
+  cnt <- dat[stay_time > 0, .N, by = c("stay_id")]
+  cnt <- cnt[N >= min_n_meas, ]
+  cnt <- cnt[, N := NULL]
+
+  msg("--> removing {length(unique(dat[['stay_id']])) - nrow(cnt)}",
+      " patients due to fewer than {min_n_meas} in-icu measurements")
+
+  dat <- merge(dat, cnt, all.y = TRUE)
+  dat <- dat[, all_miss := FALSE]
+  dat <- fill_gaps(dat)
+  dat <- dat[, all_miss := is.na(all_miss)]
 
   msg("--> loading complete")
 
@@ -281,9 +289,6 @@ export_data <- function(src, dest_dir = data_path("export"),
       load_ricu(src, var_cfg = var_cfg, ...)
     }
   )
-
-  dat <- rm_na(dat, meta_vars(dat), "any")
-  dat <- fill_gaps(dat)
 
   dat <- dat[, onset := sep3]
   dat <- replace_na(dat, type = "locf", by_ref = TRUE, vars = "sep3",
