@@ -204,10 +204,6 @@ def main():
         '--eval_dataset', default='demo',
         help='Evaluation Dataset Name: [physionet2019, ..]'
     )
-    #parser.add_argument(
-    #    '--label-propagation', default=6, type=int,
-    #    help='By how many hours to shift label into the past. Default: 6'
-    #)
     parser.add_argument(
         '--split', default='validation', 
         help='on which split to evaluate [validation (default), test]'
@@ -220,22 +216,10 @@ def main():
 
     args = parser.parse_args()
 
-    data = load_data_from_input_path(
-        args.input_path, args.eval_dataset, args.index)
-    
-    # Recover orginal, unshifted labels: 
-    split = args.split
-    if split == 'validation':
-        y_eval = data['y_validation']
-    elif split == 'test':
-        y_eval = data['y_test']
-    else:
-        raise ValueError(f'{split} not among the valid eval splits: [validation, test]')
-    ids = y_eval.index.get_level_values('id').unique().tolist()
-    labels = []
-    for pid in ids:
-        labels.append(y_eval[pid].values.tolist())   
-     
+    # TODO: missing capability to deal with unshifted labels; this
+    # script will currently just use the labels that are avaialble
+    # in the input file.
+
     #scores = {
     #    'physionet2019_score': get_physionet2019_scorer(args.label_propagation),
     #    'auroc': SCORERS['roc_auc'],
@@ -246,11 +230,6 @@ def main():
     # load cached experiment output data into dict d: 
     with open(args.experiment_path, 'r') as f:
         d = json.load(f)
-    
-    #compare shifted vs unshifted labels:
-    s1 = np.sum(np.sum(d['labels']))
-    s2 = np.sum(np.sum(labels)) 
-    print(f'sum shifted / unshifted labels: {s1} /  {s2} ')
     
     measures = {'tp_recall': flatten_wrapper(recall_score), 
                 'tp_precision': flatten_wrapper(precision_score),
@@ -263,7 +242,7 @@ def main():
         'tp_recall': []}
 
     for thres in thresholds:
-        current = evaluate_threshold(d, labels, thres, measures)
+        current = evaluate_threshold(d, d['labels'], thres, measures)
         for key in results.keys():
             if key == 'thres':
                 new_val = thres
@@ -271,8 +250,9 @@ def main():
                 new_val = current[key]
             results[key].append(new_val)
     
+    # FIXME: need to make sure that nothing is overwritten
     out_file = os.path.split(args.experiment_path)[-1]
-    out_file = os.path.join(args.output_path, '_'.join(['patient_eval', out_file])) 
+    out_file = os.path.join(args.output_path, '_'.join(['patient_eval_redux', out_file])) 
     with open(out_file, 'w') as f:
         json.dump(results, f)
 
