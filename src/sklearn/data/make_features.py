@@ -57,7 +57,7 @@ def main():
         default='config/variables.json',
         help='path to config info (variable names)')
     parser.add_argument('--split_config_path', 
-        default='config/master_splits.json',
+        default='config/splits/splits_{}.json',
         help='path split info')
     parser.add_argument('--version', default='0.3.0', 
      help='data version')
@@ -74,7 +74,7 @@ def main():
 
     out_dir = os.path.join(base_dir, args.out_dir) 
     var_config_path = args.var_config_path
-    split_config_path = args.split_config_path
+    split_config_path = args.split_config_path.format(dataset)
  
     # we initialize a dynamic variable mapping object which can be passed through the preprocessing transforms 
     vm = VariableMapping(
@@ -84,7 +84,6 @@ def main():
     )
     with open(split_config_path, 'r') as f:
         split_info = json.load(f) 
-    split_info = split_info[dataset] 
      
     data_path = os.path.join(
         args.data_dir, 'downloads',
@@ -162,7 +161,7 @@ def main():
     df = ensure_single_index(df, vm) 
 
     # Save
-    out_file = os.path.join(out_dir, 'features.parquet')
+    out_file = os.path.join(out_dir, 'features_test.parquet')
     to_parquet(df, out_file)
     #save_pickle(df_sklearn, os.path.join(out_dir, f'X_extended_features_{split}.pkl'))
     #save_pickle(df_deep2, os.path.join(out_dir, f'X_extended_features_no_imp_{split}.pkl'))
