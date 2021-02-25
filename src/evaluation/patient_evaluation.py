@@ -3,24 +3,15 @@ Script to evaluate predictive performance for cached predictions on a patient-le
 """
 
 import argparse
-from functools import partial
+import collections
 import json
-import os
-from time import time
+
 import numpy as np
-import pandas as pd
-from hashlib import md5
-import joblib
-from sklearn.pipeline import Pipeline
-from sklearn.metrics import SCORERS
-from sklearn.metrics._scorer import _cached_call
-from sklearn.metrics import recall_score, precision_score
 
-from sklearn.model_selection import RandomizedSearchCV
-#custom:
-from src.sklearn.main import load_data_from_input_path
+from sklearn.metrics import recall_score
+from sklearn.metrics import precision_score
 
- 
+
 def apply_threshold(scores, thres, pat_level=True):
     """
     applying threshold to scores to return binary predictions
@@ -184,38 +175,8 @@ def format_check(x,y):
     for x_, y_ in zip(x,y):
         assert len(x_) == len(y_)
 
-def main():
-    """Parse arguments and launch fitting of model."""
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        '--input_path', default='data/sklearn',
-        help='Path to input data (relative from dataset directory)'
-    )
-    parser.add_argument(
-        '--experiment_path', default='results/evaluation',
-        help='Relative path to experimental results including trained models'
-    )
-    parser.add_argument(
-        '--output_path', default='results/evaluation',
-        help='Relative path to evaluation results'
-    )
-    parser.add_argument(
-        '--eval_dataset', default='demo',
-        help='Evaluation Dataset Name: [physionet2019, ..]'
-    )
-    parser.add_argument(
-        '--split', default='validation', 
-        help='on which split to evaluate [validation (default), test]'
-    )
-    parser.add_argument(
-        '--index', default='multi',
-        help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
-    )
-
-
-    args = parser.parse_args()
-
+def main(args):
+    
     # TODO: missing capability to deal with unshifted labels; this
     # script will currently just use the labels that are avaialble
     # in the input file.
@@ -226,37 +187,52 @@ def main():
     #    'average_precision': SCORERS['average_precision'],
     #    'balanced_accuracy': SCORERS['balanced_accuracy'],
     #}
-   
-    # load cached experiment output data into dict d: 
-    with open(args.experiment_path, 'r') as f:
+
+    with open(args.input_file, 'r') as f:
         d = json.load(f)
-    
-    measures = {'tp_recall': flatten_wrapper(recall_score), 
-                'tp_precision': flatten_wrapper(precision_score),
-                'pat_eval': first_alarm_eval
+
+    measures = {
+        'tp_recall': flatten_wrapper(recall_score),
+        'tp_precision': flatten_wrapper(precision_score),
+        'pat_eval': first_alarm_eval
     }
+
+    # TODO: make configurable?
     n_steps = 200
-    thresholds = np.arange(0,1,1/n_steps)
-    results = {'thres': [], 'pat_recall': [], 'pat_precision': [],
-        'earliness_mean': [], 'earliness_median': [], 'tp_precision': [],
-        'tp_recall': []}
+    thresholds = np.linspace(0, 1, n_steps)
+
+    results = collections.defaultdict(list)
 
     for thres in thresholds:
         current = evaluate_threshold(d, d['labels'], thres, measures)
-        for key in results.keys():
-            if key == 'thres':
-                new_val = thres
-            else:
-                new_val = current[key]
-            results[key].append(new_val)
-    
+
+        results['thres'].append(thres)
+
+        for k, v in current.items():
+            if not isinstance(v, np.ndarray):
+                results[k].append(v)
+
     # FIXME: need to make sure that nothing is overwritten
-    out_file = os.path.split(args.experiment_path)[-1]
-    out_file = os.path.join(args.output_path, '_'.join(['patient_eval_redux', out_file])) 
-    with open(out_file, 'w') as f:
+    with open(args.output_file, 'w') as f:
         json.dump(results, f)
 
+
 if __name__ in "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        '--input-file',
+        required=True,
+        type=str,
+        help='Path to JSON file for which to run the evaluation',
+    )
+    parser.add_argument(
+        '--output-file',
+        required=True,
+        help='Output file path for storing JSON with evaluation results'
+    )
 
+    args = parser.parse_args()
 
+    main(args)
