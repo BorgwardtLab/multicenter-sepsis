@@ -21,7 +21,8 @@ for dataset in ${datasets[@]}; do
         --n-workers=30
    
     #for rep in {0..4}; do 
-    #    normalizer_file=config/normalizer/normalizer_demo_rep_${rep}.json
+    #    normalizer_file=config/normalizer/normalizer_${dataset}_rep_${rep}.json
+    #    lambda_file=config/lambdas/lambda_${dataset}_rep_${rep}.json
     #    python -m src.preprocessing.normalize 
     #        --input-file $features \
     #        --split-file $split_file \
@@ -29,6 +30,12 @@ for dataset in ${datasets[@]}; do
     #        --repetition=$rep \
     #        --output-file $normalizer_file \
     #        --force
+    #    python -m src.preprocessing.lambda \
+    #        --input-file $features \
+    #        --split-file $split_file \
+    #        --split-name train \
+    #        --repetition=$rep \
+    #         --output-file config/lambdas/lambda_demo_rep_0.json
     #    done
     done
 
