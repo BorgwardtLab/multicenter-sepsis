@@ -138,7 +138,7 @@ def main(input_filename, split_filename, output_filename, n_workers):
         output_filename, append=False, overwrite=True,
         engine='pyarrow-dataset', write_metadata_file=False, compute=False,
         compression='SNAPPY', write_statistics=False, #True
-        row_group_size=500, use_dictionary=False
+        row_group_size=2000, use_dictionary=False #row_group_size=500
     )
     future = client.compute(all_done)
     progress(future)
