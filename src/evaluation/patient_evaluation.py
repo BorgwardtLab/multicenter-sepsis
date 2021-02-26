@@ -100,13 +100,10 @@ def extract_first_alarm(x, indices=None):
 
 
 def get_patient_labels(x):
-    """ from time step labels"""
-    labels = []
-    for pat in x:
-        label = 1 if np.sum(pat) > 0 else 0
-        labels.append(label)
-    return np.array(labels)
-        
+    """Get patient labels from labels per time step."""
+    return np.asarray([int(np.sum(pat) > 0) for pat in x])
+
+
 def extract_onset_index(x):
     """ get index of sepsis onset,
         -1 indicates no onset in a patient.
