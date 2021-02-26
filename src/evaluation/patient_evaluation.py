@@ -136,24 +136,24 @@ def first_alarm_eval(y_true, y_pred, times, scores):
     case_mask = labels.astype(bool)
     y_pred, pred_indices = extract_first_alarm(y_pred)
     onset_indices = extract_onset_index(y_true)
-    alarm_times  = extract_first_alarm(times, indices=pred_indices)
-    onset_times  = extract_first_alarm(times, indices=onset_indices)
-    r = {} #results 
-    r['pat_recall'] = recall_score(labels, y_pred)
-    r['pat_precision'] = precision_score(labels, y_pred)
-    r['pat_specificity'] = specificity(labels, y_pred)
-    r['alarm_times'] = alarm_times
-    r['onset_times'] = onset_times
-
+    alarm_times = extract_first_alarm(times, indices=pred_indices)
+    onset_times = extract_first_alarm(times, indices=onset_indices)
     delta = alarm_times[case_mask] - onset_times[case_mask]
-    r['case_delta'] = delta
 
-    r['control_alarm_times'] = alarm_times[~case_mask]
-    r['case_alarm_times'] = alarm_times[case_mask]
-    r['earliness_mean'] = np.nanmean(delta)
-    r['earliness_median'] = np.nanmedian(delta)
-    r['earliness_min'] = np.nanmin(delta)
-    r['earliness_max'] = np.nanmax(delta)
+    r = {
+        'pat_recall': recall_score(labels, y_pred),
+        'pat_precision': precision_score(labels, y_pred),
+        'pat_specificity': specificity(labels, y_pred),
+        'alarm_times': alarm_times,
+        'onset_times': onset_times,
+        'case_delta': delta,
+        'control_alarm_times': alarm_times[~case_mask],
+        'case_alarm_times': alarm_times[case_mask],
+        'earliness_mean': np.nanmean(delta),
+        'earliness_median': np.nanmedian(delta),
+        'earliness_min': np.nanmin(delta),
+        'earliness_max': np.nanmax(delta),
+    }
 
     return r
 
@@ -217,7 +217,6 @@ def main(args):
     measures = {
         'tp_recall': flatten_wrapper(recall_score),
         'tp_precision': flatten_wrapper(precision_score),
-        'tp_auprc': flatten_wrapper(average_precision_score),
         'pat_eval': first_alarm_eval
     }
 
