@@ -9,11 +9,10 @@ import json
 
 import numpy as np
 
+from src.evaluation.physionet2019_score import physionet2019_utility
+
 from sklearn.metrics import recall_score
 from sklearn.metrics import precision_score
-from sklearn.metrics import roc_auc_score
-from sklearn.metrics import average_precision_score
-from sklearn.metrics import roc_curve
 from sklearn.metrics import confusion_matrix
 
 
@@ -29,31 +28,24 @@ def specificity(y_true, y_pred):
 
 
 def apply_threshold(scores, thres, pat_level=True):
-    """
-    applying threshold to scores to return binary predictions
-    (assuming list of lists (patients and time series))
+    """Threshold scores to return binary predictions.
+
+    This function applies a given threshold to scores to return binary
+    predictions, assuming list of lists (patients and time series) as an
+    input.
     """
     result = []
     for pat_scores in scores:
         if pat_level:
-            #binarize on patient level:
-            pred = 1 if any([score >= thres for score in pat_scores]) else 0 
+            # binarize on patient level:
+            pred = 1 if any([score >= thres for score in pat_scores]) else 0
             result.append(pred)
         else:
-            #binarize prediction of each timestep
-            preds = []
-            for score in pat_scores:
-                preds.append(1 if score >= thres else 0)
+            # binarize prediction of each timestep
+            preds = (pat_scores >= thres).astype(int)
             result.append(preds)
-    return result 
 
-
-def return_wrapper(fn, index):
-    """Return only one value from a function with multiple return values."""
-    def wrapped(*args):
-        return fn(*args)[index]
-
-    return wrapped
+    return result
 
 
 def flatten_list(x):
@@ -62,15 +54,17 @@ def flatten_list(x):
 
 
 def flatten_wrapper(func):
-    """ due to nested list format, slightly customize sklearn metrics
-        funcs:
-    """
-    def wrapped(y_true, y_pred):    
+    """Apply given function to flattened lists."""
+    def wrapped(y_true, y_pred):
         y_true = flatten_list(y_true)
         y_pred = flatten_list(y_pred)
+
         assert y_true.shape == y_pred.shape
+
         return func(y_true, y_pred)
+
     return wrapped
+
 
 def extract_first_alarm(x, indices=None):
     """
