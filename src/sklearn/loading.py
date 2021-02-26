@@ -81,6 +81,7 @@ def load_and_transform_data(
     data_path,
     split_path,
     normalizer_path,
+    lambda_path,
     split='train',
     rep=0,
 ):
@@ -103,6 +104,7 @@ def load_and_transform_data(
         VM_DEFAULT('label'),
         VM_DEFAULT('sex'),
         VM_DEFAULT('time'),
+        VM_DEFAULT('utility'),
         *VM_DEFAULT.all_cat('baseline'),
         *ind_cols
     ]
@@ -116,6 +118,16 @@ def load_and_transform_data(
             'stds': pd.Series(normalizer['stds'])
         }
     df_norm = norm.transform(df)
+    
+    # We apply lambda sample weights:
+    with open(lambda_path, 'r') as f:
+        lam = json.load(f)['lam']
+    # regression target without adjustment:
+    u = df_norm[VM_DEFAULT('utility')]
+    # patient-level label:
+    l = df.groupby('stay_id')['sep3'].sum() > 0 #more nan-stable than .any()
+    # applying lambda to target: if case: times lam, else no change
+    df_norm[VM_DEFAULT('utility')] = l*u*lam + (1-l)*u 
     from IPython import embed; embed()
  
 if __name__ == "__main__":
@@ -130,6 +142,9 @@ if __name__ == "__main__":
     parser.add_argument('--normalizer_path', 
                         help='path to normalization stats', 
                         default='config/normalizer')
+    parser.add_argument('--lambda_path', 
+                        help='path to lambda file', 
+                        default='config/lambdas')
     parser.add_argument('--split', 
                         help='which data split to use', 
                         default='train')
@@ -144,12 +159,15 @@ if __name__ == "__main__":
     split = args.split 
     rep = args.rep
     normalizer_path = os.path.join(args.normalizer_path, 
-        f'normalizer_{dataset_name}_rep_{rep}.json' ) 
+        f'normalizer_{dataset_name}_rep_{rep}.json' )
+    lambda_path = os.path.join(args.lambda_path, 
+        f'lambda_{dataset_name}_rep_{rep}.json' ) 
     
     load_and_transform_data(
     path,
     split_path,
     normalizer_path,
+    lambda_path,
     split,
     rep)
 
