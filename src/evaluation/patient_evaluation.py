@@ -1,11 +1,11 @@
-"""
-Script to evaluate predictive performance for cached predictions on a patient-level. 
-"""
+"""Evaluate predictive performance for cached predictions on patient level."""
 
 import argparse
 import collections
+import functools
 import itertools
 import json
+import pathlib
 
 import numpy as np
 
@@ -134,8 +134,8 @@ def first_alarm_eval(y_true, y_pred, times):
     delta = alarm_times[case_mask] - onset_times[case_mask]
 
     r = {
-        'pat_recall': recall_score(labels, y_pred),
-        'pat_precision': precision_score(labels, y_pred),
+        'pat_recall': recall_score(labels, y_pred, zero_division=0),
+        'pat_precision': precision_score(labels, y_pred, zero_division=0),
         'pat_specificity': specificity(labels, y_pred),
         'alarm_times': alarm_times,
         'onset_times': onset_times,
@@ -191,17 +191,21 @@ def format_check(x, y):
 
 
 def main(args):
-
+    """Run evaluation based on user parameters."""
     # TODO: missing capability to deal with unshifted labels; this
-    # script will currently just use the labels that are avaialble
+    # script will currently just use the labels that are available
     # in the input file.
 
     with open(args.input_file, 'r') as f:
         d = json.load(f)
 
     measures = {
-        'tp_recall': flatten_wrapper(recall_score),
-        'tp_precision': flatten_wrapper(precision_score),
+        'tp_recall': flatten_wrapper(
+            functools.partial(recall_score, zero_division=0)
+        ),
+        'tp_precision': flatten_wrapper(
+            functools.partial(precision_score, zero_division=0)
+        ),
         'tp_physionet2019_score': physionet2019_utility,
         'pat_eval': first_alarm_eval
     }
@@ -220,9 +224,8 @@ def main(args):
             if not isinstance(v, np.ndarray):
                 results[k].append(v)
 
-    # FIXME: need to make sure that nothing is overwritten
     with open(args.output_file, 'w') as f:
-        json.dump(results, f, indent=4)
+        json.dump(results, f)
 
 
 if __name__ in "__main__":
@@ -246,7 +249,16 @@ if __name__ in "__main__":
         type=int,
         help='Number of steps for thresholding'
     )
+    parser.add_argument(
+        '-f', '--force',
+        action='store_true',
+        help='If set, overwrites output files'
+    )
 
     args = parser.parse_args()
+
+    if pathlib.Path(args.output_file).exists() and not args.force:
+        raise RuntimeError(f'Refusing to overwrite {args.output_file} unless '
+                           f'`--force` is set.')
 
     main(args)
