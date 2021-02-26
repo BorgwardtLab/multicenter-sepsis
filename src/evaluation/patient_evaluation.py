@@ -11,6 +11,22 @@ import numpy as np
 
 from sklearn.metrics import recall_score
 from sklearn.metrics import precision_score
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import average_precision_score
+from sklearn.metrics import roc_curve
+from sklearn.metrics import confusion_matrix
+
+
+def fpr(y_true, y_pred):
+    """Calculate false positive rate (FPR)."""
+    tn, fp, _, _ = confusion_matrix(y_true, y_pred).ravel()
+    return fp / (fp + tn)
+
+
+def tpr(y_true, y_pred):
+    """Calculate true positive rate (TPR)."""
+    _, _, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    return tp / (tp + fn)
 
 
 def apply_threshold(scores, thres, pat_level=True):
@@ -31,6 +47,14 @@ def apply_threshold(scores, thres, pat_level=True):
                 preds.append(1 if score >= thres else 0)
             result.append(preds)
     return result 
+
+
+def return_wrapper(fn, index):
+    """Return only one value from a function with multiple return values."""
+    def wrapped(*args):
+        return fn(*args)[index]
+
+    return wrapped
 
 
 def flatten_list(x):
@@ -156,13 +180,20 @@ def evaluate_threshold(data, labels, thres, measures):
     tp_measures = {key: measures[key] for key in tp_keys}
     # patient level measures:
     pat_keys = [key for key in measures.keys() if 'pat_' in key]
-    pat_measures = {key: measures[key] for key in pat_keys} 
- 
+    pat_measures = {key: measures[key] for key in pat_keys}
+
     for name, func in tp_measures.items():
-        results[name] = func(labels, predictions) 
+        # Check whether we have to provide scores or predictions,
+        # depending on which measure was selected.
+        if 'auroc' in name or 'auprc' in name:
+            results[name] = func(labels, data['scores']) 
+        else:
+            results[name] = func(labels, predictions) 
+
     for name, func in pat_measures.items():
         output_dict = func(labels, predictions, times) 
         results.update(output_dict) 
+
     return results
  
 def format_check(x,y):
@@ -191,6 +222,9 @@ def main(args):
     measures = {
         'tp_recall': flatten_wrapper(recall_score),
         'tp_precision': flatten_wrapper(precision_score),
+        'tp_fpr': flatten_wrapper(fpr),
+        'tp_tpr': flatten_wrapper(tpr),
+        'tp_auprc': flatten_wrapper(average_precision_score),
         'pat_eval': first_alarm_eval
     }
 
