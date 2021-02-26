@@ -80,21 +80,21 @@ def extract_first_alarm(x, indices=None):
             if index == -1:
                 result.append(np.nan)
             else:
-                result.append(pat[index]) 
+                result.append(pat[index])
         return np.array(result)
     else:
         indices = []
         # extract indices ourselves
         for pat in x:
-            # ensure that we have binary predictions 
-            assert all([item in [0,1] for item in pat])
-                
+            # ensure that we have binary predictions
+            assert all([item in [0, 1] for item in pat])
+
             # get index of first `1`
             index = np.argmax(pat)
             label = 1 if np.sum(pat) > 0 else 0
             result.append(label)
-            if not label: #if no alarm was raised
-                index = -1 #distinguish alarm in first hour from no alarm
+            if not label:  # if no alarm was raised
+                index = -1   # distinguish alarm in first hour from no alarm
             indices.append(index)
         return np.array(result), indices
 
@@ -112,21 +112,23 @@ def extract_onset_index(x):
         -1 indicates no onset in a patient.
     """
     result = []
+
     for pat in x:
-        assert all([item in [0,1] for item in pat])
+        assert all([item in [0, 1] for item in pat])
         if np.sum(pat) == 0:
             index = -1
-        else: 
-            index = np.argmax(pat) 
+        else:
+            index = np.argmax(pat)
         result.append(index)
-    return result 
-    
+
+    return result
+
 
 def first_alarm_eval(y_true, y_pred, times):
     """Extract and evaluate prediction and label of first alarm."""
     labels = get_patient_labels(y_true)
     print(f'Cases: {labels.sum()}')
-    print(f'Prevalence: {labels.sum()/len(labels)*100} %')
+    print(f'Prevalence: {labels.sum()/len(labels)*100:.2f}%')
     case_mask = labels.astype(bool)
     y_pred, pred_indices = extract_first_alarm(y_pred)
     onset_indices = extract_onset_index(y_true)
@@ -185,15 +187,14 @@ def evaluate_threshold(data, labels, thres, measures):
     return results
 
 
-def format_check(x,y):
-    """
-    sanity check that two nested lists x,y have identical format
-    """
-    for x_, y_ in zip(x,y):
+def format_check(x, y):
+    """Sanity check that two nested lists x,y have identical format."""
+    for x_, y_ in zip(x, y):
         assert len(x_) == len(y_)
 
+
 def main(args):
-    
+
     # TODO: missing capability to deal with unshifted labels; this
     # script will currently just use the labels that are avaialble
     # in the input file.
