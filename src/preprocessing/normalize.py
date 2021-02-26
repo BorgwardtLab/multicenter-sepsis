@@ -4,7 +4,8 @@ import argparse
 import dask
 import json
 import pathlib
-
+import os
+import glob 
 import dask.dataframe as ddf
 import dask.diagnostics as dd
 
@@ -38,21 +39,22 @@ def main(
 
     progress_bar = dd.ProgressBar()
     progress_bar.register()
-
+    if os.path.isdir(input_filename):
+       input_filename = glob.glob(
+            os.path.join(input_filename, '*.parquet' )
+        ) 
     raw_data = ddf.read_parquet(
         input_filename,
-        engine="pyarrow", #pyarrow-dataset
-        split_row_groups=10,
-        #chunksize=1,
+        engine="pyarrow-legacy",
+        chunksize=1
     )
-    # hack for getting divisions (enabling indexing)
-    # raw_data = raw_data.reset_index().set_index(VM_DEFAULT('id'))
     ind_cols = [col for col in raw_data.columns if '_indicator' in col]
 
     drop_cols = [
         VM_DEFAULT('label'),
         VM_DEFAULT('sex'),
         VM_DEFAULT('time'),
+        VM_DEFAULT('utility'),
         *VM_DEFAULT.all_cat('baseline'),
         *ind_cols
     ]
@@ -83,13 +85,12 @@ if __name__ == "__main__":
         help="Path to parquet file or folder with parquet files containing "
              "the raw data.",
     )
-
     parser.add_argument(
         "--split-file",
         type=str,
         required=True,
         help="JSON file containing split information. Required to ensure "
-             "normalization is only computed using the dev split.",
+             "normalization is only computed using the correct training split.",
     )
     parser.add_argument(
         '--split-name',
@@ -105,14 +106,12 @@ if __name__ == "__main__":
         default=0,
         help='Repetition of split to load'
     )
-
     parser.add_argument(
         "--output-file",
         type=str,
         required=True,
-        help="Output file path to write parquet file with features.",
+        help="Output file path.",
     )
-
     parser.add_argument(
         '-f', '--force',
         action='store_true',
