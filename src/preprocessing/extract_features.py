@@ -21,8 +21,9 @@ import json
 import dask.dataframe as dd
 from dask.distributed import Client, progress
 # import pyarrow
-# import pyarrow.parquet as pq
+import pyarrow.parquet as pq
 import numpy as np
+from tqdm import tqdm
 from sklearn.pipeline import Pipeline
 from src.variables.mapping import VariableMapping
 
@@ -149,7 +150,16 @@ def main(input_filename, split_filename, output_filename, n_workers):
     print()  # Don't overwrite the progressbar
     future.result()
     client.close()
-    # for file in t
+    outputpath = Path(output_filename)
+    print('Reading all metadata...')
+    schema = None
+    metadata = []
+    for file in tqdm(outputpath.glob('*.parquet')):
+        if schema is None:
+            schema = pq.read_schema(file)
+        metadata.append(pq.read_metadata(file))
+    pq.write_metadata(
+        schema, outputpath / '_metadata', metadata_collector=metadata)
     print("Preprocessing completed after {:.2f} seconds".format(
         time.time() - start))
 
