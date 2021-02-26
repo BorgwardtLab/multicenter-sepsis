@@ -122,7 +122,7 @@ def extract_onset_index(x):
     return result 
     
 
-def first_alarm_eval(y_true, y_pred, times, scores):
+def first_alarm_eval(y_true, y_pred, times):
     """Extract and evaluate prediction and label of first alarm."""
     labels = get_patient_labels(y_true)
     print(f'Cases: {labels.sum()}')
@@ -179,7 +179,7 @@ def evaluate_threshold(data, labels, thres, measures):
         results[name] = func(labels, predictions)
 
     for name, func in pat_measures.items():
-        output_dict = func(labels, predictions, data['scores'], times)
+        output_dict = func(labels, predictions, times)
         results.update(output_dict)
 
     return results
@@ -211,6 +211,7 @@ def main(args):
     measures = {
         'tp_recall': flatten_wrapper(recall_score),
         'tp_precision': flatten_wrapper(precision_score),
+        'tp_physionet2019_score': physionet2019_utility,
         'pat_eval': first_alarm_eval
     }
 
@@ -228,9 +229,6 @@ def main(args):
         for k, v in current.items():
             if not isinstance(v, np.ndarray):
                 results[k].append(v)
-
-    # Add measures that are *not* based on any measure and apply to the
-    # patient level.
 
     # FIXME: need to make sure that nothing is overwritten
     with open(args.output_file, 'w') as f:
