@@ -4,8 +4,19 @@ import pyarrow.parquet as pq
 import pandas as pd
 import json
 import os
+import pathlib
 
-from src.variables.mapping import VariableMapping as VM
+from src.preprocessing.transforms import Normalizer
+
+from src.variables.mapping import VariableMapping
+
+VM_CONFIG_PATH = str(
+    pathlib.Path(__file__).parent.parent.parent.joinpath(
+        'config/variables.json'
+    )
+)
+VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
+
 
 class SplitInfo:
     """
@@ -42,7 +53,6 @@ class ParquetLoader:
     """Loads data from parquet by filtering for split ids."""
     def __init__(self, path):
         self.path = path
-        self.vm = VM() # get variable mapping
     
     def load(self, ids, filters=[], pandas=True):
         """
@@ -53,7 +63,7 @@ class ParquetLoader:
         - pandas: flag if pd.DataFrame should 
             be returned
         """
-        filt = [ (self.vm('id'), 'in', ids ) ]
+        filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
         if len(filters) > 0:
             filt.extend(filters)
         
@@ -67,6 +77,46 @@ class ParquetLoader:
         else: 
             return dataset.read()
 
+def load_and_transform_data(
+    data_path,
+    split_path,
+    normalizer_path,
+    split='train',
+    rep=0,
+):
+    """
+    Data loading function (for classic models).
+    Applies on the fly transforms:
+        1. read patient ids according to split
+        2. apply precomputed normalization 
+    """
+    # determine patient ids of current split:
+    si = SplitInfo(split_path)
+    ids = si(split, rep)
+    # load these patient ids:
+    pl = ParquetLoader(data_path)
+    df = pl.load(ids)
+
+    # set up normalizer:
+    ind_cols = [col for col in df.columns if '_indicator' in col]
+    drop_cols = [
+        VM_DEFAULT('label'),
+        VM_DEFAULT('sex'),
+        VM_DEFAULT('time'),
+        *VM_DEFAULT.all_cat('baseline'),
+        *ind_cols
+    ]
+ 
+    norm = Normalizer(patient_ids=None, drop_cols=drop_cols)
+    with open(normalizer_path, 'r') as f:
+        normalizer = json.load(f)
+    # we load and set the statistics
+    norm.stats = {
+            'means': pd.Series(normalizer['means']),
+            'stds': pd.Series(normalizer['stds'])
+        }
+    df_norm = norm.transform(df)
+    from IPython import embed; embed()
  
 if __name__ == "__main__":
 
@@ -77,6 +127,9 @@ if __name__ == "__main__":
     parser.add_argument('--split_path', 
                         help='path to split file', 
                         default='config/splits')
+    parser.add_argument('--normalizer_path', 
+                        help='path to normalization stats', 
+                        default='config/normalizer')
     parser.add_argument('--split', 
                         help='which data split to use', 
                         default='train')
@@ -85,17 +138,19 @@ if __name__ == "__main__":
                         default=0)
     args = parser.parse_args()
     dataset_name = args.dataset 
-    path = f'datasets/{dataset_name}/data/parquet/features.parquet'
-    split_path = os.path.join(args.split_path, f'splits_{dataset_name}.json' ) 
+    path = f'datasets/{dataset_name}/data/parquet/features' 
+    split_path = os.path.join(args.split_path, 
+        f'splits_{dataset_name}.json' ) 
     split = args.split 
     rep = args.rep
+    normalizer_path = os.path.join(args.normalizer_path, 
+        f'normalizer_{dataset_name}_rep_{rep}.json' ) 
+    
+    load_and_transform_data(
+    path,
+    split_path,
+    normalizer_path,
+    split,
+    rep)
 
-    si = SplitInfo(split_path)
-    ids = si(split, rep)
-    f1 = ('age', '<', 70) 
-     
-    pl = ParquetLoader(path)
-    df = pl.load(ids)
-    df2 = pl.load(ids, [f1])
-    t = pl.load(ids,pandas=False) 
-    from IPython import embed; embed()
+
