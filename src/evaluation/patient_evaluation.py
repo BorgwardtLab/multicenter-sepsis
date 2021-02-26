@@ -198,13 +198,6 @@ def main(args):
     # script will currently just use the labels that are avaialble
     # in the input file.
 
-    #scores = {
-    #    'physionet2019_score': get_physionet2019_scorer(args.label_propagation),
-    #    'auroc': SCORERS['roc_auc'],
-    #    'average_precision': SCORERS['average_precision'],
-    #    'balanced_accuracy': SCORERS['balanced_accuracy'],
-    #}
-
     with open(args.input_file, 'r') as f:
         d = json.load(f)
 
@@ -215,8 +208,7 @@ def main(args):
         'pat_eval': first_alarm_eval
     }
 
-    # TODO: make configurable?
-    n_steps = 200
+    n_steps = args.num_steps
     thresholds = np.linspace(0, 1, n_steps)
 
     results = collections.defaultdict(list)
@@ -249,6 +241,12 @@ if __name__ in "__main__":
         '--output-file',
         required=True,
         help='Output file path for storing JSON with evaluation results'
+    )
+    parser.add_argument(
+        '-s', '--num-steps',
+        default=200,
+        type=int,
+        help='Number of steps for thresholding'
     )
 
     args = parser.parse_args()
