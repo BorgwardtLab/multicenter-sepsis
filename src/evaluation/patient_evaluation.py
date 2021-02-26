@@ -146,23 +146,15 @@ def first_alarm_eval(y_true, y_pred, times, scores):
     r['onset_times'] = onset_times
 
     delta = alarm_times[case_mask] - onset_times[case_mask]
-    r['case_delta'] = delta  # including nans
-    delta_ = delta[~np.isnan(delta)]   # excluding nans for statistics
+    r['case_delta'] = delta
 
     r['control_alarm_times'] = alarm_times[~case_mask]
     r['case_alarm_times'] = alarm_times[case_mask]
-    if len(delta_) == 0:
-        print('No non-nan value in delta!')
-        r['earliness_mean']         \
-            = r['earliness_median'] \
-            = r['earliness_min']    \
-            = r['earliness_max']    \
-            = np.nan
-    else:
-        r['earliness_mean'] = np.mean(delta_)
-        r['earliness_median'] = np.median(delta_)
-        r['earliness_min'] = np.min(delta_)
-        r['earliness_max'] = np.max(delta_)
+    r['earliness_mean'] = np.nanmean(delta)
+    r['earliness_median'] = np.nanmedian(delta)
+    r['earliness_min'] = np.nanmin(delta)
+    r['earliness_max'] = np.nanmax(delta)
+
     return r
 
 
