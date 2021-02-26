@@ -23,10 +23,9 @@ def fpr(y_true, y_pred):
     return fp / (fp + tn)
 
 
-def tpr(y_true, y_pred):
-    """Calculate true positive rate (TPR)."""
-    _, _, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-    return tp / (tp + fn)
+def specificity(y_true, y_pred):
+    """Calculate true negative rate (TNR, specificity)."""
+    return 1 - fpr(y_true, y_pred)
 
 
 def apply_threshold(scores, thres, pat_level=True):
@@ -128,9 +127,9 @@ def extract_onset_index(x):
         result.append(index)
     return result 
     
-def first_alarm_eval(y_true, y_pred, times):
-    """ extract and evaluate prediction and label of first alarm
-    """
+
+def first_alarm_eval(y_true, y_pred, times, scores):
+    """Extract and evaluate prediction and label of first alarm."""
     labels = get_patient_labels(y_true)
     print(f'Cases: {labels.sum()}')
     print(f'Prevalence: {labels.sum()/len(labels)*100} %')
@@ -142,34 +141,41 @@ def first_alarm_eval(y_true, y_pred, times):
     r = {} #results 
     r['pat_recall'] = recall_score(labels, y_pred)
     r['pat_precision'] = precision_score(labels, y_pred)
-    r['alarm_times'] = alarm_times 
+    r['pat_specificity'] = specificity(labels, y_pred)
+    r['alarm_times'] = alarm_times
     r['onset_times'] = onset_times
+
     delta = alarm_times[case_mask] - onset_times[case_mask]
-    r['case_delta'] = delta #including nans
-    delta_ = delta[~np.isnan(delta)] #excluding nans for statistics
-     
+    r['case_delta'] = delta  # including nans
+    delta_ = delta[~np.isnan(delta)]   # excluding nans for statistics
+
     r['control_alarm_times'] = alarm_times[~case_mask]
     r['case_alarm_times'] = alarm_times[case_mask]
-    if len(delta_) == 0: 
+    if len(delta_) == 0:
         print('No non-nan value in delta!')
-        r['earliness_mean'] = r['earliness_median'] = r['earliness_min'] = r['earliness_max'] = np.nan
+        r['earliness_mean']         \
+            = r['earliness_median'] \
+            = r['earliness_min']    \
+            = r['earliness_max']    \
+            = np.nan
     else:
         r['earliness_mean'] = np.mean(delta_)
         r['earliness_median'] = np.median(delta_)
         r['earliness_min'] = np.min(delta_)
         r['earliness_max'] = np.max(delta_)
-    return r 
-     
+    return r
+
+
 def evaluate_threshold(data, labels, thres, measures):
-    """
-    function to evaluate eval measures for a given threshold
+    """Evaluate threshold-based and patient-based measures.
+
     - data: dictionary of experiment output data
     - thres: float between [0,1]
     - measures: dict of callable evaluation measures to quantify
     """
     results = {}
     predictions = apply_threshold(data['scores'], thres, pat_level=False)
-    times = data['times'] #list of lists of incrementing patient hours
+    times = data['times']  # list of lists of incrementing patient hours
 
     # sanity check that format fits:
     format_check(predictions, labels)
@@ -178,24 +184,21 @@ def evaluate_threshold(data, labels, thres, measures):
     # time point measures:
     tp_keys = [key for key in measures.keys() if 'tp_' in key]
     tp_measures = {key: measures[key] for key in tp_keys}
+
     # patient level measures:
     pat_keys = [key for key in measures.keys() if 'pat_' in key]
     pat_measures = {key: measures[key] for key in pat_keys}
 
     for name, func in tp_measures.items():
-        # Check whether we have to provide scores or predictions,
-        # depending on which measure was selected.
-        if 'auroc' in name or 'auprc' in name:
-            results[name] = func(labels, data['scores']) 
-        else:
-            results[name] = func(labels, predictions) 
+        results[name] = func(labels, predictions)
 
     for name, func in pat_measures.items():
-        output_dict = func(labels, predictions, times) 
-        results.update(output_dict) 
+        output_dict = func(labels, predictions, data['scores'], times)
+        results.update(output_dict)
 
     return results
- 
+
+
 def format_check(x,y):
     """
     sanity check that two nested lists x,y have identical format
@@ -222,8 +225,6 @@ def main(args):
     measures = {
         'tp_recall': flatten_wrapper(recall_score),
         'tp_precision': flatten_wrapper(precision_score),
-        'tp_fpr': flatten_wrapper(fpr),
-        'tp_tpr': flatten_wrapper(tpr),
         'tp_auprc': flatten_wrapper(average_precision_score),
         'pat_eval': first_alarm_eval
     }
@@ -243,9 +244,12 @@ def main(args):
             if not isinstance(v, np.ndarray):
                 results[k].append(v)
 
+    # Add measures that are *not* based on any measure and apply to the
+    # patient level.
+
     # FIXME: need to make sure that nothing is overwritten
     with open(args.output_file, 'w') as f:
-        json.dump(results, f)
+        json.dump(results, f, indent=4)
 
 
 if __name__ in "__main__":
