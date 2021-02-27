@@ -222,9 +222,10 @@ class MeasurementCounterandIndicators(TransformerMixin):
                 .cumsum()
             indicators = indicators.rename(
                 columns=lambda col: col[:-len(self.col_suffix)]+'_indicator')
+            indicators = 1-indicators
             counts = counts.rename(
                 columns=lambda col: col[:-len(self.col_suffix)]+'_count')
-            return pd.concat([df, 1-indicators, counts], axis=1)
+            return pd.concat([df, indicators, counts], axis=1)
 
         return ddf.map_partitions(counter_and_indicators)
 
@@ -466,8 +467,10 @@ class Normalizer(TransformerMixin):
     def _compute_stats(self, df):
         patients = df.loc[self.patient_ids]
         self.stats = {
-            'means': patients.mean().persist(),
-            'stds': patients.std().persist()
+            # We want to persist these. This ensures that when a worker is
+            # killed we don't loose the result of this expensive computation.
+            'means': patients.mean(),
+            'stds': patients.std()
         }
 
     def _apply_normalization(self, df):
@@ -487,6 +490,20 @@ class Normalizer(TransformerMixin):
             })
         else:
             return normalized
+        # def normalize(df, means, stds):
+        #     data = self._drop_columns(df)
+        #     normalized = ((data - means) / stds).astype(float)
+
+        #     if self.assign_values:
+        #         return df.assign(**{
+        #             col: normalized[col]
+        #             for col in normalized.columns
+        #         })
+        #     else:
+        #         return normalized
+
+        # return ddf.map_partitions(
+        #     normalize, means=self.stats['means'], stds=self.stats['stds'])
 
 
 class WaveletFeatures(DaskIDTransformer):
@@ -764,6 +781,8 @@ class InvalidTimesFiltration(TransformerMixin):
 
     def transform(self, ddf):
         columns = [x for x in ddf.columns if self.col_suffix in x]
-        ddf = self._remove_pre_icu(ddf)
-        ddf = self._remove_too_few_observations(ddf, columns)
-        return ddf
+        def drop_invalid_times(df):
+            df = self._remove_pre_icu(df)
+            df = self._remove_too_few_observations(df, columns)
+            return df
+        return ddf.map_partitions(drop_invalid_times)
