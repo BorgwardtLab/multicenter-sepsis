@@ -47,7 +47,7 @@ cohort <- function(source, min_age = 14) {
   msg("\n\n--> removing {nrw - nrow(res)} from {nrw} ids due to min age of",
       " {min_age}\n")
 
-  out <- list(cohort = unique(id_col(res)))
+  out <- list(initial = unique(id_col(res)))
 
   if (grepl("eicu", source)) {
     hos <- load_id("patient", source, cols = c(id_var(res), "hospitalid"))
@@ -67,4 +67,4 @@ res <- lapply(src, cohort)
 
 names(res) <- src
 
-jsonlite::write_json(res, cfg_path("cohorts.json"))
+jsonlite::write_json(res, cfg_path("cohorts.json"), pretty = TRUE)

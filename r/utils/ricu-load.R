@@ -34,6 +34,9 @@ load_physionet <- function(dir = data_path("physionet2019"),
 
   dat <- merge(dat, sep, all = TRUE)
 
+  dat <- dat[, all_miss := Reduce(`&`, lapply(.SD, is.na)),
+             .SDcols = data_vars(dat)]
+
   msg("--> loading complete")
 
   dat
@@ -68,7 +71,8 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
 
   feats <- read_var_json(var_cfg)[["concept"]]
   feats <- feats[!is.na(feats)]
-  pids  <- unlist(jsonlite::read_json(coh_cfg)[[source]]$cohort)
+  cohor <- jsonlite::read_json(coh_cfg, simplifyVector = TRUE, flatten = TRUE)
+  pids  <- unlist(cohor[[source]]$initial)
 
   win <- stay_windows(source, id_type = "icustay", win_type = "icustay",
                       in_time = "intime", out_time = "outtime",
@@ -137,6 +141,10 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
       " patients due to fewer than {min_n_meas} in-icu measurements")
 
   dat <- merge(dat, cnt, all.y = TRUE)
+
+  cohor[[source]]$final <- unique(id_col(dat))
+  jsonlite::write_json(cohor, coh_cfg, pretty = TRUE)
+
   dat <- dat[, all_miss := FALSE]
   dat <- fill_gaps(dat)
   dat <- dat[, all_miss := is.na(all_miss)]
