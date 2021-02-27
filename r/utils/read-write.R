@@ -11,7 +11,7 @@ read_to_bm <- function(path, ...) {
 
   cols <- which(sel)
 
-  for (i in seq_along(cols)) {
+  for (i in seq_along(cols) - 1L) {
     res[, i] <- as.double(file$ReadColumn(i)$as_vector())
   }
 
@@ -43,6 +43,44 @@ create_parquet <- function(x, name, ...) {
   arrow::write_parquet(x, paste0(name, ".parquet"), ...)
 }
 
-read_parquet <- function(name) {
-  arrow::read_parquet(paste0(name, ".parquet"))
+read_parquet <- function(name, cols = NULL) {
+
+  file <- list.files(
+    dirname(name),
+    paste0(basename(name), "_[0-9]\\.[0-9]\\.[0-9]\\.parquet"),
+    full.names = TRUE
+  )
+
+  file <- tail(sort(file), n = 1L)
+
+  if (is.null(cols)) {
+
+    res <- arrow::read_parquet(file)
+
+  } else {
+
+    readr <- arrow::ParquetFileReader$create(file)
+    avail <- names(readr$GetSchema())
+
+    assert_that(is.character(cols), all(cols %in% avail))
+
+    res <- as.data.frame(readr$ReadTable(match(cols, avail) - 1L))
+  }
+
+  if ("stay_id" %in% colnames(res)) {
+
+    if ("stay_time" %in% colnames(res)) {
+
+      res[["stay_time"]] <- as.difftime(res[["stay_time"]], units = "hours")
+
+      res <- as_ts_tbl(res, id_vars = "stay_id", index_var = "stay_time",
+                       interval = hours(1L), by_ref = TRUE)
+
+    } else {
+
+      res <- as_id_tbl(res, id_vars = "stay_id", by_ref = TRUE)
+    }
+  }
+
+  res
 }
