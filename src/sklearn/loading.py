@@ -54,7 +54,7 @@ class ParquetLoader:
     def __init__(self, path):
         self.path = path
     
-    def load(self, ids, filters=[], pandas=True):
+    def load(self, ids, filters=None, pandas=True):
         """
         Args:
         - ids: which patient ids to load
@@ -64,9 +64,8 @@ class ParquetLoader:
             be returned
         """
         filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
-        if len(filters) > 0:
+        if filters:
             filt.extend(filters)
-        
         dataset = pq.ParquetDataset(
             self.path,
             use_legacy_dataset=False, 
