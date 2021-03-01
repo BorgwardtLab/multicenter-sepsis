@@ -10,6 +10,8 @@ from src.variables.mapping import VariableMapping
 from src.sklearn.data.utils import load_pickle #save_pickle, index_check
 from src.evaluation.physionet2019_score import compute_prediction_utility 
 from src.evaluation.sklearn_utils import make_consecutive
+from src.sklearn.loading import SplitInfo
+
 
 VM_CONFIG_PATH = str(
     pathlib.Path(__file__).parent.parent.parent.joinpath(
@@ -244,8 +246,11 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    
-    X = pd.read_parquet(args.input_file, columns=['sep3', 'stay_time'])
+   
+    si = SplitInfo(args.split_file)
+    ids = si(args.split_name, args.repetition)
+    filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
+    X = pd.read_parquet(args.input_file, columns=['sep3', 'stay_time'], filters=filt)
     calc = LambdaCalculator(n_jobs=args.n_jobs)
     lam = calc(X)
     results = {'lam': lam}
