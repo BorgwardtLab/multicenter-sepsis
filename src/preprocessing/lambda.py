@@ -10,7 +10,7 @@ from src.variables.mapping import VariableMapping
 from src.sklearn.data.utils import load_pickle #save_pickle, index_check
 from src.evaluation.physionet2019_score import compute_prediction_utility 
 from src.evaluation.sklearn_utils import make_consecutive
-from src.sklearn.loading import SplitInfo
+from src.sklearn.loading import SplitInfo, ParquetLoader
 
 
 VM_CONFIG_PATH = str(
@@ -249,11 +249,19 @@ if __name__ == "__main__":
    
     si = SplitInfo(args.split_file)
     ids = si(args.split_name, args.repetition)
-    filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
-    X = pd.read_parquet(args.input_file, columns=['sep3', 'stay_time'], filters=filt)
+    
+    pl = ParquetLoader(args.input_file)
+    columns= [VM_DEFAULT(concept) for concept in ['id', 'label', 'time']]
+    X = pl.load(ids, columns=columns)
+
+    #filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
+    #X2 = pd.read_parquet(args.input_file, columns=['sep3', 'stay_time'], filters=filt)
+    #embed();sys.exit()
+ 
     calc = LambdaCalculator(n_jobs=args.n_jobs)
     lam = calc(X)
     results = {'lam': lam}
+    print(results)
     with open(args.output_file, 'w') as f:
         json.dump(results, f)
 
