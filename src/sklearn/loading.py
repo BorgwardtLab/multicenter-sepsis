@@ -54,7 +54,7 @@ class ParquetLoader:
     def __init__(self, path):
         self.path = path
     
-    def load(self, ids, filters=None, pandas=True):
+    def load(self, ids=None, filters=None, columns=None, pandas=True):
         """
         Args:
         - ids: which patient ids to load
@@ -63,18 +63,28 @@ class ParquetLoader:
         - pandas: flag if pd.DataFrame should 
             be returned
         """
-        filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
+        filt = []
+        if ids:
+            filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
         if filters:
             filt.extend(filters)
-        dataset = pq.ParquetDataset(
-            self.path,
-            use_legacy_dataset=False, 
-            filters=filt
-        )
+        if filt:
+            dataset = pq.ParquetDataset(
+                self.path,
+                use_legacy_dataset=False, 
+                filters=filt
+            )
+        else:
+            dataset = pq.ParquetDataset(
+                self.path,
+                use_legacy_dataset=False, 
+            )
+ 
+        data = dataset.read(columns) if columns else dataset.read()
         if pandas:
-            return dataset.read().to_pandas()
+            return data.to_pandas()
         else: 
-            return dataset.read()
+            return data 
 
 def load_and_transform_data(
     data_path,
@@ -127,7 +137,8 @@ def load_and_transform_data(
     l = df.groupby('stay_id')['sep3'].sum() > 0 #more nan-stable than .any()
     # applying lambda to target: if case: times lam, else no change
     df_norm[VM_DEFAULT('utility')] = l*u*lam + (1-l)*u 
-    from IPython import embed; embed()
+
+    return df_norm
  
 if __name__ == "__main__":
 
