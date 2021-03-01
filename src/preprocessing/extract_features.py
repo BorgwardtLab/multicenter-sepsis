@@ -98,11 +98,8 @@ def main(input_filename, split_filename, output_filename, n_workers):
         split_row_groups=5  # This assumes that there are approx 100 rows per row group
     )
     data = data.set_index(VM_DEFAULT("id"), sorted=True)
-    data = data.groupby(VM_DEFAULT("id"), sort=False, group_keys=False) \
-        .apply(sort_time)
-    # is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
-    # assert all(is_sorted.compute())
-    # raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=True)
+    is_sorted = data.groupby(data.index.name, group_keys=False, sort=False).apply(check_time_sorted)
+    assert all(is_sorted.compute())
 
     data_pipeline = Pipeline(
         [
