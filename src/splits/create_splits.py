@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import glob
+import pathlib
 import os
 import sys
 import time
@@ -11,6 +12,15 @@ import json
 from sklearn.model_selection import StratifiedShuffleSplit
 from IPython import embed
 from src.datasets.utils import get_file_mapping
+from src.variables.mapping import VariableMapping
+
+VM_CONFIG_PATH = str(
+    pathlib.Path(__file__).parent.parent.parent.joinpath(
+        'config/variables.json'
+    )
+)
+VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
+
 
 def main(args):
     #Unpack arguments:
@@ -33,18 +43,25 @@ def main(args):
 
     # Loop over datasets:
     for dataset in datasets:
-         
+        
+        # Filter out invalid ids:
+        filters = None
+        if dataset == 'mimic':
+            filtered_ids = [227023, 246137, 253670]
+            print(f'>>> Manually filtering the following ids: {filtered_ids}')
+            filters = [(VM_DEFAULT('id'), 'not in', filtered_ids)] 
         # Load data 
         df = pd.read_parquet( 
             os.path.join( path, file_mapping[dataset]),
-            engine='pyarrow'
+            engine='pyarrow',
+            filters=filters
         )
         d = {}
-        df = df.set_index('stay_id')
+        df = df.set_index(VM_DEFAULT('id'))
         ids = np.array(df.index.unique())
         try: 
             labels = np.array(
-                [ df.loc[i]['sep3'].any() * 1 for i in ids ]
+                [ df.loc[i][VM_DEFAULT('label')].any() * 1 for i in ids ]
             )
         except:
             from IPython import embed; embed()
