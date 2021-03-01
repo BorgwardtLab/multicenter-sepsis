@@ -92,11 +92,14 @@ def main(input_filename, split_filename, output_filename, n_workers):
     norm_ids = read_dev_split_patients(split_filename)
     data = dd.read_parquet(
         input_filename,
-        columns=VM_DEFAULT.core_set[1:],
-        index=VM_DEFAULT("id"),
+        columns=VM_DEFAULT.core_set, #[1:],
+        #index=VM_DEFAULT("id"),
         engine='pyarrow',
         split_row_groups=5  # This assumes that there are approx 100 rows per row group
     )
+    data = data.set_index(VM_DEFAULT("id"), sorted=True)
+    data = data.groupby(VM_DEFAULT("id"), sort=False, group_keys=False) \
+        .apply(sort_time)
     # is_sorted = raw_data.groupby(raw_data.index.name, group_keys=False).apply(check_time_sorted)
     # assert all(is_sorted.compute())
     # raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=True)
@@ -137,7 +140,7 @@ def main(input_filename, split_filename, output_filename, n_workers):
     all_done = data.to_parquet(
         output_filename, append=False, overwrite=True,
         engine='pyarrow-dataset', write_metadata_file=False, compute=False,
-        compression='SNAPPY', write_statistics=False, #True
+        compression='SNAPPY', write_statistics=True,
         row_group_size=2000, use_dictionary=False #row_group_size=500
     )
     future = client.compute(all_done)
