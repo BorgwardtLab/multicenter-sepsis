@@ -49,14 +49,14 @@ cohort <- function(source, min_age = 14) {
 
   out <- list(initial = unique(id_col(res)))
 
-  if (grepl("eicu", source)) {
+  if (identical("eicu", source)) {
     hos <- load_id("patient", source, cols = c(id_var(res), "hospitalid"))
     hos <- hos[hospitalid %in% eicu_hospitals(), ]
     nrw <- nrow(res)
     res <- merge(res, hos)
     msg("\n\n--> removing {nrw - nrow(res)} from {nrw} ids based on hosp",
         " selection\n")
-    out[["hospitals"]] <- unique(res$hospitalid)
+    out[["hospitals"]] <- sort(unique(res$hospitalid))
   }
 
   out
