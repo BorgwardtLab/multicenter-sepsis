@@ -126,9 +126,10 @@ class ColumnFilter:
         df = VM_DEFAULT.var_df 
         prefixes = df[(~df['challenge'].isnull()) & (~df['name'].isnull())]
         prefixes = prefixes['name'].tolist() 
-        return [ p + '_' for p in prefixes 
-            if p not in VM_DEFAULT.all_cat('static')
-        ]  
+        return [ p + '_' if p not in VM_DEFAULT.all_cat('static') else p
+            for p in prefixes
+        ] 
+ 
     def physionet_set(self, columns=None, feature_set='large'):
         """
         map set of columns to the corresponding physionet subset
