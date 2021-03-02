@@ -2,6 +2,7 @@ import argparse
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pandas as pd
+import numpy as np
 import json
 import pathlib
 from .mapping import VariableMapping
@@ -115,11 +116,19 @@ class ColumnFilter:
         else:
             return self.groups_to_columns(used_groups)
     @property 
-    def physionet_prefixes(self): 
+    def physionet_prefixes(self):
+        """
+        we highlight non-statics with underscore: <name>_ 
+        for more robust greping of correct prefixes (as there
+        could be duplicates, e.g. greping for kalium 'k' returns 
+        false positive columns without k_
+        """ 
         df = VM_DEFAULT.var_df 
         prefixes = df[(~df['challenge'].isnull()) & (~df['name'].isnull())]
-        return prefixes['name'].tolist() 
-   
+        prefixes = prefixes['name'].tolist() 
+        return [ p + '_' for p in prefixes 
+            if p not in VM_DEFAULT.all_cat('static')
+        ]  
     def physionet_set(self, columns=None, feature_set='large'):
         """
         map set of columns to the corresponding physionet subset
@@ -139,10 +148,13 @@ class ColumnFilter:
             groups.append('_signature')
         group_cols = self.groups_to_columns(groups)
         prefix_cols = [ col for col in columns if any(
-            [p in col for p in self.physionet_prefixes])
+            [col.startswith(p) for p in self.physionet_prefixes])
         ]
-        return sorted(group_cols + prefix_cols)
-
+        total_cols =  sorted(group_cols + prefix_cols)
+        # sanity check as there were duplicates at some stage:
+        u,c = np.unique(total_cols, return_counts=True)
+        assert len(u[c>1]) == 0
+        return total_cols
 
 if __name__ == "__main__":
 
