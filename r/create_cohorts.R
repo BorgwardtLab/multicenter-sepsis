@@ -47,7 +47,7 @@ cohort <- function(source, min_age = 14) {
   msg("\n\n--> removing {nrw - nrow(res)} from {nrw} ids due to min age of",
       " {min_age}\n")
 
-  out <- list(initial = unique(id_col(res)))
+  out <- list()
 
   if (identical("eicu", source)) {
     hos <- load_id("patient", source, cols = c(id_var(res), "hospitalid"))
@@ -58,6 +58,8 @@ cohort <- function(source, min_age = 14) {
         " selection\n")
     out[["hospitals"]] <- sort(unique(res$hospitalid))
   }
+
+  out[["initial"]] <- unique(id_col(res)))
 
   out
 }
