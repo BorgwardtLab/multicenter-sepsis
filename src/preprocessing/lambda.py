@@ -27,7 +27,7 @@ class LambdaCalculator:
     prevalence correction of clinical utility score.
 
     """
-    def __init__(self, n_jobs=10, n_chunks=50, u_fp=-0.05, early_window=12, shift=-6):
+    def __init__(self, n_jobs=10, n_chunks=10000, u_fp=-0.05, early_window=12, shift=-6):
         """
         Inputs: 
             - n_jobs: number of jobs for parallelism
@@ -104,7 +104,9 @@ class LambdaCalculator:
         
         u_fp = self.u_fp
         ids = data.index.get_level_values(0).unique() #works both on single and multi index
-        id_chunks = np.array_split(ids, self.n_chunks)
+        n_chunks = min(self.n_chunks, len(ids))
+        print(f'Using {n_chunks} chunks..')
+        id_chunks = np.array_split(ids, n_chunks)
         # level, assuming that ids are first index 
         t_minus = 0
         t_plus = 0
