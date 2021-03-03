@@ -102,7 +102,8 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
 load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
                       min_stay_len = hours(6L), min_n_meas = 4L,
                       min_onset = hours(4L), max_onset = days(7L),
-                      cut_case = hours(24L), cut_ctrl = max_onset + cut_case) {
+                      cut_case = hours(24L), cut_ctrl = max_onset + cut_case,
+                      max_miss_win = hours(12L)) {
 
   pmin_dt <- function(x, y) {
     x[x > y] <- `units<-`(y, units(x))
@@ -123,6 +124,18 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
     dat <- rm_cols(dat, setdiff(colnames(dat), vars))
 
     dat
+  }
+
+  miss_runs <- function(x, ival, thresh) {
+
+    if (all(x)) {
+      wins <- 0L
+    } else {
+      tmp <- rle(x)
+      wins <- tmp$lengths[!tmp$values]
+    }
+
+    !any(wins * ival > thresh)
   }
 
   assert(is.string(source))
@@ -228,8 +241,20 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
   tmp <- nrow(dat)
   dat <- merge(dat, cnt, all.y = TRUE)
 
-  msg("--> removing {nrow(tmp) - nrow(dat)} patients due to fewer",
-      "  than {min_n_meas} in-icu measurements")
+  msg("--> removing {tmp - nrow(dat)} patients due to fewer",
+      " than {min_n_meas} in-icu measurements.")
+
+  mis <- dat[stay_time > 0, list(
+    keep = miss_runs(ts_avail, interval(dat), max_miss_win)
+  ), by = c("stay_id")]
+  mis <- mis[(keep), ]
+  mis <- mis[, keep := NULL]
+
+  tmp <- nrow(dat)
+  dat <- merge(dat, mis, all.y = TRUE)
+
+  msg("--> removing {tmp - nrow(dat)} patients due to missing windows",
+      " of size larger than {format_unit(max_miss_win)}.")
 
   dat <- rename_cols(dat, cfg$name, cfg$concept, by_ref = TRUE,
                      skip_absent = TRUE)
