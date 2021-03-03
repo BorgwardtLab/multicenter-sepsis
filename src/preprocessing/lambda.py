@@ -4,6 +4,9 @@ from joblib import Parallel, delayed
 import argparse
 import pathlib
 import json
+from dask.distributed import Client
+import dask.dataframe as dd
+import dask.diagnostics as ddi
 
 from IPython import embed
 from src.variables.mapping import VariableMapping
@@ -11,7 +14,7 @@ from src.sklearn.data.utils import load_pickle #save_pickle, index_check
 from src.evaluation.physionet2019_score import compute_prediction_utility 
 from src.evaluation.sklearn_utils import make_consecutive
 from src.sklearn.loading import SplitInfo, ParquetLoader
-
+from src.preprocessing.transforms import DaskIDTransformer
 
 VM_CONFIG_PATH = str(
     pathlib.Path(__file__).parent.parent.parent.joinpath(
@@ -20,6 +23,92 @@ VM_CONFIG_PATH = str(
 )
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
+
+class DaskLambdaCalculator(DaskIDTransformer):
+    """
+    Class for computing sample weight lambda for 
+    prevalence correction of clinical utility score.
+
+    """
+    def __init__(self, u_fp=-0.05, early_window=12, shift=-6, **kwargs):
+        """
+        Inputs:
+            - u_fp: U_{FP} value as used in util score
+            - early_window: duration from t_early to t_sepsis 
+                in util score
+            - shift: label shift, default: -6 for 6 hours into the past
+        """
+        super().__init__(**kwargs)
+        self.u_fp = u_fp
+        self.early_window = early_window
+        self.shift = shift
+ 
+    def transform_id(self, df):
+        df = df.reset_index().set_index(VM_DEFAULT('time')) 
+
+        y = df[VM_DEFAULT('label')]
+        
+        # we assume that there are no remaining NaNs! assert this
+        n_nans = df.isnull().sum().sum()
+        assert n_nans == 0
+        
+        # ensure that time series is consecutive:
+        y, _ = make_consecutive(y,y)
+
+        is_septic = 0
+        t_plus = 0
+        t_minus = 0
+        g = 0
+        h = 0 
+        if np.any(y): # if septic case
+            is_septic = 1
+            onset = np.argmax(y)
+            t_plus = max(0, onset - self.early_window)
+            g = compute_prediction_utility(
+                    y, np.ones(len(y)), u_fp=self.u_fp, 
+                    return_all_scores=True, shift_labels=self.shift)
+            g = np.maximum(g,0) #here we only need the non-negative utilities
+            g = g.sum()
+            h = compute_prediction_utility(
+                    y, np.zeros(len(y)), u_fp=self.u_fp, 
+                    return_all_scores=True, shift_labels=self.shift)
+            h = h.sum()
+        else: # if control
+            t_minus = len(y)
+        #per patient only one can be non-zero:
+        assert t_plus * t_minus == 0
+        result = pd.Series(
+            {'t_minus': t_minus,
+             't_plus': t_plus,
+             'is_septic': is_septic,
+             'g': g,
+             'h': h 
+            }  
+        )
+        return result 
+ 
+    def __call__(self, data):
+        """
+        Inputs:
+            - data: dask df of dataset
+        """
+        
+        u_fp = self.u_fp
+        #output = self.dask_pipe.transform(data).compute()
+        output = self.transform(data).compute() 
+        
+        # Column sumns of output:
+        s = output.sum(axis=0)
+        
+        lam = (-u_fp * s['t_minus']) / ( 2 * s['g'] - 2 * s['h'] + u_fp * s['t_plus']) 
+        
+        self.lam = lam
+        self.t_minus = s['t_minus']
+        self.t_plus = s['t_plus']
+        self.septic = s['is_septic']
+        self.prev = self.septic / len(output)
+
+        return lam
 
 class LambdaCalculator:
     """
@@ -246,7 +335,11 @@ if __name__ == "__main__":
         default=10,
         help="number of jobs for parallelizing the calculation."
     )
-
+    parser.add_argument(
+        "--dask", type=bool,
+        default=True,
+        help="using dask implementation"
+    )
     args = parser.parse_args()
    
     si = SplitInfo(args.split_file)
@@ -254,16 +347,36 @@ if __name__ == "__main__":
     
     pl = ParquetLoader(args.input_file)
     columns= [VM_DEFAULT(concept) for concept in ['id', 'label', 'time']]
-    X = pl.load(ids, columns=columns)
+    df = pl.load(ids, columns=columns)
 
-    #filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
-    #X2 = pd.read_parquet(args.input_file, columns=['sep3', 'stay_time'], filters=filt)
-    #embed();sys.exit()
- 
-    calc = LambdaCalculator(n_jobs=args.n_jobs)
-    lam = calc(X)
+    if args.dask:
+        client = Client(
+        n_workers=20,
+        memory_limit="10GB",
+        threads_per_worker=1,
+        local_directory="/local0/tmp/dask2",
+        )
+        progress_bar = ddi.ProgressBar()
+        progress_bar.register()
+
+        n_patients = len(df.index.unique())
+        n_partitions = min(5000, np.floor(n_patients/5))
+        df = df.reset_index().set_index([VM_DEFAULT('id'), VM_DEFAULT('time')])
+        df.sort_index(
+            axis='index', level=VM_DEFAULT('id'), inplace=True, sort_remaining=True)
+        df.reset_index(level=VM_DEFAULT('time'), drop=False, inplace=True)
+        df = dd.from_pandas(df, npartitions=n_partitions, sort=True)
+        calc = DaskLambdaCalculator()
+    else:
+        calc = LambdaCalculator(n_jobs=args.n_jobs)
+        
+    lam = calc(df)
     results = {'lam': lam}
     print(results)
+
+    if args.dask:
+        client.close()
+
     with open(args.output_file, 'w') as f:
         json.dump(results, f)
 
