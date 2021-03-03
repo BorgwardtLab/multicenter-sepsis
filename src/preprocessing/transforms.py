@@ -462,7 +462,8 @@ class Normalizer(TransformerMixin):
             ]
             return df[columns]
         if self.drop_cols is not None:
-            return df.drop(columns=self.drop_cols)
+            return df.drop(columns=self.drop_cols, errors='ignore')
+            # ignoring errors useful for downstream loading where we normalize with column subset
 
     def _compute_stats(self, df):
         patients = df.loc[self.patient_ids]
