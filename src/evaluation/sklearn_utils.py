@@ -3,7 +3,17 @@ import pandas as pd
 import numpy as np
 import dask.dataframe as dd
 from sklearn.model_selection import StratifiedKFold
+import pathlib
 
+from src.variables.mapping import VariableMapping
+
+VM_CONFIG_PATH = str(
+    pathlib.Path(__file__).parent.parent.parent.joinpath(
+        'config/variables.json'
+    )
+)
+
+VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
 def nanany(array: np.ndarray):
     """Any operation which ignores NaNs.
@@ -155,7 +165,7 @@ class OnlineScoreWrapper:
             raise ValueError(
                 'Unexpected shape of labels: {}'.format(y_pred.shape))
 
-        patients = y_true.index.get_level_values('id').unique()
+        patients = y_true.index.get_level_values(VM_DEFAULT('id')).unique()
         per_patient_preds = []
         per_patient_y = []
         for patient in patients:
@@ -182,12 +192,12 @@ class StratifiedPatientKFold(StratifiedKFold):
         # determine if data is a dask dataframe:
         if type(X) == dd.DataFrame:
             # using dask:
-            patient_ids = X.index.compute().get_level_values('id')
+            patient_ids = X.index.compute().get_level_values(VM_DEFAULT('id'))
             unique_patient_ids = patient_ids.unique()
             y = y.compute()
             patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
         else:
-            patient_ids = X.index.get_level_values('id')
+            patient_ids = X.index.get_level_values(VM_DEFAULT('id'))
             unique_patient_ids = patient_ids.unique()
             patient_labels = [np.any(y.loc[pid]) for pid in unique_patient_ids]
         print('Using StratifiedPatientKFold!')
