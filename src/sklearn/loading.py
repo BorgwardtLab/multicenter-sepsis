@@ -2,10 +2,11 @@ import argparse
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pandas as pd
+import numpy as np
 import json
 import os
 import pathlib
-
+from time import time 
 from src.preprocessing.transforms import Normalizer
 
 from src.variables.mapping import VariableMapping
@@ -136,10 +137,14 @@ def load_and_transform_data(
     # determine patient ids of current split:
     si = SplitInfo(split_path)
     ids = si(split, rep)
-    # load these patient ids:
+    
+    # 1. Load Patient Data (selected ids and columns):
     pl = ParquetLoader(data_path)
+    start = time()
+    print(f'Loading patient data..')
     df = pl.load(ids, columns=cols)
-
+    print(f'.. took {time() - start} seconds.')
+    # 2. Apply Normalization (if we are not loading baseline scores)
     if not baselines: # we only need normalization on the real input features
         # set up normalizer:
         ind_cols = [col for col in df.columns if '_indicator' in col]
@@ -151,7 +156,8 @@ def load_and_transform_data(
             *VM_DEFAULT.all_cat('baseline'),
             *ind_cols
         ]
-     
+        start = time()
+        print('Applying normalization..') 
         norm = Normalizer(patient_ids=None, drop_cols=drop_cols)
         with open(normalizer_path, 'r') as f:
             normalizer = json.load(f)
@@ -165,18 +171,33 @@ def load_and_transform_data(
                 'stds': stds.loc[norm_cols]
             }
         df = norm.transform(df)
+        print(f'.. took {time() - start} seconds.')
 
+    # 3. Apply lambda sample weight if we use regression target:
     if task == 'regression':
         # For regression, we apply lambda sample weights and remove label
+        start = time()
+        print('Applying lambda..')
         with open(lambda_path, 'r') as f:
             lam = json.load(f)['lam']
         # regression target without adjustment:
         u = df[VM_DEFAULT('utility')]
         # patient-level label:
-        l = df.groupby('stay_id')[VM_DEFAULT('label')].sum() > 0 #more nan-stable than .any()
+        timestep_label = df[VM_DEFAULT('label')]
+        l = timestep_label.groupby(VM_DEFAULT('id')).sum() > 0 #more nan-stable than .any()
+        l = l.astype(int)
         # applying lambda to target: if case: times lam, else no change
         df[VM_DEFAULT('utility')] = l*u*lam + (1-l)*u 
-        df = df.drop(columns=[VM_DEFAULT('label')])  
+        df = df.drop(columns=[VM_DEFAULT('label')]) 
+        print(f'.. took {time() - start} seconds.')
+    # 4. Remove remaining NaN values and check for invalid values 
+    # e.g. due to degenerate stats in normalization
+    start = time()
+    df = df.fillna(0)
+    if (df.max().max() < np.inf) or (df.min().min() > np.inf):
+        print('Warning: Degenerate values found (inf, -inf), plausibly due to degen. normalization')
+    df = df.replace([np.inf, -np.inf], 0)
+    print(f'Final imputation took {time() - start} seconds.')
     return df
  
 if __name__ == "__main__":
@@ -184,7 +205,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', 
                         help='name of dataset to use', 
-                        default='demo')
+                        default='mimic_demo')
     parser.add_argument('--split_path', 
                         help='path to split file', 
                         default='config/splits')
@@ -215,7 +236,7 @@ if __name__ == "__main__":
     lambda_path = os.path.join(args.lambda_path, 
         f'lambda_{dataset_name}_rep_{rep}.json' ) 
  
-    df_l = load_and_transform_data(
+    df = load_and_transform_data(
         path,
         split_path,
         normalizer_path,
@@ -228,45 +249,45 @@ if __name__ == "__main__":
         task='regression',
         baselines=False
     )
-    df_s =  load_and_transform_data(
-        path,
-        split_path,
-        normalizer_path,
-        lambda_path,
-        args.feature_path,
-        split,
-        rep,
-        feature_set='small',
-        variable_set='full',
-        task='regression',
-        baselines=False
-    )
-    df_b =  load_and_transform_data(
-        path,
-        split_path,
-        normalizer_path,
-        lambda_path,
-        args.feature_path,
-        split,
-        rep,
-        feature_set='small',
-        variable_set='full',
-        task='classification',
-        baselines=True
-    )
-    df_p =  load_and_transform_data(
-        path,
-        split_path,
-        normalizer_path,
-        lambda_path,
-        args.feature_path,
-        split,
-        rep,
-        feature_set='large',
-        variable_set='physionet',
-        task='regression',
-        baselines=False
-    )
+    #df_s =  load_and_transform_data(
+    #    path,
+    #    split_path,
+    #    normalizer_path,
+    #    lambda_path,
+    #    args.feature_path,
+    #    split,
+    #    rep,
+    #    feature_set='small',
+    #    variable_set='full',
+    #    task='regression',
+    #    baselines=False
+    #)
+    #df_b =  load_and_transform_data(
+    #    path,
+    #    split_path,
+    #    normalizer_path,
+    #    lambda_path,
+    #    args.feature_path,
+    #    split,
+    #    rep,
+    #    feature_set='small',
+    #    variable_set='full',
+    #    task='classification',
+    #    baselines=True
+    #)
+    #df_p =  load_and_transform_data(
+    #    path,
+    #    split_path,
+    #    normalizer_path,
+    #    lambda_path,
+    #    args.feature_path,
+    #    split,
+    #    rep,
+    #    feature_set='large',
+    #    variable_set='physionet',
+    #    task='regression',
+    #    baselines=False
+    #)
     from IPython import embed; embed()
 
 

@@ -1,6 +1,6 @@
 
 def get_file_mapping(version):
-    return {    'demo': f'mimic_demo_{version}.parquet',
+    return {    'mimic_demo': f'mimic_demo_{version}.parquet',
                 'mimic': f'mimic_{version}.parquet',
                 'hirid': f'hirid_{version}.parquet',
                 'eicu': f'eicu_{version}.parquet',

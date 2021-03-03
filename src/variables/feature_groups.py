@@ -162,7 +162,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', 
                         help='name of dataset to use', 
-                        default='demo')
+                        default='mimic_demo')
     parser.add_argument('--out-file', 
                         help='name of output file', 
                         default='config/features.json')
