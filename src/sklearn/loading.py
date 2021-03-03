@@ -187,7 +187,11 @@ def load_and_transform_data(
         l = timestep_label.groupby(VM_DEFAULT('id')).sum() > 0 #more nan-stable than .any()
         l = l.astype(int)
         # applying lambda to target: if case: times lam, else no change
-        df[VM_DEFAULT('utility')] = l*u*lam + (1-l)*u 
+        # need to drop target instead of overwriting as otherwise pandas 
+        # throwed an error due to reindexing with duplicate indices..
+        df = df.drop(columns=[VM_DEFAULT('utility')])
+        new_target = l*u*lam + (1-l)*u 
+        df[VM_DEFAULT('utility')] = new_target 
         df = df.drop(columns=[VM_DEFAULT('label')]) 
         print(f'.. took {time() - start} seconds.')
     # 4. Remove remaining NaN values and check for invalid values 
