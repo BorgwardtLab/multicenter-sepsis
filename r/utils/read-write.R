@@ -24,6 +24,23 @@ read_to_bm <- function(source, path = data_path("mm"), cols = feature_set(),
   res
 }
 
+read_to_df <- function(source, path = data_path("mm"), cols = feature_set(),
+                       pids = coh_split(source)) {
+
+  file <- arrow::open_dataset(file.path(path, source, "features"))
+
+  res <- dplyr::filter(file, stay_id %in% pids)
+  res <- dplyr::select(res, dplyr::all_of(cols))
+
+  dplyr::collect(res)
+}
+
+read_to_vec <- function(source, path = data_path("mm"), col = "sep3",
+                        pids = coh_split(source)) {
+
+  read_to_df(source, path, col, pids)[[col]]
+}
+
 read_var_json <- function(path = cfg_path("variables.json")) {
 
   get_one <- function(x, i) {
