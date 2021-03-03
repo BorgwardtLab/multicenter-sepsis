@@ -46,10 +46,10 @@ def main(args):
         
         # Filter out invalid ids:
         filters = None
-        if dataset == 'mimic':
-            filtered_ids = [227023, 246137, 253670]
-            print(f'>>> Manually filtering the following ids: {filtered_ids}')
-            filters = [(VM_DEFAULT('id'), 'not in', filtered_ids)] 
+        #if dataset == 'mimic':
+        #    filtered_ids = [227023, 246137, 253670]
+        #    print(f'>>> Manually filtering the following ids: {filtered_ids}')
+        #    filters = [(VM_DEFAULT('id'), 'not in', filtered_ids)] 
         # Load data 
         df = pd.read_parquet( 
             os.path.join( path, file_mapping[dataset]),
