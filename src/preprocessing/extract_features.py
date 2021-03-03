@@ -52,8 +52,8 @@ def check_time_sorted(df):
 #     ids = pq.read_table(filename, columns=[VM_DEFAULT("id")])
 #     unique_ids, counts = np.unique(ids, return_counts=True)
 #     return OrderedDict(zip(unique_ids, counts))
-# 
-# 
+#
+#
 # def compute_devisions(rows_per_patient, max_rows):
 #     divisions = []
 #     cur_count = 0
@@ -65,7 +65,7 @@ def check_time_sorted(df):
 #             cur_count = n_obs
 #         else:
 #             cur_count += n_obs
-# 
+#
 #     if cur_count != 0:
 #         divisions.append(list(rows_per_patient.keys())[-1])
 #     return np.array(divisions)
@@ -152,7 +152,9 @@ def main(input_filename, split_filename, output_filename, n_workers):
     for file in tqdm(outputpath.glob('*.parquet')):
         if schema is None:
             schema = pq.read_schema(file)
-        metadata.append(pq.read_metadata(file))
+        cur_metadata = pq.read_metadata(file)
+        cur_metadata.set_file_path(str(file.relative_to(outputpath)))
+        metadata.append(cur_metadata)
     pq.write_metadata(
         schema, outputpath / '_metadata', metadata_collector=metadata)
     print("Preprocessing completed after {:.2f} seconds".format(
