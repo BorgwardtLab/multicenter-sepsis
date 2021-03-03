@@ -59,7 +59,7 @@ cohort <- function(source, min_age = 14) {
     out[["hospitals"]] <- sort(unique(res$hospitalid))
   }
 
-  out[["initial"]] <- unique(id_col(res)))
+  out[["initial"]] <- unique(id_col(res))
 
   out
 }
