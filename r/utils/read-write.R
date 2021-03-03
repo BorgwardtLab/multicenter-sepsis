@@ -1,18 +1,24 @@
 
-read_to_bm <- function(path, ...) {
+read_to_bm <- function(source, path = data_path("mm"), cols = feature_set(),
+                       pids = coh_split(source)) {
 
-  file <- arrow::ParquetFileReader$create(path)
+  file <- arrow::open_dataset(file.path(path, source, "features"))
+  subs <- dplyr::filter(file, stay_id %in% pids)$filtered_rows
 
-  cols <- names(file$GetSchema())
-  sel  <- !cols %in% c("time", "id")
+  scan <- file$NewScan()$Filter(subs)
 
-  res <- bigmemory::big.matrix(file$num_rows, sum(sel), type = "double",
-                               dimnames = list(NULL, cols[sel]), shared = TRUE)
+  col_dat <- scan$Project(cols[1L])$Finish()$ToTable()
 
-  cols <- which(sel)
+  res <- bigmemory::big.matrix(
+    nrow(col_dat), length(cols), type = "double", dimnames = list(NULL, cols),
+    shared = TRUE
+  )
 
-  for (i in seq_along(cols) - 1L) {
-    res[, i] <- as.double(file$ReadColumn(i)$as_vector())
+  res[, cols[1L]] <- as.double(col_dat[[1L]])
+
+  for (col in cols[-1L]) {
+    col_dat <- scan$Project(col)$Finish()$ToTable()
+    res[, col] <- as.double(col_dat[[1L]])
   }
 
   res
