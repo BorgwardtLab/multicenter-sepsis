@@ -3,6 +3,7 @@ import argparse
 from functools import partial
 import json
 import os
+import pathlib
 from time import time
 import numpy as np
 import pandas as pd
@@ -11,42 +12,92 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import SCORERS
 from sklearn.metrics._scorer import _cached_call
 from sklearn.model_selection import RandomizedSearchCV
-#custom modules
-from src.sklearn.data.utils import load_data, load_pickle, save_pickle
+
+from src.variables.mapping import VariableMapping
+from src.sklearn.data.utils import load_pickle, save_pickle
+from src.sklearn.loading import load_and_transform_data
+from src.sklearn.shift_utils import handle_label_shift
 from src.evaluation import (
     get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
 
+VM_CONFIG_PATH = str(
+    pathlib.Path(__file__).parent.parent.parent.joinpath(
+        'config/variables.json'
+    )
+)
 
-def load_data_from_input_path(input_path, dataset_name, index, extended_features=False):
-    """Load the data according to dataset_name, and index-handling
+VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
-    Returns dict with keys:
-        X_train, X_validation, X_test, y_train, y_validation, y_test 
-
+def load_data(args, split):
     """
-    input_path = os.path.join('datasets', dataset_name, input_path)
-    data = load_data(   path=os.path.join(input_path, 'processed'),
-                        index=index, extended_features=extended_features)
-    return data 
+    util function to load current data split
+    """
+    dataset = args.dataset
+    rep = args.rep
+    input_path = args.input_path.format(dataset)
+    normalizer_path = os.path.join(args.normalizer_path, 
+        f'normalizer_{dataset}_rep_{rep}.json' )
+    lambda_path = os.path.join(args.lambda_path, 
+        f'lambda_{dataset}_rep_{rep}.json' )
+    split_path = os.path.join(args.split_path, 
+        f'splits_{dataset}.json' ) 
+
+    # Load data and apply on-the-fly transforms:
+    return load_and_transform_data(
+        input_path,
+        split_path,
+        normalizer_path,
+        lambda_path,
+        args.feature_path,
+        split=split,
+        rep=rep,
+        feature_set=args.feature_set,
+        variable_set=args.variable_set,
+        task=args.task,
+        baselines=False
+    )
+
+def load_data_splits(args, 
+    splits=['train','validation','test']):
+    """
+    Util function to read all 3 data splits of current repetion
+    and return dictionary {X_train: [], y_train: [], ..}
+    setting the label to the current task
+    """ 
+    d = {}
+    if args.task == 'classification':
+        label = VM_DEFAULT('label')
+    elif args.task == 'regression':
+        label = VM_DEFAULT('utility')
+    else:
+        raise ValueError(f'Task {args.task} not among valid tasks. ')
+    for split in splits:
+        data = load_data(args, split)
+        if args.index == 'multi':   
+            data = data.reset_index().set_index(
+                [VM_DEFAULT('id'), VM_DEFAULT('time')]
+            ) 
+        d[f'y_{split}'] = data[label]
+        data = data.drop(columns=[label])
+        # sanity check as we must not leak any label info to the input data
+        assert all( 
+            [ VM_DEFAULT(x) not in data.columns 
+                for x in ['label', 'utility'] 
+            ]
+        )
+        d[f'X_{split}'] = data 
+    return d
 
 def get_pipeline_and_grid(args):
     """Get sklearn pipeline and parameter grid."""
     # first determine which feature set to use for current model:
     # unpack arguments:
-    method_name = args.method_name
+    method_name = args.method
     clf_params = args.clf_params 
-    feature_set = args.feature_set
     task = args.task
  
     steps = [] #pipeline steps
-    if feature_set == 'challenge':
-        from src.sklearn.data.subsetters import ChallengeFeatureSubsetter
-        subsetter = ChallengeFeatureSubsetter() #transform to remove all features which cannot be derived from challenge data
-        steps.append(('feature_subsetter', subsetter))
-         
-    elif feature_set != 'all':
-        raise ValueError(f'provided feature set {feature_set} is not among the valid [all, challenge]')
- 
+     
     # Convert input format from argparse into a dict
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
@@ -56,7 +107,7 @@ def get_pipeline_and_grid(args):
         if task == 'classification':
             est = lgb.LGBMClassifier(**parameters)
         elif task == 'regression':
-            est == lgb.LGBMRegressor(**parameteres)
+            est = lgb.LGBMRegressor(**parameters)
         else:
             raise ValueError(f'task {task} must be classification or regression') 
         steps.append(('est', est))
@@ -66,109 +117,47 @@ def get_pipeline_and_grid(args):
             'est__boosting_type': ['gbdt', 'dart'],
             'est__learning_rate': [0.001, 0.01, 0.1, 0.5],
             'est__num_leaves': [30, 50, 100],
-            'est__scale_pos_weight': [1, 10, 20, 50, 100]
         }
+        if args.task == 'classification':
+            param_dist['est__scale_pos_weight'] = [1, 10, 20, 50, 100]
         return pipe, param_dist
-    elif method_name == 'lr':
-        from sklearn.linear_model import LogisticRegression as LR
-        parameters = {'n_jobs': 1} #10 for non-eicu #-1 led to OOM
-        parameters.update(clf_params)
-        est = LR(**parameters)
-        steps.append(('est', est))
-        pipe = Pipeline(steps)
-        # hyper-parameter grid:
-        param_dist = {
-            'est__penalty': ['l2','none'],
-            'est__C': np.logspace(-2,2,50),
-            'est__solver': ['sag', 'saga'], 
-        }
-        return pipe, param_dist
-    elif method_name in ['sofa', 'qsofa', 'sirs', 'mews', 'news']:
-        from src.sklearn.baseline import BaselineModel
-        import scipy.stats as stats
-        parameters = {'column': method_name}
-        parameters.update(clf_params)
-        est = BaselineModel(**parameters)
-        steps.append(('est', est))
-        pipe = Pipeline(steps)
-        param_dist = { 
-            'est__theta':  stats.uniform(0, 1)
-        }
-        return pipe, param_dist 
+    # TODO: add baselines (and try LogReg) also
+    #elif method_name == 'lr':
+    #    from sklearn.linear_model import LogisticRegression as LR
+    #    parameters = {'n_jobs': 1} #10 for non-eicu #-1 led to OOM
+    #    parameters.update(clf_params)
+    #    est = LR(**parameters)
+    #    steps.append(('est', est))
+    #    pipe = Pipeline(steps)
+    #    # hyper-parameter grid:
+    #    param_dist = {
+    #        'est__penalty': ['l2','none'],
+    #        'est__C': np.logspace(-2,2,50),
+    #        'est__solver': ['sag', 'saga'], 
+    #    }
+    #    return pipe, param_dist
+    #elif method_name in ['sofa', 'qsofa', 'sirs', 'mews', 'news']:
+    #    from src.sklearn.baseline import BaselineModel
+    #    import scipy.stats as stats
+    #    parameters = {'column': method_name}
+    #    parameters.update(clf_params)
+    #    est = BaselineModel(**parameters)
+    #    steps.append(('est', est))
+    #    pipe = Pipeline(steps)
+    #    param_dist = { 
+    #        'est__theta':  stats.uniform(0, 1)
+    #    }
+    #    return pipe, param_dist 
     else:
         raise ValueError('Invalid method: {}'.format(method_name))
 
-def apply_label_shift(labels, shift):
-    """Apply label shift to labels."""
-    labels = labels.copy()
-    patients = labels.index.get_level_values('id').unique()
-    # sanity check: assert that no reordering occured:
-    assert np.all(labels.index.levels[0] == patients)
-    new_labels = pd.DataFrame() 
-    
-    for patient in patients:
-        #labels[patient] = shift_onset_label(patient, labels[patient], shift)
-        # the above (nice) solution lead to pandas bug in newer version.. 
-        shifted_labels = shift_onset_label(patient, labels[patient], shift)
-        df = shifted_labels.to_frame()
-        df = df.rename(columns={0: 'sep3'}) 
-        df['id'] = patient
-        new_labels = new_labels.append(df)
-    new_labels.reset_index(inplace=True)
-    new_labels.set_index(['id', 'time'], inplace=True)
-    return new_labels['sep3']
-
-def handle_label_shift(args, d):
-    """Handle label shift given argparse args and data dict d"""
-    if args.label_propagation != 0:
-        # Label shift is normally assumed to be in the direction of the future.
-        # For label propagation we should thus take the negative of the
-        # provided label propagation parameter
-        cached_path = os.path.join('datasets', args.dataset, 'data', 'cached')
-        cached_file = os.path.join(cached_path, f'y_shifted_{args.label_propagation}'+'_{}.pkl')
-        cached_train = cached_file.format('train')
-        cached_validation = cached_file.format('validation')
-        cached_test = cached_file.format('test')
- 
-        if os.path.exists(cached_train) and not args.overwrite:
-            # read label-shifted data from json:
-            print(f'Loading cached labels shifted by {args.label_propagation} hours')
-            y_train = load_pickle(cached_train)
-            y_val = load_pickle(cached_validation)
-            y_test = load_pickle(cached_test)
-        else:
-            # unpack dict
-            y_train = d['y_train']
-            y_val = d['y_validation'] 
-            y_test = d['y_test']
-
-            # do label-shifting here: 
-            start = time()
-            y_train = apply_label_shift(y_train, -args.label_propagation)
-            y_val = apply_label_shift(y_val, -args.label_propagation)
-            y_test = apply_label_shift(y_test, -args.label_propagation)
-
-            elapsed = time() - start
-            print(f'Label shift took {elapsed:.2f} seconds')
-            #and cache data to quickly reuse from now:
-            print('Caching shifted labels..')
-            save_pickle(y_train, cached_train) #save pickle also creates folder if needed 
-            save_pickle(y_val, cached_validation)
-            save_pickle(y_test, cached_test)
-        # update the shifted labels in data dict:
-        d['y_train'] = y_train
-        d['y_validation'] = y_val
-        d['y_test'] = y_test 
-    else:
-        print('No label shift applied.')
-    return d
 
 def main():
     """Parse arguments and launch fitting of model."""
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        '--input_path', default='data/sklearn',
+        '--input_path', default='datasets/{}/data/parquet/features',
         help='Path to input data directory (relative from dataset directory)'
     )
     parser.add_argument(
@@ -176,16 +165,17 @@ def main():
         help='Relative path to experimental results (from input path)'
     )
     parser.add_argument(
-        '--dataset', default='physionet2019',
+        '--dataset', default='mimic_demo',
         help='Dataset Name: [physionet2019, ..]'
     )
     parser.add_argument(
         '--label-propagation', default=6, type=int,
-        help='By how many hours to shift label into the past. Default: 6'
+        help="""(Active for classification task) By how many hours to 
+            shift label into the past. Default: 6"""
     )
     parser.add_argument(
         '--overwrite', action='store_true', default=False,
-        help='<Currently inactive> To overwrite existing cached data'
+        help='(Active for classification) To overwrite existing cached shifted labels'
     )
     parser.add_argument(
         '--method', default='lgbm', type=str,
@@ -197,21 +187,49 @@ def main():
     )
     parser.add_argument(
         '--n_iter_search', type=int, default=20,
-        help='Number of iterations in randomized hyperparameter search')
+        help='Number of iterations in randomized hyperparameter search'
+    )
     parser.add_argument(
         '--cv_n_jobs', type=int, default=10,
         help='n_jobs for cross-validation'
     )
     parser.add_argument(
-        '--feature_set', default='all',
-        help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'
+        '--variable_set', default='full',
+        help="""which variable set should be used: [full, physionet], 
+            where physionet refers to the subset as derived from 
+            physionet challenge variables"""
     )
     parser.add_argument(
-        '--extended_features', default=False, action='store_true',
-        help='flag if extended feature set should be used (incl measurement counter, wavelets etc)'
+        '--feature_set', default='large',
+        help="""which feature set should be used: [large, small], 
+            large including feature engineering for classic models"""
     )
     parser.add_argument(
-        '--task', default='classification', 
+        '--split_path', 
+        help='path to split file', 
+        default='config/splits'
+    )
+    parser.add_argument(    
+        '--normalizer_path', 
+        help='path to normalization stats', 
+        default='config/normalizer'
+    )
+    parser.add_argument(
+        '--lambda_path', 
+        help='path to lambda files', 
+        default='config/lambdas'
+    )
+    parser.add_argument(
+        '--feature_path', 
+        help='path to feature names file', 
+        default='config/features.json'
+    )
+    parser.add_argument(
+        '--rep', 
+        help='split repetition', type=int, 
+        default=0)
+    parser.add_argument(
+        '--task', default='regression', 
         help='which prediction task to use: [classification, regression]'
     )
     parser.add_argument(
@@ -220,38 +238,51 @@ def main():
     )
 
     args = parser.parse_args()
+    ## Process arguments:
+    task = args.task 
+ 
+    # Load data and apply on-the-fly transforms:
+    data = load_data_splits(args)
 
-    data = load_data_from_input_path(
-        args.input_path, args.dataset, args.index, args.extended_features)
-
-    data = handle_label_shift(args, data)
-    
-    # for baselines: 
-    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
-        # use baselines as prediction input data
-        # hack until prepro is run again (currently live jobs depending on it)
-        data['baselines_train'].index = data['X_train'].index
-        data['baselines_validation'].index = data['X_validation'].index
-        data['X_train'] = data['baselines_train']
-        data['X_validation'] = data['baselines_validation']
+    #data = load_data_from_input_path(
+    #    args.input_path, args.dataset, args.index, args.extended_features)
+    if task == 'classification':
+        # for regression task the label shift happens in target calculation
+        data = handle_label_shift(args, data)
+   
+    # TODO: add (update) baseline option! 
+    ## for baselines: 
+    #if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
+    #    # use baselines as prediction input data
+    #    # hack until prepro is run again (currently live jobs depending on it)
+    #    data['baselines_train'].index = data['X_train'].index
+    #    data['baselines_validation'].index = data['X_validation'].index
+    #    data['X_train'] = data['baselines_train']
+    #    data['X_validation'] = data['baselines_validation']
  
     pipeline, hparam_grid = get_pipeline_and_grid(args)
-
-    scores = {
-        'physionet_utility': get_physionet2019_scorer(args.label_propagation),
-        'roc_auc': SCORERS['roc_auc'],
-        'average_precision': SCORERS['average_precision'],
-        'balanced_accuracy': SCORERS['balanced_accuracy'],
-    }
+    
+    if task == 'classification':
+        target_name = 'physionet_utility'
+        scores = {
+            target_name: get_physionet2019_scorer(args.label_propagation),
+            #'roc_auc': SCORERS['roc_auc'],
+            #'average_precision': SCORERS['average_precision'],
+            #'balanced_accuracy': SCORERS['balanced_accuracy'],
+        }
+    elif task == 'regression':
+        target_name = 'neg_mse'
+        scores = { target_name: SCORERS['neg_mean_squared_error']
+        }
     
     random_search = RandomizedSearchCV(
         pipeline,
         param_distributions=hparam_grid,
         scoring=scores,
-        refit='physionet_utility', #'average_precision'
+        refit=target_name, #'average_precision'
         n_iter=args.n_iter_search,
         cv=StratifiedPatientKFold(n_splits=5),
-        iid=False,
+        #iid=False,
         n_jobs=args.cv_n_jobs
     )
     # actually run the randomized search
