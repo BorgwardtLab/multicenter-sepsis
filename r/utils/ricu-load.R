@@ -342,6 +342,8 @@ export_data <- function(src, dest_dir = data_path("export"),
                     by = id_vars(dat))
   dat <- replace_na(dat, FALSE, by_ref = TRUE, vars = "sep3")
 
+  dat <- dat[, is_case := any(sep3), by = stay_id]
+
   ind <- augment_prof(dat, Negate(is.na), "ind")
   lof <- augment_prof(dat, data.table::nafill, "locf", by = id_vars(dat),
                       type = "locf")
