@@ -75,7 +75,7 @@ def compute_devisions(rows_per_patient, max_rows):
 def main(input_filename, split_filename, output_filename, n_workers):
     client = Client(
         n_workers=n_workers,
-        memory_limit="20GB",
+        memory_limit="50GB",
         threads_per_worker=1,
         local_directory="/local0/tmp/dask2",
     )
@@ -83,7 +83,7 @@ def main(input_filename, split_filename, output_filename, n_workers):
     print("Computing patient partitions...")
     rows_per_patient = get_rows_per_patient(input_filename)
     # Initial divisions
-    divisions1 = compute_devisions(rows_per_patient, 1000)
+    divisions1 = compute_devisions(rows_per_patient, 2000)
     # # After lookback features
     # divisions2 = compute_devisions(rows_per_patient, max_partition_size // 5)
     # # After wavelets
@@ -94,14 +94,15 @@ def main(input_filename, split_filename, output_filename, n_workers):
     norm_ids = read_dev_split_patients(split_filename)
     data = dd.read_parquet(
         input_filename,
-        columns=VM_DEFAULT.core_set, #[1:],
-        #index=VM_DEFAULT("id"),
+        columns=VM_DEFAULT.core_set[1:],
+        index=VM_DEFAULT("id"),
         engine='pyarrow',
         split_row_groups=5  # This assumes that there are approx 100 rows per row group
     )
-    data = data.set_index(VM_DEFAULT("id"), sorted=True).repartition(divisions=divisions1)
-    is_sorted = data.groupby(data.index.name, group_keys=False, sort=False).apply(check_time_sorted)
-    assert all(is_sorted.compute())
+    #data = data.set_index(VM_DEFAULT("id"), sorted=True)
+    data = data.repartition(divisions=divisions1)
+    #is_sorted = data.groupby(data.index.name, group_keys=False, sort=False).apply(check_time_sorted)
+    #assert all(is_sorted.compute())
 
     data_pipeline = Pipeline(
         [
