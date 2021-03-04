@@ -3,7 +3,7 @@ import bisect
 import os
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
-import torch.utils.data import Dataset
+from torch.utils.data import Dataset
 import json
 
 
@@ -72,7 +72,8 @@ class ParquetDataset(Dataset):
 if __name__ == '__main__':
     import argparse
     from random import Random
-    import timeit
+    from time import time
+    from timeit import timeit
     parser = argparse.ArgumentParser()
     parser.add_argument('parquet_dataset', type=str)
     parser.add_argument('--split_file', type=str, required=True)
@@ -83,16 +84,22 @@ if __name__ == '__main__':
 
     n_ids = len(ids)
 
+
+    start = time()
     dataset = ParquetDataset(
-        args.parquet_dataset, ids, id_column='stay_id')
+        args.parquet_dataset, ids, id_column='stay_id', as_pandas=True)
+    print('Setting up lookup took {} seconds.'.format(time()-start))
     rand = Random()
+    n_repetitions = 100
     time = timeit(
         'index=rand.randint(0, n_ids-1); dataset[index]',
-        number=100,
+        number=n_repetitions,
         globals={
             'rand': rand,
             'n_ids': n_ids,
             'dataset': dataset
         }
     )
-    print(time)
+    print(
+        'Random access to a patient took on average {} seconds'.format(
+            time/n_repetitions))
