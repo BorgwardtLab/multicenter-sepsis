@@ -1,0 +1,252 @@
+{
+  "is_vent": {
+    "concepts": ["vent_ind"],
+    "description": "Ventilation during ICU stay",
+    "category": "respiratory",
+    "target": "id_tbl",
+    "callback": "is_vent_callback",
+    "class": "rec_cncpt"
+  },
+  "is_vaso": {
+    "concepts": ["norepi_equiv"],
+    "description": "Vasopressor administration during ICU stay",
+    "category": "cardio",
+    "target": "id_tbl",
+    "callback": "is_vaso_callback",
+    "class": "rec_cncpt"
+  },
+  "is_abx": {
+    "concepts": ["abx"],
+    "description": "Antibiotics during ICU stay",
+    "category": "Misc.",
+    "target": "id_tbl",
+    "callback": "is_abx_callback",
+    "class": "rec_cncpt"
+  },
+  "sep3_mc": {
+    "concepts": [""],
+    "description": "MC-Sepsis Sepsis-3",
+    "category": "Misc.",
+    "callback": "is_abx_callback",
+    "class": "rec_cncpt"
+  },
+  "susp_inf_mc": {
+    "concepts": ["abx", "samp"],
+    "description": "MC-Sepsis Suspected Infection",
+    "category": "Misc.",
+    "aggregate": [
+      [
+        "sum"
+      ],
+      [
+        false
+      ]
+    ],
+    "callback": "susp_inf_mc_callback",
+    "class": "rec_cncpt"
+  },
+  "is_si": {
+    "concepts": ["susp_inf_mc"],
+    "description": "Suspected Infection during ICU stay",
+    "target": "id_tbl",
+    "category": "Misc.",
+    "callback": "is_si_callback",
+    "class": "rec_cncpt"
+  },
+
+  "DM": {
+    "description": "No. comorbidities",
+    "category": "Misc.",
+    "target": "id_tbl",
+    "sources": {
+      "mimic_demo": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "DM_callback"
+        }
+      ],
+      "mimic": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "DM_callback"
+        }
+      ],
+      "eicu_demo": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "DM_callback"
+        }
+      ],
+      "eicu": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "DM_callback"
+        }
+      ]
+    }
+  },
+  "CPD": {
+    "description": "No. comorbidities",
+    "category": "Misc.",
+    "target": "id_tbl",
+    "sources": {
+      "mimic_demo": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "CPD_callback"
+        }
+      ],
+      "mimic": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "CPD_callback"
+        }
+      ],
+      "eicu_demo": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "CPD_callback"
+        }
+      ],
+      "eicu": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "CPD_callback"
+        }
+      ]
+    }
+  },
+  "LD": {
+    "description": "No. comorbidities",
+    "category": "Misc.",
+    "target": "id_tbl",
+    "sources": {
+      "mimic_demo": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "LD_callback"
+        }
+      ],
+      "mimic": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "LD_callback"
+        }
+      ],
+      "eicu_demo": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "LD_callback"
+        }
+      ],
+      "eicu": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "LD_callback"
+        }
+      ]
+    }
+  },
+  "CRF": {
+    "description": "No. comorbidities",
+    "category": "Misc.",
+    "target": "id_tbl",
+    "sources": {
+      "mimic_demo": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "CRF_callback"
+        }
+      ],
+      "mimic": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "CRF_callback"
+        }
+      ],
+      "eicu_demo": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "CRF_callback"
+        }
+      ],
+      "eicu": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "CRF_callback"
+        }
+      ]
+    }
+  },
+  "Cancer": {
+    "description": "No. comorbidities",
+    "category": "Misc.",
+    "target": "id_tbl",
+    "sources": {
+      "mimic_demo": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "Cancer_callback"
+        }
+      ],
+      "mimic": [
+        {
+          "table": "diagnoses_icd",
+          "sub_var": "icd9_code",
+          "class": "col_itm",
+          "callback": "Cancer_callback"
+        }
+      ],
+      "eicu_demo": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "Cancer_callback"
+        }
+      ],
+      "eicu": [
+        {
+          "table": "diagnosis",
+          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "Cancer_callback"
+        }
+      ]
+    }
+  }
+}
