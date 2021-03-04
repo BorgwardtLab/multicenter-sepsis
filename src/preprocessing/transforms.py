@@ -125,7 +125,8 @@ class DaskIDTransformer(TransformerMixin):
 
     def __init_subclass__(cls, *args, **kwargs):
         if not hasattr(cls, 'transform_id'):
-            raise TypeError('Class must take a transform_id method')
+            print('Warning: Class must take a transform_id method')
+            # raise TypeError
         return super().__init_subclass__(*args, **kwargs)
 
     def fit(self, df, y=None):
