@@ -16,7 +16,8 @@ ids = tuple(df['stay_id'].unique()[:5])
 filt = [('stay_id', 'in', ids)]
 
 # read subset of ids:
-df2 = dd.read_parquet(path, engine='pyarrow', filters=filt).compute()
+cols = ['stay_id', 'stay_time', 'sep3']
+df2 = dd.read_parquet(path, engine='pyarrow-dataset', columns=cols, filters=filt).compute()
 
 df3 = pd.read_parquet(path, engine='pyarrow', filters=filt)
 
