@@ -1,8 +1,10 @@
 """Feature extraction pipeline."""
+from collections import OrderedDict
 import json
 from pathlib import Path
 import time
 
+import numpy as np
 import dask.dataframe as dd
 from dask.distributed import Client, progress
 import pyarrow.parquet as pq
@@ -48,27 +50,27 @@ def check_time_sorted(df):
     return (df[VM_DEFAULT("time")].diff() <= 0).sum() == 0
 
 
-# def get_rows_per_patient(filename):
-#     ids = pq.read_table(filename, columns=[VM_DEFAULT("id")])
-#     unique_ids, counts = np.unique(ids, return_counts=True)
-#     return OrderedDict(zip(unique_ids, counts))
-#
-#
-# def compute_devisions(rows_per_patient, max_rows):
-#     divisions = []
-#     cur_count = 0
-#     for patient_id, n_obs in rows_per_patient.items():
-#         if (len(divisions) == 0) or (cur_count + n_obs > max_rows and cur_count != 0):
-#             # Either first partition or we cannot add more to the current
-#             # partition
-#             divisions.append(patient_id)
-#             cur_count = n_obs
-#         else:
-#             cur_count += n_obs
-#
-#     if cur_count != 0:
-#         divisions.append(list(rows_per_patient.keys())[-1])
-#     return np.array(divisions)
+def get_rows_per_patient(filename):
+    ids = pq.read_table(filename, columns=[VM_DEFAULT("id")])
+    unique_ids, counts = np.unique(ids, return_counts=True)
+    return OrderedDict(zip(unique_ids, counts))
+
+
+def compute_devisions(rows_per_patient, max_rows):
+    divisions = []
+    cur_count = 0
+    for patient_id, n_obs in rows_per_patient.items():
+        if (len(divisions) == 0) or (cur_count + n_obs > max_rows and cur_count != 0):
+            # Either first partition or we cannot add more to the current
+            # partition
+            divisions.append(patient_id)
+            cur_count = n_obs
+        else:
+            cur_count += n_obs
+
+    if cur_count != 0:
+        divisions.append(list(rows_per_patient.keys())[-1])
+    return divisions
 
 def main(input_filename, split_filename, output_filename, n_workers):
     client = Client(
@@ -78,10 +80,10 @@ def main(input_filename, split_filename, output_filename, n_workers):
         local_directory="/local0/tmp/dask2",
     )
     start = time.time()
-    # print("Computing patient partitions...")
-    # rows_per_patient = get_rows_per_patient(input_filename)
-    # # Initial divisions
-    # divisions1 = compute_devisions(rows_per_patient, max_partition_size)
+    print("Computing patient partitions...")
+    rows_per_patient = get_rows_per_patient(input_filename)
+    # Initial divisions
+    divisions1 = compute_devisions(rows_per_patient, 1000)
     # # After lookback features
     # divisions2 = compute_devisions(rows_per_patient, max_partition_size // 5)
     # # After wavelets
@@ -97,7 +99,7 @@ def main(input_filename, split_filename, output_filename, n_workers):
         engine='pyarrow',
         split_row_groups=5  # This assumes that there are approx 100 rows per row group
     )
-    data = data.set_index(VM_DEFAULT("id"), sorted=True)
+    data = data.set_index(VM_DEFAULT("id"), sorted=True).repartition(divisions=divisions1)
     is_sorted = data.groupby(data.index.name, group_keys=False, sort=False).apply(check_time_sorted)
     assert all(is_sorted.compute())
 
