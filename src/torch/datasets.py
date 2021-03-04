@@ -6,6 +6,11 @@ import pyarrow.parquet as pq
 from torch.utils.data import Dataset
 import json
 
+from src.variables.feature_groups import ColumnFilterLight
+
+
+# def filter_columns(columns, )
+
 
 class ParquetDataset(Dataset):
     METADATA_FILENAME = '_metadata'
@@ -19,10 +24,10 @@ class ParquetDataset(Dataset):
         self.as_pandas = as_pandas
         self.reader_args = kwargs
 
-        self._build_id_lookup()
+        self._parse_and_store_metadata()
 
-    def _build_id_lookup(self):
-        ids_sorted = sorted(ids)
+    def _parse_and_store_metadata(self):
+        ids_sorted = sorted(self.ids)
 
         metadata = pq.read_metadata(
             os.path.join(self.path, self.METADATA_FILENAME))
@@ -50,6 +55,7 @@ class ParquetDataset(Dataset):
                 else:
                     id_to_file_mapping[cur_id] = cur_file
 
+        self._dataset_columns = metadata.schema.names
         self._id_to_file_lookup = id_to_file_mapping
 
     def __getitem__(self, index):
@@ -67,6 +73,97 @@ class ParquetDataset(Dataset):
         if self.as_pandas:
             return table.to_pandas()
         return table
+
+
+class SplittedDataset(ParquetDataset):
+    """Dataset which reads splits from json file."""
+
+    def __init__(self, path, split_file, split, feature_set, only_physionet_features=False, fold=0):
+        with open(split_file, 'r') as f:
+            if split in ['train', 'validation']:
+                ids = json.load(f)['dev']['split_{}'.format(fold)][split]
+            else:
+                ids = json.load(f)[split]['split_{}'.format(fold)]
+
+        super().__init__(
+            path, ids, 'stay_id', columns=None, as_pandas=True)
+
+        if only_physionet_features:
+            self.columns = ColumnFilterLight(
+                self._dataset_columns).physionet_set(feature_set=feature_set)
+        else:
+            self.columns = ColumnFilterLight(
+                self._dataset_columns).feature_set(name=feature_set)
+
+
+class Physionet2019(SplittedDataset):
+    """Physionet 2019 dataset."""
+
+    def __init__(self, split, feature_set, only_physionet_features=True, fold=0):
+        super().__init__(
+            'datasets/physionet2019/data/parquet/features',
+            'config/splits/splits_physionet2019.json',
+            split,
+            feature_set,
+            only_physionet_features=only_physionet_features,
+            fold=fold
+        )
+
+
+class MIMICDemo(SplittedDataset):
+    """Physionet 2019 dataset."""
+
+    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        super().__init__(
+            'datasets/mimic/data/parquet/features',
+            'config/splits/splits_mimic_demo.json',
+            split,
+            feature_set,
+            only_physionet_features=only_physionet_features,
+            fold=fold
+        )
+
+
+class Hirid(SplittedDataset):
+    """Hirid dataset."""
+
+    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        super().__init__(
+            'datasets/hirid/data/parquet/features',
+            'config/splits/splits_hirid.json',
+            split,
+            feature_set,
+            only_physionet_features=only_physionet_features,
+            fold=fold
+        )
+
+
+class EICU(SplittedDataset):
+    """EICU dataset."""
+
+    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        super().__init__(
+            'datasets/eicu/data/parquet/features',
+            'config/splits/splits_eicu.json',
+            split,
+            feature_set,
+            only_physionet_features=only_physionet_features,
+            fold=fold
+        )
+
+
+class AUMC(SplittedDataset):
+    """AUMC dataset."""
+
+    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        super().__init__(
+            'datasets/aumc/data/parquet/features',
+            'config/splits/splits_aumc.json',
+            split,
+            feature_set,
+            only_physionet_features=only_physionet_features,
+            fold=fold
+        )
 
 
 if __name__ == '__main__':
