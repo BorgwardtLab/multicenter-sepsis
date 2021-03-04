@@ -76,7 +76,7 @@ class ParquetDataset(Dataset):
 
 
 class SplittedDataset(ParquetDataset):
-    """Dataset which reads splits from json file."""
+    """Dataset with predefined splits and feature groups."""
 
     def __init__(self, path, split_file, split, feature_set, only_physionet_features=False, fold=0):
         with open(split_file, 'r') as f:
@@ -111,12 +111,26 @@ class Physionet2019(SplittedDataset):
 
 
 class MIMICDemo(SplittedDataset):
-    """Physionet 2019 dataset."""
+    """MIMIC demo dataset."""
 
     def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
         super().__init__(
             'datasets/mimic/data/parquet/features',
             'config/splits/splits_mimic_demo.json',
+            split,
+            feature_set,
+            only_physionet_features=only_physionet_features,
+            fold=fold
+        )
+
+
+class MIMIC(SplittedDataset):
+    """MIMIC dataset."""
+
+    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        super().__init__(
+            'datasets/mimic/data/parquet/features',
+            'config/splits/splits_mimic.json',
             split,
             feature_set,
             only_physionet_features=only_physionet_features,
