@@ -4,9 +4,8 @@ from joblib import Parallel, delayed
 import argparse
 import pathlib
 import json
-from dask.distributed import Client
+from dask.distributed import Client, progress
 import dask.dataframe as dd
-import dask.diagnostics as ddi
 
 from IPython import embed
 from src.variables.mapping import VariableMapping
@@ -95,8 +94,10 @@ class DaskLambdaCalculator(DaskIDTransformer):
         
         u_fp = self.u_fp
         #output = self.dask_pipe.transform(data).compute()
-        output = self.transform(data).compute() 
-        
+        output = self.transform(data) #.compute() 
+        output = output.persist()
+        progress(output)
+        output = output.compute() 
         # Column sumns of output:
         s = output.sum(axis=0)
         
@@ -356,9 +357,6 @@ if __name__ == "__main__":
         threads_per_worker=1,
         local_directory="/local0/tmp/dask2",
         )
-        progress_bar = ddi.ProgressBar()
-        progress_bar.register()
-
         n_patients = len(df.index.unique())
         n_partitions = min(5000, np.floor(n_patients/5))
         df = df.reset_index().set_index([VM_DEFAULT('id'), VM_DEFAULT('time')])
