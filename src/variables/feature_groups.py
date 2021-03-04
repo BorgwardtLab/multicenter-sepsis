@@ -157,6 +157,13 @@ class ColumnFilter:
         assert len(u[c>1]) == 0
         return total_cols
 
+class ColumnFilterLight(ColumnFilter):
+    """Column filter which uses an existing list of columns."""
+
+    def __init__(self, dataset_columns):
+        self.columns = dataset_columns
+        self.groups = self.columns_to_groups(self.columns)
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
