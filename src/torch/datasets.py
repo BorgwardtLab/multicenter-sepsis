@@ -9,9 +9,6 @@ import json
 from src.variables.feature_groups import ColumnFilterLight
 
 
-# def filter_columns(columns, )
-
-
 class ParquetDataset(Dataset):
     METADATA_FILENAME = '_metadata'
 
@@ -71,14 +68,20 @@ class ParquetDataset(Dataset):
             ** self.reader_args
         )
         if self.as_pandas:
-            return table.to_pandas()
+            return table.to_pandas(self_destruct=True, ignore_metadata=True)
         return table
 
 
 class SplittedDataset(ParquetDataset):
     """Dataset with predefined splits and feature groups."""
 
-    def __init__(self, path, split_file, split, feature_set, only_physionet_features=False, fold=0):
+    ID_COLUMN = 'stay_id'
+    TIME_COLUMN = 'stay_time'
+    # TODO: It looks like age and sex are not present in the data anymore
+    STATIC_COLUMNS = ['weight', 'height']
+
+    def __init__(self, path, split_file, split, feature_set,
+                 only_physionet_features=False, fold=0, transform=None):
         with open(split_file, 'r') as f:
             if split in ['train', 'validation']:
                 ids = json.load(f)['dev']['split_{}'.format(fold)][split]
@@ -86,7 +89,7 @@ class SplittedDataset(ParquetDataset):
                 ids = json.load(f)[split]['split_{}'.format(fold)]
 
         super().__init__(
-            path, ids, 'stay_id', columns=None, as_pandas=True)
+            path, ids, self.ID_COLUMN, columns=None, as_pandas=True)
 
         if only_physionet_features:
             self.columns = ColumnFilterLight(
@@ -94,6 +97,25 @@ class SplittedDataset(ParquetDataset):
         else:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).feature_set(name=feature_set)
+        self.transform = transform
+
+    def __getitem__(self, index):
+        df = super().__getitem__(index)
+        id = df[self.ID_COLUMN].values[0]
+        times = df[self.TIME_COLUMN].values
+        statics = df[self.STATIC_COLUMNS].values[0]
+        ts = df.drop(
+            columns=[self.ID_COLUMN, self.TIME_COLUMN] + self.STATIC_COLUMNS)
+        out = {
+            'id': id,
+            'times': times,
+            'statics': statics,
+            'ts': ts.values
+        }
+
+        if self.transform:
+            out = self.transform(out)
+        return out
 
 
 class Physionet2019(SplittedDataset):
