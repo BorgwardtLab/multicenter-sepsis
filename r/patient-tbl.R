@@ -12,7 +12,7 @@ invisible(lapply(list.files(utils_dir, full.names = TRUE), source))
 Sys.setenv(RICU_CONFIG_PATH = file.path(root, "config", "ricu-dict"))
 
 src <- c("mimic", "eicu", "hirid", "aumc")
-cohort_list <- read_json("~/ICU/multicenter-sepsis/config/cohorts.json",                                 simplifyVector = T)
+cohort_list <- read_json(file.path(root, "config", "cohorts.json"),                                      simplifyVector = T)
 cohorts <- lapply(src, function(x) cohort_list[[x]][["final"]])
 names(cohorts) <- src
 
