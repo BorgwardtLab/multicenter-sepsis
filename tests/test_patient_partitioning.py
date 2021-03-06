@@ -1,5 +1,7 @@
 from collections import OrderedDict
 import pandas as pd
+import numpy as np
+import pyarrow.parquet as pq
 import pytest
 from src.preprocessing.extract_features import get_rows_per_patient, compute_devisions
 
@@ -23,13 +25,27 @@ def test_simple_example():
     'datasets/downloads/eicu_0.3.0.parquet',
     'datasets/downloads/hirid_0.3.0.parquet',
     'datasets/downloads/aumc_0.3.0.parquet',
+])
+def test_ids_sorted(dataset_file):
+    ids = pq.read_table(dataset_file, columns=['stay_id'])
+    assert np.all(np.diff(ids) >= 0)
 
 
-])  # train and val use same code path
-def test_datasets(dataset_file):
+@pytest.mark.parametrize('dataset_file,max_rows', [
+    ('datasets/downloads/mimic_demo_0.3.0.parquet', 1000),
+    ('datasets/downloads/mimic_0.3.0.parquet', 1000),
+    ('datasets/downloads/eicu_0.3.0.parquet', 1000),
+    ('datasets/downloads/hirid_0.3.0.parquet', 1000),
+    ('datasets/downloads/aumc_0.3.0.parquet', 1000)
+])
+def test_datasets(dataset_file, max_rows):
     rows_per_patient = get_rows_per_patient(dataset_file)
     pd_row_per_patient = pd.Series(
         index=rows_per_patient.keys(), data=rows_per_patient.values())
-    divisions = compute_devisions(rows_per_patient, 1000)
+    divisions = compute_devisions(rows_per_patient, max_rows)
     for begin, end in zip(divisions[:-1], divisions[1:]):
-        assert pd_row_per_patient[begin:end].sum() <= 1000
+        # Pandas label based slicing is inclusive!
+        if not pd_row_per_patient.loc[begin:end-1].sum() <= max_rows:
+            print(begin, end)
+            print(pd_row_per_patient.loc[begin:end-1])
+            assert pd_row_per_patient.loc[begin:end-1].sum() <= max_rows
