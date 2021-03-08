@@ -31,7 +31,7 @@ class ColumnFilter:
         
         """
         pl = ParquetLoader(path)
-        table = pl.load(pandas=False)
+        table = pl.load(form='pyarrow')
         self.columns = table.column_names
         self.groups = self.columns_to_groups(self.columns)
 
