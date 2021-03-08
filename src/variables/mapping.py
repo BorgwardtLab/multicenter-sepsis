@@ -112,6 +112,8 @@ class VariableMapping:
                 if cat in ['static', 'baseline']: #hack as cat is technically a series 
                     if i==0:
                         result.append(v)
+                elif cat in ['extra']:
+                    continue
                 else: #add suffix
                     v = '_'.join([v, suffix])
                     result.append(v)
