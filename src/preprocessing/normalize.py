@@ -6,12 +6,12 @@ import json
 import pathlib
 import os
 import glob 
-import dask.dataframe as ddf
-import dask.diagnostics as dd
+import dask.dataframe as dd
 from dask.distributed import Client, progress
 
 from src.sklearn.loading import SplitInfo, ParquetLoader
-
+from src.preprocessing.extract_features import \
+    ( get_rows_per_patient, compute_divisions ) 
 from src.preprocessing.transforms import Normalizer
 
 from src.variables.mapping import VariableMapping
@@ -46,12 +46,24 @@ def main(
     #progress_bar.register()
     
     client = Client(
-        n_workers=20,
-        memory_limit="10GB",
-        threads_per_worker=2,
+        n_workers=10,
+        memory_limit="20GB",
+        threads_per_worker=4,
         local_directory="/local0/tmp/dask2",
     )
-    raw_data = ParquetLoader(args.input_file).load(form='dask')
+    #raw_data = ParquetLoader(args.input_file, form='dask', engine='pyarrow').load()
+    raw_data = dd.read_parquet(
+        args.input_file,
+        engine='pyarrow-dataset',
+        #split_row_groups=True
+        chunksize=40 
+    )
+    #raw_data = raw_data.reset_index().set_index(VM_DEFAULT("id"), sorted=True) #shuffle='disk') #disk
+ 
+    ## try repartition for known divisions: 
+    #rows_per_patient = get_rows_per_patient(args.input_file)
+    #divisions1 = compute_divisions(rows_per_patient, 2000)
+    #raw_data = raw_data.repartition(divisions=divisions1)
 
     #if os.path.isdir(input_filename):
     #   input_filename = glob.glob(
@@ -80,11 +92,18 @@ def main(
     #    norm.stats['means'],
     #    norm.stats['stds']
     #)
-    means = norm.stats['means']
-    means = compute_with_progress(means)
+    means = norm.stats['means'] #.compute()
+    #means = compute_with_progress(means)
     
-    stds = norm.stats['stds']
-    stds = compute_with_progress(stds)
+    stds = norm.stats['stds'] #.compute()
+    #stds = compute_with_progress(stds)
+    
+    means, stds = client.compute([means, stds])
+    progress(means)
+    means = means.result()
+    stds = stds.result()
+
+    client.close()
 
     results = {
         'means': means.to_dict(),
