@@ -4,18 +4,13 @@ In this repo, we gather pipelining code for a multicenter sepsis prediction effo
 
 ## Python pipeline:  
 To set up python libraries run:  
-```>pipenv install --skip-lock```  
+```>pipenv install```  
 ```>pipenv shell```  
 
 ### Datasets   
 
-`datasets`: (code for downloading and extracting this dataset)
-- `physionet2019`
---> inside the dataset folder, to download and extract the dataset, simply run:  
- ```make```  
-
-for the other datasets: mimic3, eicu, hirid, aumc: first download the zip files from polybox (internal for now),
-then move the zips to the following path:  
+(internal usage: run ``` source scripts/download_from_euler.sh ``` )  
+All data will be downloaded to:   
 ```datasets/downloads/```  
 
 ### Source code
@@ -26,19 +21,15 @@ then move the zips to the following path:
 - `sklearn`: sklearn-based pipeline for boosted trees baselines
     
 ### Running the preprocessing
-```source scripts/run_preprocessing_extended.sh```  
+```source scripts/run_preprocessing.sh```  
 
-### Sanity checks:
-For checking, if all datasets were preprocessed properly (e.g. dimensions of all instances are consistent within a dataset (one-hot encoding of categorical variables could cause problems over different splits)), run:  
-```>python -m scripts.sanity_checks.check_datasets```
- 
 ### Model overview   
 - src/torch: pytorch-based pipeline and models (currently GRU and attention model)  
 - src/sklearn: sklearn-based pipeline for lightGBM and LogReg models 
 
 ### Running a sklearn model hyperparameter search      
 For running a hyperparameter search using sklearn models, run:  
- ```>source scripts/run_sklearn_extended.sh <results_folder_name>```   
+ ```>source scripts/run_sklearn.sh <results_folder_name>```   
 
 #### Training a single dataset and classifier:     
 ```>python src/sklearn/main.py``` runs a hyperparameter search of a sklearn-based online classifier.
