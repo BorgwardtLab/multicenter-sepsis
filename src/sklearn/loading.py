@@ -52,16 +52,30 @@ class SplitInfo:
 
 class ParquetLoader:
     """Loads data from parquet by filtering for split ids."""
-    def __init__(self, path):
+    def __init__(self, path, form='pandas', engine=None):
+        """
+        Arguments:
+        - path: path to Parquet file (or folder)
+        - form: format of returned table (pandas, dask, pyarrow)
+        - engine: which engine to use for dask
+            --> if loading specific ids `pyarrow-dataset` should be used,
+            otherwise `pyarrow` which is robuster for general downstream 
+            tasks - however when filtering for ids reads entire row groups 
+            (which is typically not what we want here) 
+        """
         self.path = path
+        self.form = form
+        self.engine = engine
+        if engine is None and form == 'dask':
+            self.engine = 'pyarrow-dataset'
+        assert form in ['dask', 'pandas', 'pyarrow']
     
-    def load(self, ids=None, filters=None, columns=None, form='pandas'):
+    def load(self, ids=None, filters=None, columns=None):
         """
         Args:
         - ids: which patient ids to load
         - filters: list of additional (optional) 
             filters: e.g. [('age', <, 70)]
-        - form: ['pandas', 'dask', 'pyarrow'] 
         """
         filt = []
         if ids:
@@ -70,27 +84,27 @@ class ParquetLoader:
             filt.extend(filters)
         if len(filt) == 0:
             filt = None
-        if form == 'dask':
+        if self.form == 'dask':
             import dask.dataframe as dd
+            print(f'Using dask with engine {self.engine}.')
             return dd.read_parquet(
                 self.path, 
                 filters=filt, 
-                engine='pyarrow-dataset', 
+                engine=self.engine, 
                 columns=columns
             )
-        elif form in ['pandas', 'pyarrow']:
+        elif self.form in ['pandas', 'pyarrow']:
             dataset = pq.ParquetDataset(
                 self.path,
                 use_legacy_dataset=False, 
                 filters=filt
             )
             data = dataset.read(columns) if columns else dataset.read()
-            if form == 'pandas':
+            if self.form == 'pandas':
                 return data.to_pandas()
             else: 
                 return data 
-        else:
-            raise ValueError('No valid format provided.')
+
 
 def load_and_transform_data(
     data_path,

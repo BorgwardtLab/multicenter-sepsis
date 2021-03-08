@@ -347,7 +347,7 @@ if __name__ == "__main__":
     ids = si(args.split_name, args.repetition)
     
     form = 'dask' if args.dask else 'pandas'
-    pl = ParquetLoader(args.input_file)
+    pl = ParquetLoader(args.input_file, form=form)
     col_names = ['id', 'label', 'time']
     
     if form == 'dask':
@@ -375,7 +375,7 @@ if __name__ == "__main__":
 
     # loading data and actually computing lambda:
     print(f'Using {form} format..')
-    df = pl.load(ids, columns=columns, form=form)
+    df = pl.load(ids, columns=columns)
     if form == 'dask':
         assert df.index.name == VM_DEFAULT('id')
         # assert that we load index properly
