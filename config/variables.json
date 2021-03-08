@@ -558,5 +558,19 @@
     "type": ["integer"],
     "name": ["mews"],
     "category": ["baseline"]
+  },
+  {
+    "concept": ["death"],
+    "challenge": {},
+    "type": ["logical"],
+    "name": ["death"],
+    "category": ["extra"]
+  },
+  {
+    "concept": ["abx"],
+    "challenge": {},
+    "type": ["logical"],
+    "name": ["abx"],
+    "category": ["extra"]
   }
 ]
