@@ -75,7 +75,8 @@ def compute_devisions(rows_per_patient, max_rows):
 
     if cur_count != 0:
         divisions.append(list(rows_per_patient.keys())[-1])
-    return divisions
+    return tuple(divisions)
+
 
 def main(input_filename, split_filename, output_filename, n_workers):
     client = Client(
@@ -158,7 +159,7 @@ def main(input_filename, split_filename, output_filename, n_workers):
         output_filename, append=False, overwrite=True,
         engine='pyarrow-dataset', write_metadata_file=False, compute=False,
         compression='SNAPPY', write_statistics=True,
-        row_group_size=2000, use_dictionary=False #row_group_size=500
+        row_group_size=2000, use_dictionary=False  # row_group_size=500
     )
     future = client.compute(all_done)
     progress(future)

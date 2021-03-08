@@ -66,7 +66,19 @@ create_parquet <- function(x, name, ...) {
   arrow::write_parquet(x, paste0(name, ".parquet"), ...)
 }
 
-read_parquet <- function(name, cols = NULL) {
+read_parquet <- function(name, cols = NULL, pids = NULL) {
+
+  read_subset <- function(n, x, i, j = NULL) {
+
+    res <- x$ReadRowGroup(n)
+    res <- res$Filter(res$GetColumnByName("stay_id")$as_vector() %in% i)
+
+    if (!is.null(j)) {
+      res <- res$SelectColumns(j)
+    }
+
+    as.data.frame(res)
+  }
 
   file <- list.files(
     dirname(name),
@@ -76,18 +88,33 @@ read_parquet <- function(name, cols = NULL) {
 
   file <- tail(sort(file), n = 1L)
 
-  if (is.null(cols)) {
+  if (is.null(cols) && is.null(pids)) {
 
     res <- arrow::read_parquet(file)
 
   } else {
 
     readr <- arrow::ParquetFileReader$create(file)
-    avail <- names(readr$GetSchema())
 
-    assert_that(is.character(cols), all(cols %in% avail))
+    if (!is.null(cols)) {
 
-    res <- as.data.frame(readr$ReadTable(match(cols, avail) - 1L))
+      avail <- names(readr$GetSchema())
+
+      assert_that(is.character(cols), all(cols %in% avail))
+
+      cols <- match(cols, avail) - 1L
+    }
+
+    if (is.null(pids)) {
+
+      res <- as.data.frame(readr$ReadTable(cols))
+
+    } else {
+
+      res <- lapply(seq.int(readr$num_row_groups) - 1L, read_subset, readr,
+                    pids, cols)
+      res <- data.table::rbindlist(res)
+    }
   }
 
   if ("stay_id" %in% colnames(res)) {

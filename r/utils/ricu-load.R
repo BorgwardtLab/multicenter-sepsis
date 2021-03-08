@@ -102,20 +102,21 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
 load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
                       min_stay_len = hours(6L), min_n_meas = 4L,
                       min_onset = hours(4L), max_onset = days(7L),
-                      cut_case = hours(24L), cut_ctrl = max_onset + cut_case,
-                      max_miss_win = hours(12L)) {
+                      ub_case = hours(24L), ub_ctrl = max_onset + ub_case,
+                      lb_all = -hours(48L), max_miss_win = hours(12L)) {
 
   pmin_dt <- function(x, y) {
     x[x > y] <- `units<-`(y, units(x))
     x
   }
 
-  truncate_dat <- function(dat, win) {
+  truncate_dat <- function(dat, win, lower) {
 
     join <- paste(id_var(dat), "==", id_var(win))
     vars <- c(meta_vars(dat), data_var(dat))
 
     if (is_ts_tbl(dat)) {
+      dat  <- dat[get(index_var(dat)) >= lower, ]
       dat  <- dat[, c("join_time") := list(get(index_var(dat)))]
       join <- c(join, "join_time <= cuttime")
     }
@@ -179,14 +180,14 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
       " {format_unit(min_stay_len)}].\n")
 
   win <- win[, cuttime := data.table::fifelse(
-    is.na(sep_time), pmin_dt(outtime, cut_ctrl), sep_time + cut_case
+    is.na(sep_time), pmin_dt(outtime, ub_ctrl), sep_time + ub_case
   )]
 
-  msg("--> removing up to {format_unit(sum(win$outtime - win$cuttime))}",
-      " due to censoring data {format_unit(cut_case)} after onsets",
-      " and {format_unit(cut_ctrl)} into stays.\n")
+  msg("--> removing time-points due to censoring data {format_unit(ub_case)}",
+      " after onsets and [{format_unit(lb_all)}, {format_unit(ub_ctrl)}]",
+      " w.r.t. stay admission.\n")
 
-  dat <- lapply(c(dat$dat, list(dat$sep)), truncate_dat, win)
+  dat <- lapply(c(dat$dat, list(dat$sep)), truncate_dat, win, lb_all)
 
   is_ts <- vapply(dat, is_ts_tbl, logical(1L))
   is_id <- vapply(dat, is_id_tbl, logical(1L)) & ! is_ts
@@ -225,7 +226,7 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
   cfg <- read_var_json(var_cfg)
   cfg <- cfg[!is.na(cfg$concept), ]
 
-  tsn <- cfg[!cfg$category %in% c("static", "baseline"), ]
+  tsn <- cfg[!cfg$category %in% c("static", "baseline", "extra"), ]
   exp <- !nav[tsn$concept]
   exp <- names(exp[exp])
 
