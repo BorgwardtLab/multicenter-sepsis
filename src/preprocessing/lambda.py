@@ -355,17 +355,11 @@ if __name__ == "__main__":
         col_names.remove('id')  
     columns= [VM_DEFAULT(concept) for concept in col_names ]
    
-    print(f'Using {form} format..')
-    df = pl.load(ids, columns=columns, form=form)
-    if form == 'dask':
-        assert df.index.name == VM_DEFAULT('id')
-        # assert that we load index properly
-
     if args.dask:
         client = Client(
         n_workers=20,
         memory_limit="10GB",
-        threads_per_worker=1,
+        threads_per_worker=2,
         local_directory="/local0/tmp/dask2",
         )
         #n_patients = len(df.index.unique())
@@ -378,7 +372,14 @@ if __name__ == "__main__":
         calc = DaskLambdaCalculator()
     else:
         calc = LambdaCalculator(n_jobs=args.n_jobs)
-        
+
+    # loading data and actually computing lambda:
+    print(f'Using {form} format..')
+    df = pl.load(ids, columns=columns, form=form)
+    if form == 'dask':
+        assert df.index.name == VM_DEFAULT('id')
+        # assert that we load index properly
+
     lam = calc(df)
     results = {'lam': lam}
     print(results)
