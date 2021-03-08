@@ -55,37 +55,42 @@ class ParquetLoader:
     def __init__(self, path):
         self.path = path
     
-    def load(self, ids=None, filters=None, columns=None, pandas=True):
+    def load(self, ids=None, filters=None, columns=None, form='pandas'):
         """
         Args:
         - ids: which patient ids to load
         - filters: list of additional (optional) 
             filters: e.g. [('age', <, 70)]
-        - pandas: flag if pd.DataFrame should 
-            be returned
+        - form: ['pandas', 'dask', 'pyarrow'] 
         """
         filt = []
         if ids:
-            filt = [ (VM_DEFAULT('id'), 'in', ids ) ]
+            filt = [ (VM_DEFAULT('id'), 'in', tuple(ids) ) ]
         if filters:
             filt.extend(filters)
-        if filt:
+        if len(filt) == 0:
+            filt = None
+        if form == 'dask':
+            import dask.dataframe as dd
+            return dd.read_parquet(
+                self.path, 
+                filters=filt, 
+                engine='pyarrow-dataset', 
+                columns=columns
+            )
+        elif form in ['pandas', 'pyarrow']:
             dataset = pq.ParquetDataset(
                 self.path,
                 use_legacy_dataset=False, 
                 filters=filt
             )
+            data = dataset.read(columns) if columns else dataset.read()
+            if form == 'pandas':
+                return data.to_pandas()
+            else: 
+                return data 
         else:
-            dataset = pq.ParquetDataset(
-                self.path,
-                use_legacy_dataset=False, 
-            )
- 
-        data = dataset.read(columns) if columns else dataset.read()
-        if pandas:
-            return data.to_pandas()
-        else: 
-            return data 
+            raise ValueError('No valid format provided.')
 
 def load_and_transform_data(
     data_path,
