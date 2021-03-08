@@ -40,6 +40,8 @@ def test_ids_sorted(dataset_file):
 ])
 def test_datasets(dataset_file, max_rows):
     rows_per_patient = get_rows_per_patient(dataset_file)
+    longest_id = max(rows_per_patient, key=rows_per_patient.get)
+    print(f'Longest patient {longest_id} has {rows_per_patient[longest_id]} rows.') 
     pd_row_per_patient = pd.Series(
         index=rows_per_patient.keys(), data=rows_per_patient.values())
     divisions = compute_devisions(rows_per_patient, max_rows)
