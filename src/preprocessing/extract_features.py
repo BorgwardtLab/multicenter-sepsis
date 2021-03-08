@@ -61,7 +61,7 @@ def get_rows_per_patient(filename):
     return OrderedDict(zip(unique_ids, counts))
 
 
-def compute_devisions(rows_per_patient, max_rows):
+def compute_divisions(rows_per_patient, max_rows):
     divisions = []
     cur_count = 0
     for patient_id, n_obs in rows_per_patient.items():
@@ -89,7 +89,7 @@ def main(input_filename, split_filename, output_filename, n_workers):
     print("Computing patient partitions...")
     rows_per_patient = get_rows_per_patient(input_filename)
     # Initial divisions
-    divisions1 = compute_devisions(rows_per_patient, 2000)
+    divisions1 = compute_divisions(rows_per_patient, 2000)
     # # After lookback features
     # divisions2 = compute_devisions(rows_per_patient, max_partition_size // 5)
     # # After wavelets
