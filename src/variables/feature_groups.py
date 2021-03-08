@@ -30,8 +30,8 @@ class ColumnFilter:
         - path: path to example feature parquet dump that indicates data format
         
         """
-        pl = ParquetLoader(path)
-        table = pl.load(form='pyarrow')
+        pl = ParquetLoader(path, form='pyarrow')
+        table = pl.load()
         self.columns = table.column_names
         self.groups = self.columns_to_groups(self.columns)
 
