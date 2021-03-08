@@ -8,8 +8,9 @@ import os
 import glob 
 import dask.dataframe as ddf
 import dask.diagnostics as dd
+from dask.distributed import Client, progress
 
-from src.sklearn.loading import SplitInfo
+from src.sklearn.loading import SplitInfo, ParquetLoader
 
 from src.preprocessing.transforms import Normalizer
 
@@ -26,6 +27,10 @@ VM_CONFIG_PATH = str(
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
+def compute_with_progress(x):
+    x = x.persist()  # start computation in the background
+    progress(x)      # watch progress
+    return x.compute()
 
 def main(
     input_filename,
@@ -36,18 +41,27 @@ def main(
 ):
     """Perform normalization of input data, subject to a certain split."""
     patient_ids = SplitInfo(split_filename)(split_name, repetition)
-
-    progress_bar = dd.ProgressBar()
-    progress_bar.register()
-    if os.path.isdir(input_filename):
-       input_filename = glob.glob(
-            os.path.join(input_filename, '*.parquet' )
-        ) 
-    raw_data = ddf.read_parquet(
-        input_filename,
-        engine="pyarrow-legacy",
-        chunksize=1
+    
+    #progress_bar = dd.ProgressBar()
+    #progress_bar.register()
+    
+    client = Client(
+        n_workers=20,
+        memory_limit="10GB",
+        threads_per_worker=2,
+        local_directory="/local0/tmp/dask2",
     )
+    raw_data = ParquetLoader(args.input_file).load(form='dask')
+
+    #if os.path.isdir(input_filename):
+    #   input_filename = glob.glob(
+    #        os.path.join(input_filename, '*.parquet' )
+    #    ) 
+    #raw_data = ddf.read_parquet(
+    #    input_filename,
+    #    engine="pyarrow-dataset"#, #pyarrow-legacy
+    #    #chunksize=1
+    #)
     ind_cols = [col for col in raw_data.columns if '_indicator' in col]
 
     drop_cols = [
@@ -62,10 +76,15 @@ def main(
     norm = Normalizer(patient_ids, drop_cols=drop_cols)
     norm = norm.fit(raw_data)
 
-    means, stds = dask.compute(
-        norm.stats['means'],
-        norm.stats['stds']
-    )
+    #means, stds = dask.compute(
+    #    norm.stats['means'],
+    #    norm.stats['stds']
+    #)
+    means = norm.stats['means']
+    means = compute_with_progress(means)
+    
+    stds = norm.stats['stds']
+    stds = compute_with_progress(stds)
 
     results = {
         'means': means.to_dict(),
