@@ -60,16 +60,14 @@ def main(
         VM_DEFAULT('utility'),
         *VM_DEFAULT.all_cat('baseline'),
         *ind_cols,
-        VM_DEFAULT('id') # index is not in columns
+        #VM_DEFAULT('id') # index is not in columns
     ]
     keep_columns = [col for col in columns if col not in drop_cols]
 
-    #progress_bar = dd.ProgressBar()
-    #progress_bar.register()
     if distributed:
         print('Using distributed dask setup.') 
         client = Client(
-            n_workers=10,
+            n_workers=30,
             memory_limit="20GB",
             threads_per_worker=4,
             local_directory="/local0/tmp/dask2",
@@ -82,14 +80,16 @@ def main(
     raw_data = dd.read_parquet(
         args.input_file,
         columns=keep_columns,
-        engine='pyarrow-dataset',
+        engine='pyarrow', #pyarrow-dataset
+        index=False,
+        ignore_metadata=True
         #split_row_groups=True
-        chunksize=40
+        #chunksize=50 #40
     )
     # we assume that the index is already set to the patient id:
-    assert raw_data.index.name == VM_DEFAULT('id')
+    # assert raw_data.index.name == VM_DEFAULT('id')
 
-    #raw_data = raw_data.reset_index().set_index(VM_DEFAULT("id"), sorted=True) #shuffle='disk') #disk
+    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False) #shuffle='disk') #disk
  
     ## try repartition for known divisions: 
     #rows_per_patient = get_rows_per_patient(args.input_file)
@@ -113,8 +113,9 @@ def main(
         means = norm.stats['means'] #.compute()
         stds = norm.stats['stds'] #.compute()
         
-        means, stds = client.compute([means, stds])
-        progress(means)
+        means, stds = client.compute([means, stds]) #client.compute()
+        progress([means, stds])
+
         means = means.result()
         stds = stds.result()
 
