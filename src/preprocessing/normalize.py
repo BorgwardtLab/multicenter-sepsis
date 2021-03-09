@@ -9,6 +9,7 @@ import glob
 import dask.dataframe as dd
 from dask.distributed import Client, progress
 import dask.diagnostics as ddi
+import pyarrow.parquet as pq
 
 from src.sklearn.loading import SplitInfo, ParquetLoader
 from src.preprocessing.extract_features import \
@@ -33,6 +34,10 @@ def compute_with_progress(x):
     progress(x)      # watch progress
     return x.compute()
 
+def get_columns(filepath):
+    schema = pq.read_metadata(os.path.join(filepath, '_metadata'))
+    return schema.names
+
 def main(
     input_filename,
     split_filename,
@@ -43,7 +48,21 @@ def main(
 ):
     """Perform normalization of input data, subject to a certain split."""
     patient_ids = SplitInfo(split_filename)(split_name, repetition)
-    
+
+    columns = get_columns(args.input_file)
+
+    ind_cols = [col for col in columns if '_indicator' in col]
+
+    drop_cols = [
+        VM_DEFAULT('label'),
+        VM_DEFAULT('sex'),
+        VM_DEFAULT('time'),
+        VM_DEFAULT('utility'),
+        *VM_DEFAULT.all_cat('baseline'),
+        *ind_cols
+    ]
+    keep_columns = [col for col in columns if col not in drop_cols]
+
     #progress_bar = dd.ProgressBar()
     #progress_bar.register()
     if distributed:
@@ -61,9 +80,10 @@ def main(
     #raw_data = ParquetLoader(args.input_file, form='dask', engine='pyarrow').load()
     raw_data = dd.read_parquet(
         args.input_file,
+        columns=keep_columns,
         engine='pyarrow-dataset',
         #split_row_groups=True
-        chunksize=40 
+        chunksize=40
     )
     #raw_data = raw_data.reset_index().set_index(VM_DEFAULT("id"), sorted=True) #shuffle='disk') #disk
  
@@ -81,18 +101,8 @@ def main(
     #    engine="pyarrow-dataset"#, #pyarrow-legacy
     #    #chunksize=1
     #)
-    ind_cols = [col for col in raw_data.columns if '_indicator' in col]
 
-    drop_cols = [
-        VM_DEFAULT('label'),
-        VM_DEFAULT('sex'),
-        VM_DEFAULT('time'),
-        VM_DEFAULT('utility'),
-        *VM_DEFAULT.all_cat('baseline'),
-        *ind_cols
-    ]
-
-    norm = Normalizer(patient_ids, drop_cols=drop_cols)
+    norm = Normalizer(patient_ids)
     norm = norm.fit(raw_data)
 
     if distributed:

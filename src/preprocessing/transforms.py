@@ -469,19 +469,27 @@ class Normalizer(TransformerMixin):
         if self.drop_cols is not None:
             return df.drop(columns=self.drop_cols, errors='ignore')
             # ignoring errors useful for downstream loading where we normalize with column subset
+        else:
+            return df
 
     def _compute_stats(self, df):
-        patients = df.loc[self.patient_ids]
+        if self.patient_ids is not None:
+            df = df.loc[self.patient_ids]
         self.stats = {
             # We want to persist these. This ensures that when a worker is
             # killed we don't loose the result of this expensive computation.
-            'means': patients.mean(),
-            'stds': patients.std().apply(self.robustify, eps=self.eps)
+            'means': df.mean(),
+            'stds': self.robustify_vec(df.std(), eps=self.eps)
         }
-    
+
     @staticmethod
     def robustify(x,eps=0.1):
         return 1 if abs(x) < eps else x 
+
+    @staticmethod
+    def robustify_vec(series, eps=0.1):
+        series[series.abs() < eps] = 1
+        return series
 
     def _apply_normalization(self, df):
         assert self.stats is not None
