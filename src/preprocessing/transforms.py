@@ -479,7 +479,7 @@ class Normalizer(TransformerMixin):
             # We want to persist these. This ensures that when a worker is
             # killed we don't loose the result of this expensive computation.
             'means': df.mean(),
-            'stds': self.robustify_vec(df.std(), eps=self.eps)
+            'stds':  df.std().map_partitions(self.robustify_vec, eps=self.eps)
         }
 
     @staticmethod
