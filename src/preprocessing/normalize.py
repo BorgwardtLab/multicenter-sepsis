@@ -8,6 +8,7 @@ import os
 import glob 
 import dask.dataframe as dd
 from dask.distributed import Client, progress
+import dask.diagnostics as ddi
 
 from src.sklearn.loading import SplitInfo, ParquetLoader
 from src.preprocessing.extract_features import \
@@ -37,20 +38,26 @@ def main(
     split_filename,
     split_name,
     repetition,
-    output_filename,
+    output_filename,    
+    distributed
 ):
     """Perform normalization of input data, subject to a certain split."""
     patient_ids = SplitInfo(split_filename)(split_name, repetition)
     
     #progress_bar = dd.ProgressBar()
     #progress_bar.register()
-    
-    client = Client(
-        n_workers=10,
-        memory_limit="20GB",
-        threads_per_worker=4,
-        local_directory="/local0/tmp/dask2",
-    )
+    if distributed:
+        print('Using distributed dask setup.') 
+        client = Client(
+            n_workers=10,
+            memory_limit="20GB",
+            threads_per_worker=4,
+            local_directory="/local0/tmp/dask2",
+        )
+    else: #using local dask, with progress bar
+        progress_bar = ddi.ProgressBar()
+        print('Using local dask setup.')
+        progress_bar.register()
     #raw_data = ParquetLoader(args.input_file, form='dask', engine='pyarrow').load()
     raw_data = dd.read_parquet(
         args.input_file,
@@ -88,22 +95,30 @@ def main(
     norm = Normalizer(patient_ids, drop_cols=drop_cols)
     norm = norm.fit(raw_data)
 
-    #means, stds = dask.compute(
-    #    norm.stats['means'],
-    #    norm.stats['stds']
-    #)
-    means = norm.stats['means'] #.compute()
-    #means = compute_with_progress(means)
-    
-    stds = norm.stats['stds'] #.compute()
-    #stds = compute_with_progress(stds)
-    
-    means, stds = client.compute([means, stds])
-    progress(means)
-    means = means.result()
-    stds = stds.result()
+    if distributed:
+        means = norm.stats['means'] #.compute()
+        stds = norm.stats['stds'] #.compute()
+        
+        means, stds = client.compute([means, stds])
+        progress(means)
+        means = means.result()
+        stds = stds.result()
 
-    client.close()
+        client.close()
+    else:
+        means, stds = dask.compute(
+            norm.stats['means'],
+            norm.stats['stds']
+        )
+    #means = norm.stats['means'] #.compute()
+    #stds = norm.stats['stds'] #.compute()
+    #
+    #means, stds = client.compute([means, stds])
+    #progress(means)
+    #means = means.result()
+    #stds = stds.result()
+
+    #client.close()
 
     results = {
         'means': means.to_dict(),
@@ -155,6 +170,11 @@ if __name__ == "__main__":
         action='store_true',
         help='If set, overwrites output files'
     )
+    parser.add_argument(
+        '--distributed',
+        action='store_true',
+        help='if set, distributed dask client is used'
+    )
 
     args = parser.parse_args()
 
@@ -172,4 +192,5 @@ if __name__ == "__main__":
         args.split_name,
         args.repetition,
         args.output_file,
+        args.distributed
     )
