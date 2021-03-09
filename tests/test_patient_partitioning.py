@@ -43,11 +43,13 @@ def test_datasets(dataset_file, max_rows):
     longest_id = max(rows_per_patient, key=rows_per_patient.get)
     print(f'Longest patient {longest_id} has {rows_per_patient[longest_id]} rows.') 
     pd_row_per_patient = pd.Series(
-        index=rows_per_patient.keys(), data=rows_per_patient.values())
+        index=rows_per_patient.keys(), data=rows_per_patient.values(),
+        name='n_values')
     divisions = compute_devisions(rows_per_patient, max_rows)
+    n_oversize = 0
     for begin, end in zip(divisions[:-1], divisions[1:]):
         # Pandas label based slicing is inclusive!
         if not pd_row_per_patient.loc[begin:end-1].sum() <= max_rows:
-            print(begin, end)
             print(pd_row_per_patient.loc[begin:end-1])
-            assert pd_row_per_patient.loc[begin:end-1].sum() <= max_rows
+            n_oversize += 1
+    assert n_oversize == 0
