@@ -67,7 +67,7 @@ def main(
     if distributed:
         print('Using distributed dask setup.') 
         client = Client(
-            n_workers=30,
+            n_workers=50,
             memory_limit="20GB",
             threads_per_worker=4,
             local_directory="/local0/tmp/dask2",
@@ -82,14 +82,14 @@ def main(
         columns=keep_columns,
         engine='pyarrow', #pyarrow-dataset
         index=False,
-        ignore_metadata=True
+        ###ignore_metadata=True
         #split_row_groups=True
         #chunksize=50 #40
     )
     # we assume that the index is already set to the patient id:
     # assert raw_data.index.name == VM_DEFAULT('id')
 
-    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False) #shuffle='disk') #disk
+    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False, shuffle='tasks') #False 
  
     ## try repartition for known divisions: 
     #rows_per_patient = get_rows_per_patient(args.input_file)
