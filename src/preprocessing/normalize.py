@@ -83,14 +83,14 @@ def main(
         engine='pyarrow', #pyarrow-dataset
         index=False,
         ###ignore_metadata=True
-        #split_row_groups=True
-        #chunksize=50 #40
+        #split_row_groups=5
+        #chunksize=40 #40
     )
     # we assume that the index is already set to the patient id:
     # assert raw_data.index.name == VM_DEFAULT('id')
 
-    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False, shuffle='tasks') #False 
- 
+    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=True) #, shuffle='tasks') #False 
+
     ## try repartition for known divisions: 
     #rows_per_patient = get_rows_per_patient(args.input_file)
     #divisions1 = compute_divisions(rows_per_patient, 2000)

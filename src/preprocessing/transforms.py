@@ -478,8 +478,8 @@ class Normalizer(TransformerMixin):
         self.stats = {
             # We want to persist these. This ensures that when a worker is
             # killed we don't loose the result of this expensive computation.
-            'means': df.mean(),
-            'stds':  df.std().map_partitions(self.robustify_vec, eps=self.eps)
+            'means': df.mean(split_every=5),
+            'stds':  df.std(split_every=5).map_partitions(self.robustify_vec, eps=self.eps)
         }
 
     @staticmethod
