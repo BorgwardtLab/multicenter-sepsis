@@ -35,8 +35,8 @@ def compute_with_progress(x):
     return x.compute()
 
 def get_columns(filepath):
-    schema = pq.read_metadata(os.path.join(filepath, '_metadata'))
-    return schema.names
+    meta = pq.read_metadata(os.path.join(filepath, '_metadata'))
+    return meta.schema.names
 
 def main(
     input_filename,
@@ -59,7 +59,8 @@ def main(
         VM_DEFAULT('time'),
         VM_DEFAULT('utility'),
         *VM_DEFAULT.all_cat('baseline'),
-        *ind_cols
+        *ind_cols,
+        VM_DEFAULT('id') # index is not in columns
     ]
     keep_columns = [col for col in columns if col not in drop_cols]
 
@@ -85,6 +86,9 @@ def main(
         #split_row_groups=True
         chunksize=40
     )
+    # we assume that the index is already set to the patient id:
+    assert raw_data.index.name == VM_DEFAULT('id')
+
     #raw_data = raw_data.reset_index().set_index(VM_DEFAULT("id"), sorted=True) #shuffle='disk') #disk
  
     ## try repartition for known divisions: 
