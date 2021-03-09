@@ -6,11 +6,14 @@ import json
 import pathlib
 import os
 import glob 
-import dask.dataframe as ddf
-import dask.diagnostics as dd
+import dask.dataframe as dd
+from dask.distributed import Client, progress
+import dask.diagnostics as ddi
+import pyarrow.parquet as pq
 
-from src.sklearn.loading import SplitInfo
-
+from src.sklearn.loading import SplitInfo, ParquetLoader
+from src.preprocessing.extract_features import \
+    ( get_rows_per_patient, compute_divisions ) 
 from src.preprocessing.transforms import Normalizer
 
 from src.variables.mapping import VariableMapping
@@ -26,29 +29,29 @@ VM_CONFIG_PATH = str(
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
+def compute_with_progress(x):
+    x = x.persist()  # start computation in the background
+    progress(x)      # watch progress
+    return x.compute()
+
+def get_columns(filepath):
+    meta = pq.read_metadata(os.path.join(filepath, '_metadata'))
+    return meta.schema.names
 
 def main(
     input_filename,
     split_filename,
     split_name,
     repetition,
-    output_filename,
+    output_filename,    
+    distributed
 ):
     """Perform normalization of input data, subject to a certain split."""
     patient_ids = SplitInfo(split_filename)(split_name, repetition)
 
-    progress_bar = dd.ProgressBar()
-    progress_bar.register()
-    if os.path.isdir(input_filename):
-       input_filename = glob.glob(
-            os.path.join(input_filename, '*.parquet' )
-        ) 
-    raw_data = ddf.read_parquet(
-        input_filename,
-        engine="pyarrow-legacy",
-        chunksize=1
-    )
-    ind_cols = [col for col in raw_data.columns if '_indicator' in col]
+    columns = get_columns(args.input_file)
+
+    ind_cols = [col for col in columns if '_indicator' in col]
 
     drop_cols = [
         VM_DEFAULT('label'),
@@ -56,16 +59,81 @@ def main(
         VM_DEFAULT('time'),
         VM_DEFAULT('utility'),
         *VM_DEFAULT.all_cat('baseline'),
-        *ind_cols
+        *ind_cols,
+        #VM_DEFAULT('id') # index is not in columns
     ]
+    keep_columns = [col for col in columns if col not in drop_cols]
 
-    norm = Normalizer(patient_ids, drop_cols=drop_cols)
+    if distributed:
+        print('Using distributed dask setup.') 
+        client = Client(
+            n_workers=50,
+            memory_limit="20GB",
+            threads_per_worker=4,
+            local_directory="/local0/tmp/dask2",
+        )
+    else: #using local dask, with progress bar
+        progress_bar = ddi.ProgressBar()
+        print('Using local dask setup.')
+        progress_bar.register()
+    #raw_data = ParquetLoader(args.input_file, form='dask', engine='pyarrow').load()
+    raw_data = dd.read_parquet(
+        args.input_file,
+        columns=keep_columns,
+        engine='pyarrow', #pyarrow-dataset
+        index=False,
+        ###ignore_metadata=True
+        #split_row_groups=True
+        #chunksize=50 #40
+    )
+    # we assume that the index is already set to the patient id:
+    # assert raw_data.index.name == VM_DEFAULT('id')
+
+    raw_data = raw_data.set_index(VM_DEFAULT("id"), sorted=False, shuffle='tasks') #False 
+ 
+    ## try repartition for known divisions: 
+    #rows_per_patient = get_rows_per_patient(args.input_file)
+    #divisions1 = compute_divisions(rows_per_patient, 2000)
+    #raw_data = raw_data.repartition(divisions=divisions1)
+
+    #if os.path.isdir(input_filename):
+    #   input_filename = glob.glob(
+    #        os.path.join(input_filename, '*.parquet' )
+    #    ) 
+    #raw_data = ddf.read_parquet(
+    #    input_filename,
+    #    engine="pyarrow-dataset"#, #pyarrow-legacy
+    #    #chunksize=1
+    #)
+
+    norm = Normalizer(patient_ids)
     norm = norm.fit(raw_data)
 
-    means, stds = dask.compute(
-        norm.stats['means'],
-        norm.stats['stds']
-    )
+    if distributed:
+        means = norm.stats['means'] #.compute()
+        stds = norm.stats['stds'] #.compute()
+        
+        means, stds = client.compute([means, stds]) #client.compute()
+        progress([means, stds])
+
+        means = means.result()
+        stds = stds.result()
+
+        client.close()
+    else:
+        means, stds = dask.compute(
+            norm.stats['means'],
+            norm.stats['stds']
+        )
+    #means = norm.stats['means'] #.compute()
+    #stds = norm.stats['stds'] #.compute()
+    #
+    #means, stds = client.compute([means, stds])
+    #progress(means)
+    #means = means.result()
+    #stds = stds.result()
+
+    #client.close()
 
     results = {
         'means': means.to_dict(),
@@ -117,6 +185,11 @@ if __name__ == "__main__":
         action='store_true',
         help='If set, overwrites output files'
     )
+    parser.add_argument(
+        '--distributed',
+        action='store_true',
+        help='if set, distributed dask client is used'
+    )
 
     args = parser.parse_args()
 
@@ -134,4 +207,5 @@ if __name__ == "__main__":
         args.split_name,
         args.repetition,
         args.output_file,
+        args.distributed
     )

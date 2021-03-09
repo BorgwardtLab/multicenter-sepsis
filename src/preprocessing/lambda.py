@@ -346,28 +346,40 @@ if __name__ == "__main__":
     si = SplitInfo(args.split_file)
     ids = si(args.split_name, args.repetition)
     
-    pl = ParquetLoader(args.input_file)
-    columns= [VM_DEFAULT(concept) for concept in ['id', 'label', 'time']]
-    df = pl.load(ids, columns=columns)
-
+    form = 'dask' if args.dask else 'pandas'
+    pl = ParquetLoader(args.input_file, form=form)
+    col_names = ['id', 'label', 'time']
+    
+    if form == 'dask':
+        # in dask format the loader throws an error if column is an index:
+        col_names.remove('id')  
+    columns= [VM_DEFAULT(concept) for concept in col_names ]
+   
     if args.dask:
         client = Client(
         n_workers=20,
         memory_limit="10GB",
-        threads_per_worker=1,
+        threads_per_worker=2,
         local_directory="/local0/tmp/dask2",
         )
-        n_patients = len(df.index.unique())
-        n_partitions = min(5000, np.floor(n_patients/5))
-        df = df.reset_index().set_index([VM_DEFAULT('id'), VM_DEFAULT('time')])
-        df.sort_index(
-            axis='index', level=VM_DEFAULT('id'), inplace=True, sort_remaining=True)
-        df.reset_index(level=VM_DEFAULT('time'), drop=False, inplace=True)
-        df = dd.from_pandas(df, npartitions=n_partitions, sort=True)
+        #n_patients = len(df.index.unique())
+        #n_partitions = min(5000, np.floor(n_patients/5))
+        #df = df.reset_index().set_index([VM_DEFAULT('id'), VM_DEFAULT('time')])
+        #df.sort_index(
+        #    axis='index', level=VM_DEFAULT('id'), inplace=True, sort_remaining=True)
+        #df.reset_index(level=VM_DEFAULT('time'), drop=False, inplace=True)
+        #df = dd.from_pandas(df, npartitions=n_partitions, sort=True)
         calc = DaskLambdaCalculator()
     else:
         calc = LambdaCalculator(n_jobs=args.n_jobs)
-        
+
+    # loading data and actually computing lambda:
+    print(f'Using {form} format..')
+    df = pl.load(ids, columns=columns)
+    if form == 'dask':
+        assert df.index.name == VM_DEFAULT('id')
+        # assert that we load index properly
+
     lam = calc(df)
     results = {'lam': lam}
     print(results)

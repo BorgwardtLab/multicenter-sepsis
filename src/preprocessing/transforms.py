@@ -125,7 +125,8 @@ class DaskIDTransformer(TransformerMixin):
 
     def __init_subclass__(cls, *args, **kwargs):
         if not hasattr(cls, 'transform_id'):
-            print('Warning: Class must take a transform_id method')
+            pass
+            #print('Warning: Class must take a transform_id method')
             # raise TypeError
         return super().__init_subclass__(*args, **kwargs)
 
@@ -435,7 +436,7 @@ class DerivedFeatures(TransformerMixin):
 class Normalizer(TransformerMixin):
     """Performs normalization (z-scoring) of columns."""
 
-    def __init__(self, patient_ids, suffix=None, drop_cols=None, assign_values=True):
+    def __init__(self, patient_ids, suffix=None, drop_cols=None, assign_values=True, eps=0.01):
         """
         Args:
         - patient_ids: Patient ids that should be used for computing
@@ -446,12 +447,15 @@ class Normalizer(TransformerMixin):
           columns of the input data frame
         - assign_values: Assign the transformed values to the input dataframe.
           If set to false will solely return the normalized columns.
+        - eps: epsilon threshold to reject spurious stds() too close to zero, 
+            these stds are then replaced with 1 for robuster z-scoring.
         """
         self.patient_ids = patient_ids
         self.suffix = suffix
         self.drop_cols = drop_cols
         self.stats = None
         self.assign_values = assign_values
+        self.eps = eps
 
     def _drop_columns(self, df):
         """ Utility function, to select available columns to
@@ -465,15 +469,27 @@ class Normalizer(TransformerMixin):
         if self.drop_cols is not None:
             return df.drop(columns=self.drop_cols, errors='ignore')
             # ignoring errors useful for downstream loading where we normalize with column subset
+        else:
+            return df
 
     def _compute_stats(self, df):
-        patients = df.loc[self.patient_ids]
+        if self.patient_ids is not None:
+            df = df.loc[self.patient_ids]
         self.stats = {
             # We want to persist these. This ensures that when a worker is
             # killed we don't loose the result of this expensive computation.
-            'means': patients.mean(),
-            'stds': patients.std()
+            'means': df.mean(),
+            'stds':  df.std().map_partitions(self.robustify_vec, eps=self.eps)
         }
+
+    @staticmethod
+    def robustify(x,eps=0.1):
+        return 1 if abs(x) < eps else x 
+
+    @staticmethod
+    def robustify_vec(series, eps=0.1):
+        series[series.abs() < eps] = 1
+        return series
 
     def _apply_normalization(self, df):
         assert self.stats is not None

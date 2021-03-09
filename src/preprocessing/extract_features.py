@@ -40,6 +40,11 @@ def read_dev_split_patients(splitfile):
         split_info = json.load(f)
     return split_info["dev"]["total"]
 
+def read_total_patients(splitfile):
+    with open(splitfile, "r") as f:
+        split_info = json.load(f)
+    return split_info["total"]["ids"]
+
 
 def sort_time(df):
     res = df.sort_values(VM_DEFAULT("time"), axis=0)
@@ -56,7 +61,7 @@ def get_rows_per_patient(filename):
     return OrderedDict(zip(unique_ids, counts))
 
 
-def compute_devisions(rows_per_patient, max_rows):
+def compute_divisions(rows_per_patient, max_rows):
     divisions = []
     cur_count = 0
     for patient_id, n_obs in rows_per_patient.items():
@@ -77,14 +82,14 @@ def main(input_filename, split_filename, output_filename, n_workers):
     client = Client(
         n_workers=n_workers,
         memory_limit="50GB",
-        threads_per_worker=1,
+        threads_per_worker=3,
         local_directory="/local0/tmp/dask2",
     )
     start = time.time()
     print("Computing patient partitions...")
     rows_per_patient = get_rows_per_patient(input_filename)
     # Initial divisions
-    divisions1 = compute_devisions(rows_per_patient, 2000)
+    divisions1 = compute_divisions(rows_per_patient, 2000)
     # # After lookback features
     # divisions2 = compute_devisions(rows_per_patient, max_partition_size // 5)
     # # After wavelets
@@ -95,13 +100,21 @@ def main(input_filename, split_filename, output_filename, n_workers):
     norm_ids = read_dev_split_patients(split_filename)
     data = dd.read_parquet(
         input_filename,
-        columns=VM_DEFAULT.core_set[1:],
-        index=VM_DEFAULT("id"),
-        engine='pyarrow',
+        columns=VM_DEFAULT.core_set, #[1:],
+        #index=VM_DEFAULT("id"),
+        engine='pyarrow', #pyarrow
         split_row_groups=5  # This assumes that there are approx 100 rows per row group
     )
-    #data = data.set_index(VM_DEFAULT("id"), sorted=True)
+    data = data.set_index(VM_DEFAULT("id"), sorted=True, shuffle='disk') #disk
+    
+    #all_ids = read_total_patients(split_filename)
+    #lost = set(all_ids).difference(data.index.unique().compute())
+    #print(f'Lost ids after loading: {lost}')
+    
     data = data.repartition(divisions=divisions1)
+    #lost = set(all_ids).difference(data.index.unique().compute())
+    #print(f'Lost ids after repartitioning: {lost}')
+ 
     #is_sorted = data.groupby(data.index.name, group_keys=False, sort=False).apply(check_time_sorted)
     #assert all(is_sorted.compute())
 
@@ -133,6 +146,10 @@ def main(input_filename, split_filename, output_filename, n_workers):
         ]
     )
     data = data_pipeline.fit_transform(data)
+
+    #lost = set(all_ids).difference(data.index.unique().compute())
+    #print(f'Lost ids after pipeline transform: {lost}')
+
     # TODO: There is still an issue when writing the metadata file. It seems
     # like the worker which should write out the metadata runs into memory
     # issues. All in all we could try to do this in a separate step or collect
