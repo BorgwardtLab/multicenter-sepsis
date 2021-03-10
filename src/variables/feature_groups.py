@@ -23,7 +23,7 @@ class ColumnFilter:
             - small vs large feature set
     """
     def __init__(self, 
-                 path=f'datasets/demo/data/parquet/features'
+                 path=f'datasets/mimic_demo/data/parquet/features'
                 ):
         """
         Arguments:
@@ -34,7 +34,7 @@ class ColumnFilter:
         table = pl.load()
         self.columns = table.column_names
         self.groups = self.columns_to_groups(self.columns)
-
+        self.physionet_prefixes = self.get_physionet_prefixes()
     
     def columns_to_groups(self, cols):
         """ maps columns to feature groups
@@ -115,18 +115,19 @@ class ColumnFilter:
             return used_groups 
         else:
             return self.groups_to_columns(used_groups)
-    @property 
-    def physionet_prefixes(self):
+    
+    def get_physionet_prefixes(self):
         """
         we highlight non-statics with underscore: <name>_ 
         for more robust greping of correct prefixes (as there
         could be duplicates, e.g. greping for kalium 'k' returns 
         false positive columns without k_
         """ 
-        df = VM_DEFAULT.var_df 
+        df = VM_DEFAULT.var_df  
+        statics = VM_DEFAULT.all_cat('static') 
         prefixes = df[(~df['challenge'].isnull()) & (~df['name'].isnull())]
         prefixes = prefixes['name'].tolist() 
-        return [ p + '_' if p not in VM_DEFAULT.all_cat('static') else p
+        return [ p + '_' if p not in statics else p
             for p in prefixes
         ] 
  
