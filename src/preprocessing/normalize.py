@@ -3,6 +3,7 @@
 import argparse
 import dask
 import json
+import simplejson
 import pathlib
 import os
 import glob 
@@ -141,7 +142,7 @@ def main(
     }
 
     with open(output_filename, 'w') as f:
-        json.dump(results, f, indent=4)
+        simplejson.dump(results, f, indent=4, ignore_nan=True)
 
 
 if __name__ == "__main__":
