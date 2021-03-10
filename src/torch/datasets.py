@@ -3,10 +3,27 @@ import bisect
 import os
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
+import pandas as pd
 from torch.utils.data import Dataset
 import json
 
 from src.variables.feature_groups import ColumnFilterLight
+
+
+class Normalize:
+    """Transform for normalizing some of the datasets input columns."""
+
+    def __init__(self, normalization_config):
+        with open(normalization_config, 'r') as f:
+            d = json.load(f)
+
+        self.mean = pd.Series(d['means'])
+        self.std = pd.Series(d['stds'])
+
+
+    def __call__(self, df):
+        df = df.subtract(self.mean, axis=1, fill_value=0.)
+        return df.div(self.std, axis=1, fill_value=1.)
 
 
 class ParquetDataset(Dataset):
@@ -81,7 +98,7 @@ class SplittedDataset(ParquetDataset):
     STATIC_COLUMNS = ['weight', 'height']
 
     def __init__(self, path, split_file, split, feature_set,
-                 only_physionet_features=False, fold=0, transform=None):
+                 only_physionet_features=False, fold=0, pd_transform=None, transform=None):
         with open(split_file, 'r') as f:
             if split in ['train', 'validation']:
                 ids = json.load(f)['dev']['split_{}'.format(fold)][split]
@@ -97,10 +114,13 @@ class SplittedDataset(ParquetDataset):
         else:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).feature_set(name=feature_set)
+        self.pd_transform = transform
         self.transform = transform
 
     def __getitem__(self, index):
         df = super().__getitem__(index)
+        if self.pd_transform:
+            df = self.pd_transform(df)
         id = df[self.ID_COLUMN].values[0]
         times = df[self.TIME_COLUMN].values
         statics = df[self.STATIC_COLUMNS].values[0]
@@ -136,13 +156,16 @@ class MIMICDemo(SplittedDataset):
     """MIMIC demo dataset."""
 
     def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        normalizer = Normalize(
+            'config/normalizer/normalizer_mimic_demo_rep_{}.json'.format(fold))
         super().__init__(
-            'datasets/mimic/data/parquet/features',
+            'datasets/mimic_demo/data/parquet/features',
             'config/splits/splits_mimic_demo.json',
             split,
             feature_set,
             only_physionet_features=only_physionet_features,
-            fold=fold
+            fold=fold,
+            pd_transform=normalizer
         )
 
 
@@ -150,13 +173,16 @@ class MIMIC(SplittedDataset):
     """MIMIC dataset."""
 
     def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        normalizer = Normalize(
+            'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold))
         super().__init__(
             'datasets/mimic/data/parquet/features',
             'config/splits/splits_mimic.json',
             split,
             feature_set,
             only_physionet_features=only_physionet_features,
-            fold=fold
+            fold=fold,
+            pd_transform=normalizer
         )
 
 
@@ -164,13 +190,16 @@ class Hirid(SplittedDataset):
     """Hirid dataset."""
 
     def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        normalizer = Normalize(
+            'config/normalizer/normalizer_hirid_rep_{}.json'.format(fold))
         super().__init__(
             'datasets/hirid/data/parquet/features',
             'config/splits/splits_hirid.json',
             split,
             feature_set,
             only_physionet_features=only_physionet_features,
-            fold=fold
+            fold=fold,
+            pd_transform=normalizer
         )
 
 
@@ -178,13 +207,16 @@ class EICU(SplittedDataset):
     """EICU dataset."""
 
     def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        normalizer = Normalize(
+            'config/normalizer/normalizer_eicu_rep_{}.json'.format(fold))
         super().__init__(
             'datasets/eicu/data/parquet/features',
             'config/splits/splits_eicu.json',
             split,
             feature_set,
             only_physionet_features=only_physionet_features,
-            fold=fold
+            fold=fold,
+            pd_transform=normalizer
         )
 
 
@@ -192,13 +224,16 @@ class AUMC(SplittedDataset):
     """AUMC dataset."""
 
     def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
+        normalizer = Normalize(
+            'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold))
         super().__init__(
             'datasets/aumc/data/parquet/features',
             'config/splits/splits_aumc.json',
             split,
             feature_set,
             only_physionet_features=only_physionet_features,
-            fold=fold
+            fold=fold,
+            pd_transform=normalizer
         )
 
 
