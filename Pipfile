@@ -32,6 +32,7 @@ iisignature = "*"
 # dask-lightgbm = "*"  # merged into lightgbm
 # distributed = "*"
 parquet-tools = "*"
+simplejson = "*"
 
 [requires]
 python_version = "3.7"

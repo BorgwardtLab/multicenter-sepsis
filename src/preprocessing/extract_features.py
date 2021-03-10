@@ -9,7 +9,6 @@ import dask.dataframe as dd
 from dask.distributed import Client, progress
 import pyarrow.parquet as pq
 from sklearn.pipeline import Pipeline
-from tqdm import tqdm
 
 from src.preprocessing.transforms import (
     ApplyOnNormalized,
@@ -23,6 +22,7 @@ from src.preprocessing.transforms import (
     SignatureFeatures,
     WaveletFeatures,
 )
+from src.preprocessing.generate_metadata_from_dataset import write_metadata_to_dataset
 from src.variables.mapping import VariableMapping
 
 # warnings.filterwarnings("error")
@@ -166,18 +166,8 @@ def main(input_filename, split_filename, output_filename, n_workers):
     print()  # Don't overwrite the progressbar
     future.result()
     client.close()
-    outputpath = Path(output_filename)
-    print('Reading all metadata...')
-    schema = None
-    metadata = []
-    for file in tqdm(outputpath.glob('*.parquet')):
-        if schema is None:
-            schema = pq.read_schema(file)
-        cur_metadata = pq.read_metadata(file)
-        cur_metadata.set_file_path(str(file.relative_to(outputpath)))
-        metadata.append(cur_metadata)
-    pq.write_metadata(
-        schema, outputpath / '_metadata', metadata_collector=metadata)
+    # Read the metadata from all files and combine into single _metadata file
+    write_metadata_to_dataset(output_filename)
     print("Preprocessing completed after {:.2f} seconds".format(
         time.time() - start))
 

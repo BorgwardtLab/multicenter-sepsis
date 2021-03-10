@@ -4,12 +4,14 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from tqdm import tqdm
 
+
 def get_partition_id(file: Path):
     """Split off the part of the path that corresponds to the partition."""
-    return int(file.stem.split('-')[-1])
+    return int(file.stem.split('.')[-1])
 
 
-def main(dataset_folder):
+def write_metadata_to_dataset(dataset_folder):
+    """Read files from a dask generated dataset and write _metadata."""
     dataset_folder = Path(dataset_folder)
     schema = None
     metadata = []
@@ -29,4 +31,4 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('dataset_folder', type=str)
     args = parser.parse_args()
-    main(args.dataset_folder)
+    write_metadata_to_dataset(args.dataset_folder)
