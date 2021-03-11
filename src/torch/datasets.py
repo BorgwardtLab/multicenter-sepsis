@@ -1,39 +1,53 @@
 """Dataset loading."""
 import bisect
-import os
-import pathlib
-import pyarrow.dataset as ds
-import pyarrow.parquet as pq
-import pandas as pd
-from torch.utils.data import Dataset
 import json
+import os
+from pathlib import Path
+
+import pandas as pd
+import pyarrow.parquet as pq
+from sklearn.model_selection import train_test_split
+from torch.utils.data import Dataset
 
 from src.variables.feature_groups import ColumnFilterLight
 from src.variables.mapping import VariableMapping
 
 VM_CONFIG_PATH = str(
-    pathlib.Path(__file__).parent.parent.parent.joinpath(
+    Path(__file__).parent.parent.parent.joinpath(
         'config/variables.json'
     )
 )
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
+__all__ = [
+    'Physionet2019',
+    'MIMICDemo',
+    'MIMIC',
+    'Hirid',
+    'EICU',
+    'AUMC'
+]
+
 
 class Normalize:
     """Transform for normalizing some of the datasets input columns."""
 
-    def __init__(self, normalization_config):
+    def __init__(self, normalization_config, columns):
         with open(normalization_config, 'r') as f:
             d = json.load(f)
 
-        self.mean = pd.Series(d['means'])
-        self.std = pd.Series(d['stds'])
-
+        means = pd.Series(d['means'])
+        # Get the subset of columns that are relevant for us
+        norm_cols = list(set(means.index).intersection(columns))
+        self.mean = means.loc[norm_cols]
+        self.std = pd.Series(d['stds']).loc[norm_cols]
 
     def __call__(self, df):
-        df = df.subtract(self.mean, axis=1, fill_value=0.)
-        return df.div(self.std, axis=1, fill_value=1.)
+        norm_df = df[self.mean.index]
+        norm_df = (norm_df - self.mean) / self.std
+        df[norm_df.columns] = norm_df
+        return df
 
 
 class ParquetDataset(Dataset):
@@ -92,7 +106,7 @@ class ParquetDataset(Dataset):
             use_legacy_dataset=False,  # Needed for filtering
             filters=[(self.id_column, '=', item_id)],
             use_pandas_metadata=True if self.as_pandas else False,
-            ** self.reader_args
+            **self.reader_args
         )
         if self.as_pandas:
             return table.to_pandas(self_destruct=True, ignore_metadata=True)
@@ -105,27 +119,42 @@ class SplittedDataset(ParquetDataset):
     ID_COLUMN = VM_DEFAULT('id')
     TIME_COLUMN = VM_DEFAULT('time')
     # TODO: It looks like age and sex are not present in the data anymore
-    STATIC_COLUMNS = VM_DEFAULT.all_cat('static') #['weight', 'height']
+    STATIC_COLUMNS = VM_DEFAULT.all_cat('static')
+    LABEL_COLUMN = VM_DEFAULT('label')
 
     def __init__(self, path, split_file, split, feature_set,
                  only_physionet_features=False, fold=0, pd_transform=None, transform=None):
         with open(split_file, 'r') as f:
+            d = json.load(f)
             if split in ['train', 'validation']:
-                ids = json.load(f)['dev']['split_{}'.format(fold)][split]
+                ids = d['dev']['split_{}'.format(fold)][split]
             else:
-                ids = json.load(f)[split]['split_{}'.format(fold)]
+                ids = d[split]['split_{}'.format(fold)]
+            # Need this to construct stratified split
+            self.id_to_label = dict(zip(d['total']['ids'], d['total']['labels']))
 
         super().__init__(
             path, ids, self.ID_COLUMN, columns=None, as_pandas=True)
 
+        # TODO: Handle label and utility columns because we need them later.
         if only_physionet_features:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).physionet_set(feature_set=feature_set)
         else:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).feature_set(name=feature_set)
-        self.pd_transform = transform
+        self.pd_transform = pd_transform
         self.transform = transform
+
+    def get_stratified_split(self, random_state=None):
+        per_instance_labels = [self.id_to_label[id] for id in self.ids]
+        train_indices, test_indices = train_test_split(
+            range(len(per_instance_labels)),
+            train_size=0.9,
+            stratify=per_instance_labels,
+            random_state=random_state
+        )
+        return train_indices, test_indices
 
     def __getitem__(self, index):
         df = super().__getitem__(index)
@@ -136,11 +165,13 @@ class SplittedDataset(ParquetDataset):
         statics = df[self.STATIC_COLUMNS].values[0]
         ts = df.drop(
             columns=[self.ID_COLUMN, self.TIME_COLUMN] + self.STATIC_COLUMNS)
+
         out = {
             'id': id,
             'times': times,
             'statics': statics,
-            'ts': ts.values
+            'ts': ts.values,
+            'labels': df[self.LABEL_COLUMN].values
         }
 
         if self.transform:
@@ -151,23 +182,26 @@ class SplittedDataset(ParquetDataset):
 class Physionet2019(SplittedDataset):
     """Physionet 2019 dataset."""
 
-    def __init__(self, split, feature_set, only_physionet_features=True, fold=0):
+    def __init__(self, split, feature_set='small', only_physionet_features=True, fold=0, transform=None):
         super().__init__(
             'datasets/physionet2019/data/parquet/features',
             'config/splits/splits_physionet2019.json',
             split,
             feature_set,
             only_physionet_features=only_physionet_features,
-            fold=fold
+            fold=fold,
+            transform=transform
+        )
+        self.pd_transform = Normalize(
+            'config/normalizer/normalizer_physionet2019_rep_{}.json'.format(fold),
+            self.columns
         )
 
 
 class MIMICDemo(SplittedDataset):
     """MIMIC demo dataset."""
 
-    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
-        normalizer = Normalize(
-            'config/normalizer/normalizer_mimic_demo_rep_{}.json'.format(fold))
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
             'datasets/mimic_demo/data/parquet/features',
             'config/splits/splits_mimic_demo.json',
@@ -175,16 +209,18 @@ class MIMICDemo(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            pd_transform=normalizer
+            transform=transform
+        )
+        self.pd_transform = Normalize(
+            'config/normalizer/normalizer_mimic_demo_rep_{}.json'.format(fold),
+            self.columns
         )
 
 
 class MIMIC(SplittedDataset):
     """MIMIC dataset."""
 
-    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
-        normalizer = Normalize(
-            'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold))
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
             'datasets/mimic/data/parquet/features',
             'config/splits/splits_mimic.json',
@@ -192,16 +228,18 @@ class MIMIC(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            pd_transform=normalizer
+            transform=transform
+        )
+        self.pd_transform = Normalize(
+            'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold),
+            self.columns
         )
 
 
 class Hirid(SplittedDataset):
     """Hirid dataset."""
 
-    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
-        normalizer = Normalize(
-            'config/normalizer/normalizer_hirid_rep_{}.json'.format(fold))
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
             'datasets/hirid/data/parquet/features',
             'config/splits/splits_hirid.json',
@@ -209,16 +247,18 @@ class Hirid(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            pd_transform=normalizer
+            transform=transform
+        )
+        self.pd_transform = Normalize(
+            'config/normalizer/normalizer_hirid_rep_{}.json'.format(fold),
+            self.columns
         )
 
 
 class EICU(SplittedDataset):
     """EICU dataset."""
 
-    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
-        normalizer = Normalize(
-            'config/normalizer/normalizer_eicu_rep_{}.json'.format(fold))
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
             'datasets/eicu/data/parquet/features',
             'config/splits/splits_eicu.json',
@@ -226,16 +266,18 @@ class EICU(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            pd_transform=normalizer
+            transform=transform
+        )
+        self.pd_transform = Normalize(
+            'config/normalizer/normalizer_eicu_rep_{}.json'.format(fold),
+            self.columns
         )
 
 
 class AUMC(SplittedDataset):
     """AUMC dataset."""
 
-    def __init__(self, split, feature_set, only_physionet_features=False, fold=0):
-        normalizer = Normalize(
-            'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold))
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
             'datasets/aumc/data/parquet/features',
             'config/splits/splits_aumc.json',
@@ -243,7 +285,11 @@ class AUMC(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            pd_transform=normalizer
+            transform=transform
+        )
+        self.pd_transform = Normalize(
+            'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold),
+            self.columns
         )
 
 
@@ -261,7 +307,6 @@ if __name__ == '__main__':
         ids = json.load(f)['total']['ids']
 
     n_ids = len(ids)
-
 
     start = time()
     dataset = ParquetDataset(
