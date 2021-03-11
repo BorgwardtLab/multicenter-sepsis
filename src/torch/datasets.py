@@ -1,6 +1,7 @@
 """Dataset loading."""
 import bisect
 import os
+import pathlib
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 import pandas as pd
@@ -8,6 +9,15 @@ from torch.utils.data import Dataset
 import json
 
 from src.variables.feature_groups import ColumnFilterLight
+from src.variables.mapping import VariableMapping
+
+VM_CONFIG_PATH = str(
+    pathlib.Path(__file__).parent.parent.parent.joinpath(
+        'config/variables.json'
+    )
+)
+
+VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
 
 class Normalize:
@@ -92,10 +102,10 @@ class ParquetDataset(Dataset):
 class SplittedDataset(ParquetDataset):
     """Dataset with predefined splits and feature groups."""
 
-    ID_COLUMN = 'stay_id'
-    TIME_COLUMN = 'stay_time'
+    ID_COLUMN = VM_DEFAULT('id')
+    TIME_COLUMN = VM_DEFAULT('time')
     # TODO: It looks like age and sex are not present in the data anymore
-    STATIC_COLUMNS = ['weight', 'height']
+    STATIC_COLUMNS = VM_DEFAULT.all_cat('static') #['weight', 'height']
 
     def __init__(self, path, split_file, split, feature_set,
                  only_physionet_features=False, fold=0, pd_transform=None, transform=None):
