@@ -153,9 +153,9 @@ def variable_length_collate(batch):
 
         transposed_items[key] = np.stack(padded_instances, axis=0)
 
-    # transposed_items['statics'] = np.stack(transposed_items['statics'], axis=0)
-    # transposed_items['statics'] = \
-    #     transposed_items['statics'].astype(np.float32)
+    transposed_items['statics'] = np.stack(transposed_items['statics'], axis=0)
+    transposed_items['statics'] = \
+        transposed_items['statics'].astype(np.float32)
     transposed_items['times'] = transposed_items['times'].astype(np.float32)
     transposed_items['ts'] = transposed_items['ts'].astype(np.float32)
     transposed_items['lengths'] = transposed_items['lengths'].astype(np.long)
