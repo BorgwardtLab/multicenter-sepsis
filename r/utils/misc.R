@@ -82,4 +82,55 @@ read_colstats <- function(source, split = paste0("split_", 0:4), cols = NULL) {
   vapply(res, `[`, numeric(length(cols)), cols)
 }
 
+read_lambda <- function(source, split = paste0("split_", 0:4)) {
+
+  file <- paste0("lambda_", source, "_rep",
+                 sub("^split", "", match.arg(split)), ".json")
+
+  jsonlite::read_json(cfg_path(file.path("lambdas", file)))$lam
+}
+
+y_class <- function(source, start_offset = hours(6L),
+                    end_offset = hours(Inf), ...) {
+
+  dat <- read_to_df(source, cols = c("stay_id", "stay_time", "sep3"),
+                    norm_cols = NULL, ...)
+  sep <- dat[sep3 == 1L, head(.SD, n = 1L), by = "stay_id"]
+
+  units(start_offset) <- units(interval(dat))
+  units(end_offset) <- units(interval(dat))
+
+  win <- merge(sep,
+    dat[, list(in_time = min(stay_time), out_time = max(stay_time)),
+        by = "stay_id"],
+    all.x = TRUE
+  )
+
+  win <- win[, c("start_time", "end_time") := list(
+    pmax(stay_time - start_offset, in_time),
+    pmin(stay_time + end_offset, out_time)
+  )]
+
+  sep <- expand(win, start_var = "start_time", end_var = "end_time")
+  sep <- sep[, sep3 := TRUE]
+
+  dat <- merge(dat[, sep3 := NULL], sep, all = TRUE)
+
+  is_true(dat[["sep3"]])
+}
+
+y_reg <- function(source, split = "split_0", ...) {
+
+  dat <- read_to_df(source,
+    cols = c("stay_id", "stay_time", "sep3", "utility"),
+    norm_cols = NULL, ..., split = split
+  )
+
+  lmb <- read_lambda(source, split)
+  dat <- dat[, is_case := any(sep3 == 1L), by = "stay_id"]
+  dat <- dat[, lambda := data.table::fifelse(is_case, lmb, 1)]
+
+  dat[["utility"]] * dat[["lambda"]]
+}
+
 delayedAssign("root_dir", here::here())

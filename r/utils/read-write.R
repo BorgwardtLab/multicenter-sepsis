@@ -46,8 +46,17 @@ read_to_df <- function(source, path = data_path("mm"), cols = feature_set(),
 
   file <- arrow::open_dataset(file.path(path, source))
 
-  res <- dplyr::filter(file, stay_id %in% pids)
-  res <- dplyr::select(res, dplyr::all_of(cols))
+  if (length(pids) > 0L && length(cols) > 0L) {
+    res <- dplyr::filter(file, stay_id %in% pids)
+    res <- dplyr::select(res, dplyr::all_of(cols))
+  } else if (length(pids) > 0L) {
+    res <- dplyr::filter(file, stay_id %in% pids)
+  } else if (length(cols) > 0L) {
+    res <- dplyr::select(file, dplyr::all_of(cols))
+  } else {
+    res <- file
+  }
+
   res <- dplyr::collect(res)
 
   if (length(norm_cols) > 0L) {
@@ -60,7 +69,7 @@ read_to_df <- function(source, path = data_path("mm"), cols = feature_set(),
     res <- data.table::setDF(res)
   }
 
-  res
+  try_id_tbl(res)
 }
 
 read_to_vec <- function(source, path = data_path("mm"), col = "sep3",
@@ -145,20 +154,27 @@ read_parquet <- function(source, dir = data_path(), cols = NULL, pids = NULL) {
     }
   }
 
-  if ("stay_id" %in% colnames(res)) {
+  try_id_tbl(res)
+}
 
-    if ("stay_time" %in% colnames(res)) {
+try_id_tbl <- function(x) {
 
-      res[["stay_time"]] <- as.difftime(res[["stay_time"]], units = "hours")
+  if ("stay_id" %in% colnames(x)) {
 
-      res <- as_ts_tbl(res, id_vars = "stay_id", index_var = "stay_time",
-                       interval = hours(1L), by_ref = TRUE)
+    if ("stay_time" %in% colnames(x)) {
+
+      x <- data.table::set(x, j = "stay_time",
+        value = as.difftime(x[["stay_time"]], units = "hours")
+      )
+
+      x <- as_ts_tbl(x, id_vars = "stay_id", index_var = "stay_time",
+                     interval = hours(1L), by_ref = TRUE)
 
     } else {
 
-      res <- as_id_tbl(res, id_vars = "stay_id", by_ref = TRUE)
+      x <- as_id_tbl(x, id_vars = "stay_id", by_ref = TRUE)
     }
   }
 
-  res
+  x
 }
