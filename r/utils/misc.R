@@ -50,4 +50,36 @@ feature_set <- function(name = c("full-small", "full-large",
   res[[name[1L]]][[name[2L]]][["columns"]]
 }
 
+norm_sel <- function(x) {
+  setdiff(
+    grep("_(indicator|count)$", x, invert = TRUE, value = TRUE),
+    c("stay_id", "stay_time")
+  )
+}
+
+zscore <- function(x, mean, std) (x - mean) / std
+
+zero_impute <- function(x) replace(x, is.na(x), 0)
+
+read_colstats <- function(source, split = paste0("split_", 0:4), cols = NULL) {
+
+  file <- paste0("normalizer_", source, "_rep",
+                 sub("^split", "", match.arg(split)), ".json")
+
+  res <- jsonlite::read_json(cfg_path(file.path("normalizer", file)))
+  mis <- lapply(res, vapply, is.null, logical(1L))
+  res <- Map(`[<-`, res, mis, NA_real_)
+  res <- lapply(res, unlist, recursive = FALSE)
+
+  all <- Reduce(union, lapply(res, names))
+
+  if (is.null(cols)) {
+    cols <- all
+  }
+
+  assert_that(is.character(cols), all(cols %in% all))
+
+  vapply(res, `[`, numeric(length(cols)), cols)
+}
+
 delayedAssign("root_dir", here::here())

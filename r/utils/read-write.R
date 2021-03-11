@@ -1,8 +1,9 @@
 
 read_to_bm <- function(source, path = data_path("mm"), cols = feature_set(),
-                       pids = coh_split(source)) {
+                       norm_cols = norm_sel(cols), split = "split_0",
+                       pids = coh_split(source, split = split)) {
 
-  file <- arrow::open_dataset(file.path(path, source, "features"))
+  file <- arrow::open_dataset(file.path(path, source))
   subs <- dplyr::filter(file, stay_id %in% pids)$filtered_rows
 
   scan <- file$NewScan()$Filter(subs)
@@ -16,23 +17,50 @@ read_to_bm <- function(source, path = data_path("mm"), cols = feature_set(),
 
   res[, cols[1L]] <- as.double(col_dat[[1L]])
 
+  if (length(norm_cols) > 0L) {
+    sta <- read_colstats(source, split, norm_cols)
+  } else {
+    sta <- NULL
+  }
+
   for (col in cols[-1L]) {
+
     col_dat <- scan$Project(col)$Finish()$ToTable()
-    res[, col] <- as.double(col_dat[[1L]])
+    tmp_dat <- as.double(col_dat[[1L]])
+
+    if (col %in% rownames(sta)) {
+      tmp_dat <- zero_impute(
+        zscore(tmp_dat, sta[col, "means"], sta[col, "stds"])
+      )
+    }
+
+    res[, col] <- tmp_dat
   }
 
   res
 }
 
 read_to_df <- function(source, path = data_path("mm"), cols = feature_set(),
-                       pids = coh_split(source)) {
+                       norm_cols = norm_sel(cols), split = "split_0",
+                       pids = coh_split(source, split = split)) {
 
-  file <- arrow::open_dataset(file.path(path, source, "features"))
+  file <- arrow::open_dataset(file.path(path, source))
 
   res <- dplyr::filter(file, stay_id %in% pids)
   res <- dplyr::select(res, dplyr::all_of(cols))
+  res <- dplyr::collect(res)
 
-  dplyr::collect(res)
+  if (length(norm_cols) > 0L) {
+    res <- data.table::setDT(res)
+    sta <- read_colstats(source, split, norm_cols)
+    fea <- rownames(sta)
+    res <- res[, c(fea) := Map(zscore, .SD, sta[, "means"], sta[, "stds"]),
+               .SDcols = fea]
+    res <- res[, c(fea) := lapply(.SD, zero_impute), .SDcols = fea]
+    res <- data.table::setDF(res)
+  }
+
+  res
 }
 
 read_to_vec <- function(source, path = data_path("mm"), col = "sep3",
@@ -66,7 +94,7 @@ create_parquet <- function(x, name, ...) {
   arrow::write_parquet(x, paste0(name, ".parquet"), ...)
 }
 
-read_parquet <- function(name, cols = NULL, pids = NULL) {
+read_parquet <- function(source, dir = data_path(), cols = NULL, pids = NULL) {
 
   read_subset <- function(n, x, i, j = NULL) {
 
@@ -81,8 +109,8 @@ read_parquet <- function(name, cols = NULL, pids = NULL) {
   }
 
   file <- list.files(
-    dirname(name),
-    paste0(basename(name), "_[0-9]\\.[0-9]\\.[0-9]\\.parquet"),
+    dir,
+    paste0(source, "_[0-9]\\.[0-9]\\.[0-9]\\.parquet"),
     full.names = TRUE
   )
 
