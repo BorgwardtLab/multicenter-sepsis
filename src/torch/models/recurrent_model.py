@@ -67,17 +67,17 @@ class RecurrentModel(BaseModel):
     def add_model_specific_args(cls, parent_parser):
         parser = super().add_model_specific_args(parent_parser)
         # MODEL specific
-        parser.opt_list(
+        parser.add_argument(
             '--d-model', type=int, default=64,
-            tunable=True, options=[64, 128, 256, 512]
+            # tunable=True, options=[64, 128, 256, 512]
         )
-        parser.opt_list(
+        parser.add_argument(
             '--n-layers', type=int, default=1,
-            tunable=True, options=[1, 2, 3]
+            # tunable=True, options=[1, 2, 3]
         )
-        parser.opt_list(
+        parser.add_argument(
             '--dropout', default=0.1, type=float,
-            tunable=True, options=[0., 0.1, 0.2, 0.3, 0.4]
+            # tunable=True, options=[0., 0.1, 0.2, 0.3, 0.4]
         )
         return parser
 
