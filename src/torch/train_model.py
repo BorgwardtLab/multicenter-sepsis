@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 
 import src.torch.models
-import src.datasets
+import src.torch.datasets
 from src.torch.torch_utils import JsonEncoder, TbWithBestValueLogger
 
 
@@ -120,10 +120,10 @@ if __name__ == '__main__':
                         default='min')
     parser.add_argument('--indicators', type=bool,
                         default=True)
-    parser.add_argument(
-        '--feature-set', default='all',
-        help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'
-    )
+    # parser.add_argument(
+    #     '--feature-set', default='all',
+    #     help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'
+    # )
 
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
@@ -148,5 +148,5 @@ if __name__ == '__main__':
             main(hyperparam_draw, model_cls)
     else:
         # Need to do this in order to allow pickling
-        hparams = Namespace(**hparams.__getstate__())
+        hparams = Namespace(**vars(hparams))
         main(hparams, model_cls)
