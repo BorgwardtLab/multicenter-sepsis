@@ -56,55 +56,58 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   fun <- switch(predictor, linear = train_lin, rf = train_rf)
   mod <- prof(fun(x, y, !identical(target, "reg"), n_cores(), ...))
 
-  rm(x, y)
-
   qs::qsave(mod, paste0(job, ".qs"))
 
-  pids <- coh_split(test_src, "validation", split)
+  for (src in test_src) {
 
-  msg("reading validation data")
+    rm(x, y)
 
-  x <- prof(
-    read_to_mat(test_src, cols = feature_sel(feat_reg, predictor),
-      path = data_dir, split = split, pids = pids, mat_type = mat
+    pids <- coh_split(src, "validation", split)
+
+    msg("reading `", src, "` validation data")
+
+    x <- prof(
+      read_to_mat(src, cols = feature_sel(feat_reg, predictor),
+        path = data_dir, split = split, pids = pids, mat_type = mat
+      )
     )
-  )
 
-  msg("predicting")
+    msg("predicting")
 
-  fun <- switch(predictor, linear = pred_lin, rf = pred_rf)
-  res <- prof(fun(mod, x))
+    fun <- switch(predictor, linear = pred_lin, rf = pred_rf)
+    res <- prof(fun(mod, x))
 
-  y <- switch(target,
-    class = y_class(test_src, hours(6L), hours(Inf), path = data_dir,
-                    split = split, pids = pids),
-    hybrid = y_class(test_src, hours(6L), hours(6L), path = data_dir,
-                     split = split, pids = pids),
-    reg = y_reg(test_src, path = data_dir, split = split, pids = pids)
-  )
+    y <- switch(target,
+      class = y_class(src, hours(6L), hours(Inf), path = data_dir,
+                      split = split, pids = pids),
+      hybrid = y_class(src, hours(6L), hours(6L), path = data_dir,
+                       split = split, pids = pids),
+      reg = y_reg(src, path = data_dir, split = split, pids = pids)
+    )
 
-  pids <- read_to_df(test_src, data_dir, cols = c("stay_id", "stay_time"),
-                     norm_cols = NULL, split = split, pids = pids)
-  pids <- pids[, stay_time := as.double(stay_time)]
+    pids <- read_to_df(src, data_dir, cols = c("stay_id", "stay_time"),
+                       norm_cols = NULL, split = split, pids = pids)
+    pids <- pids[, stay_time := as.double(stay_time)]
 
-  y <- split(y, pids[["stay_id"]])
-  res <- split(res, pids[["stay_id"]])
+    y <- split(y, pids[["stay_id"]])
+    res <- split(res, pids[["stay_id"]])
 
-  pids <- split(pids, by = "stay_id", keep.by = FALSE)
-  pids <- lapply(pids, `[[`, "stay_time")
+    pids <- split(pids, by = "stay_id", keep.by = FALSE)
+    pids <- lapply(pids, `[[`, "stay_time")
 
-  res <- list(
-    model = paste(predictor, target, feat_reg, sep = "::"),
-    dataset_train = train_src,
-    dataset_eval = test_src,
-    split = split,
-    labels = y,
-    scores = res,
-    times = pids,
-    ids = names(pids)
-  )
+    res <- list(
+      model = paste(predictor, target, feat_reg, sep = "::"),
+      dataset_train = train_src,
+      dataset_eval = src,
+      split = split,
+      labels = y,
+      scores = res,
+      times = pids,
+      ids = names(pids)
+    )
 
-  jsonlite::write_json(res, paste0(job, ".json"))
+    jsonlite::write_json(res, paste0(job, "-", src, ".json"))
+  }
 
   invisible(NULL)
 }
