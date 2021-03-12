@@ -63,6 +63,19 @@ def load_data_splits(args,
     Util function to read all 3 data splits of current repetion
     and return dictionary {X_train: [], y_train: [], ..}
     setting the label to the current task
+    Parameters: 
+    args: config object with properties:
+        .task regression or classification
+        .index: multi oder single index
+        .input_path: path to input data, with dataset name generic with {}
+        .dataset: name of dataset
+        .split_path: path to split info
+        .lambda_path: path to lambdas
+        .normalizer_path: path to normalizer
+        .features_path: path to feature columns file
+        .variable_set: full, physionet
+        .feature_set: large, small
+        .rep: repetition/fold of split
     """ 
     d = {}
     if args.task == 'classification':
