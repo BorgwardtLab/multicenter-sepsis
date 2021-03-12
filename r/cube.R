@@ -16,7 +16,7 @@ args <- check_index(
   feat_set = "basic",
   predictor = c("linear", "rf"),
   target = "reg",
-  res_dir = file.path(data_path("res"), paste0("model_", jobname()))
+  res_dir = file.path(data_path("res"), paste0("model_", jobid()))
 )
 
 prof(do.call(fit_predict, args))

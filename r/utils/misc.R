@@ -5,8 +5,8 @@ n_cores <- function() {
   )
 }
 
-jobname <- function() {
-  Sys.getenv("LSB_JOBNAME", unset = as.numeric(Sys.time()))
+jobid <- function() {
+  Sys.getenv("LSB_JOBID", unset = as.numeric(Sys.time()))
 }
 
 cfg_path <- function(file) file.path(root_dir, "config", file)

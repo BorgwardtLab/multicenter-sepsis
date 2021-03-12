@@ -7,7 +7,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
                         res_dir = data_path("res"), ...) {
 
   if (!dir.exists(res_dir)) {
-    dir.create(res_dir)
+    dir.create(res_dir, showWarnings = FALSE)
   }
 
   if (missing(feat_reg)) {
@@ -94,7 +94,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   pids <- lapply(pids, `[[`, "stay_time")
 
   res <- list(
-    model = basename(predictor, target, feat_reg, sep = "::"),
+    model = paste(predictor, target, feat_reg, sep = "::"),
     dataset_train = train_src,
     dataset_eval = test_src,
     split = split,
