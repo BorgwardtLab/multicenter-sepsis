@@ -143,6 +143,7 @@ class SplittedDataset(ParquetDataset):
         else:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).feature_set(name=feature_set)
+        self.columns = self.columns + [self.LABEL_COLUMN]
         self.pd_transform = pd_transform
         self.transform = transform
 

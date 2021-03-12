@@ -1,38 +1,90 @@
 
-read_to_bm <- function(source, path = data_path("mm"), cols = feature_set(),
-                       pids = coh_split(source)) {
+read_to_bm <- function(...) read_to_mat(..., mat_type = "big")
 
-  file <- arrow::open_dataset(file.path(path, source, "features"))
+read_to_mat <- function(source, path = data_path("mm"), cols = feature_set(),
+                        norm_cols = norm_sel(cols), split = "split_0",
+                        pids = coh_split(source, split = split),
+                        mat_type = c("mem", "big")) {
+
+  might_norm <- function(x, col) {
+
+    res <- as.double(x)
+
+    if (col %in% rownames(sta)) {
+      res <- zero_impute(
+        zscore(res, sta[col, "means"], sta[col, "stds"])
+      )
+    }
+
+    res
+  }
+
+  if (length(norm_cols) > 0L) {
+    sta <- read_colstats(source, split, norm_cols)
+  } else {
+    sta <- NULL
+  }
+
+  file <- arrow::open_dataset(file.path(path, source))
   subs <- dplyr::filter(file, stay_id %in% pids)$filtered_rows
 
   scan <- file$NewScan()$Filter(subs)
 
   col_dat <- scan$Project(cols[1L])$Finish()$ToTable()
 
-  res <- bigmemory::big.matrix(
-    nrow(col_dat), length(cols), type = "double", dimnames = list(NULL, cols),
-    shared = TRUE
-  )
+  if (identical(match.arg(mat_type), "big")) {
 
-  res[, cols[1L]] <- as.double(col_dat[[1L]])
+    res <- bigmemory::big.matrix(
+      nrow(col_dat), length(cols), type = "double",
+      dimnames = list(NULL, cols), shared = TRUE
+    )
+
+  } else {
+
+    res <- matrix(nrow = nrow(col_dat), ncol = length(cols),
+                  dimnames = list(NULL, cols))
+  }
+
+  res[, cols[1L]] <- might_norm(col_dat[[1L]], cols[1L])
 
   for (col in cols[-1L]) {
     col_dat <- scan$Project(col)$Finish()$ToTable()
-    res[, col] <- as.double(col_dat[[1L]])
+    res[, col] <- might_norm(col_dat[[1L]], col)
   }
 
   res
 }
 
 read_to_df <- function(source, path = data_path("mm"), cols = feature_set(),
-                       pids = coh_split(source)) {
+                       norm_cols = norm_sel(cols), split = "split_0",
+                       pids = coh_split(source, split = split)) {
 
-  file <- arrow::open_dataset(file.path(path, source, "features"))
+  file <- arrow::open_dataset(file.path(path, source))
 
-  res <- dplyr::filter(file, stay_id %in% pids)
-  res <- dplyr::select(res, dplyr::all_of(cols))
+  if (length(pids) > 0L && length(cols) > 0L) {
+    res <- dplyr::filter(file, stay_id %in% pids)
+    res <- dplyr::select(res, dplyr::all_of(cols))
+  } else if (length(pids) > 0L) {
+    res <- dplyr::filter(file, stay_id %in% pids)
+  } else if (length(cols) > 0L) {
+    res <- dplyr::select(file, dplyr::all_of(cols))
+  } else {
+    res <- file
+  }
 
-  dplyr::collect(res)
+  res <- dplyr::collect(res)
+
+  if (length(norm_cols) > 0L) {
+    res <- data.table::setDT(res)
+    sta <- read_colstats(source, split, norm_cols)
+    fea <- rownames(sta)
+    res <- res[, c(fea) := Map(zscore, .SD, sta[, "means"], sta[, "stds"]),
+               .SDcols = fea]
+    res <- res[, c(fea) := lapply(.SD, zero_impute), .SDcols = fea]
+    res <- data.table::setDF(res)
+  }
+
+  try_id_tbl(res)
 }
 
 read_to_vec <- function(source, path = data_path("mm"), col = "sep3",
@@ -66,7 +118,7 @@ create_parquet <- function(x, name, ...) {
   arrow::write_parquet(x, paste0(name, ".parquet"), ...)
 }
 
-read_parquet <- function(name, cols = NULL, pids = NULL) {
+read_parquet <- function(source, dir = data_path(), cols = NULL, pids = NULL) {
 
   read_subset <- function(n, x, i, j = NULL) {
 
@@ -81,8 +133,8 @@ read_parquet <- function(name, cols = NULL, pids = NULL) {
   }
 
   file <- list.files(
-    dirname(name),
-    paste0(basename(name), "_[0-9]\\.[0-9]\\.[0-9]\\.parquet"),
+    dir,
+    paste0(source, "_[0-9]\\.[0-9]\\.[0-9]\\.parquet"),
     full.names = TRUE
   )
 
@@ -117,20 +169,27 @@ read_parquet <- function(name, cols = NULL, pids = NULL) {
     }
   }
 
-  if ("stay_id" %in% colnames(res)) {
+  try_id_tbl(res)
+}
 
-    if ("stay_time" %in% colnames(res)) {
+try_id_tbl <- function(x) {
 
-      res[["stay_time"]] <- as.difftime(res[["stay_time"]], units = "hours")
+  if ("stay_id" %in% colnames(x)) {
 
-      res <- as_ts_tbl(res, id_vars = "stay_id", index_var = "stay_time",
-                       interval = hours(1L), by_ref = TRUE)
+    if ("stay_time" %in% colnames(x)) {
+
+      x <- data.table::set(x, j = "stay_time",
+        value = as.difftime(x[["stay_time"]], units = "hours")
+      )
+
+      x <- as_ts_tbl(x, id_vars = "stay_id", index_var = "stay_time",
+                     interval = hours(1L), by_ref = TRUE)
 
     } else {
 
-      res <- as_id_tbl(res, id_vars = "stay_id", by_ref = TRUE)
+      x <- as_id_tbl(x, id_vars = "stay_id", by_ref = TRUE)
     }
   }
 
-  res
+  x
 }
