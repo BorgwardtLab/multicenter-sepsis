@@ -1,7 +1,29 @@
 
-read_to_bm <- function(source, path = data_path("mm"), cols = feature_set(),
-                       norm_cols = norm_sel(cols), split = "split_0",
-                       pids = coh_split(source, split = split)) {
+read_to_bm <- function(...) read_to_mat(..., mat_type = "big")
+
+read_to_mat <- function(source, path = data_path("mm"), cols = feature_set(),
+                        norm_cols = norm_sel(cols), split = "split_0",
+                        pids = coh_split(source, split = split),
+                        mat_type = c("mem", "big")) {
+
+  might_norm <- function(x, col) {
+
+    res <- as.double(x)
+
+    if (col %in% rownames(sta)) {
+      res <- zero_impute(
+        zscore(res, sta[col, "means"], sta[col, "stds"])
+      )
+    }
+
+    res
+  }
+
+  if (length(norm_cols) > 0L) {
+    sta <- read_colstats(source, split, norm_cols)
+  } else {
+    sta <- NULL
+  }
 
   file <- arrow::open_dataset(file.path(path, source))
   subs <- dplyr::filter(file, stay_id %in% pids)$filtered_rows
@@ -10,31 +32,24 @@ read_to_bm <- function(source, path = data_path("mm"), cols = feature_set(),
 
   col_dat <- scan$Project(cols[1L])$Finish()$ToTable()
 
-  res <- bigmemory::big.matrix(
-    nrow(col_dat), length(cols), type = "double", dimnames = list(NULL, cols),
-    shared = TRUE
-  )
+  if (identical(match.arg(mat_type), "big")) {
 
-  res[, cols[1L]] <- as.double(col_dat[[1L]])
+    res <- bigmemory::big.matrix(
+      nrow(col_dat), length(cols), type = "double",
+      dimnames = list(NULL, cols), shared = TRUE
+    )
 
-  if (length(norm_cols) > 0L) {
-    sta <- read_colstats(source, split, norm_cols)
   } else {
-    sta <- NULL
+
+    res <- matrix(nrow = nrow(col_dat), ncol = length(cols),
+                  dimnames = list(NULL, cols))
   }
 
+  res[, cols[1L]] <- might_norm(col_dat[[1L]], cols[1L])
+
   for (col in cols[-1L]) {
-
     col_dat <- scan$Project(col)$Finish()$ToTable()
-    tmp_dat <- as.double(col_dat[[1L]])
-
-    if (col %in% rownames(sta)) {
-      tmp_dat <- zero_impute(
-        zscore(tmp_dat, sta[col, "means"], sta[col, "stds"])
-      )
-    }
-
-    res[, col] <- tmp_dat
+    res[, col] <- might_norm(col_dat[[1L]], col)
   }
 
   res
