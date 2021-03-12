@@ -216,7 +216,7 @@ def load_and_transform_data(
         df = df.drop(columns=[VM_DEFAULT('utility')])
         new_target = l*u*lam + (1-l)*u 
         df[VM_DEFAULT('utility')] = new_target 
-        df = df.drop(columns=[VM_DEFAULT('label')]) 
+        # df = df.drop(columns=[VM_DEFAULT('label')]) 
         print(f'.. took {time() - start} seconds.')
     # 4. Remove remaining NaN values and check for invalid values 
     # e.g. due to degenerate stats in normalization
