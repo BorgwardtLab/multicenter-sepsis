@@ -11,13 +11,24 @@ delayedAssign("src_opt",
 )
 
 delayedAssign("out_dir",
-    optparse::make_option(
+  optparse::make_option(
     c("-d", "--dir"),
     type = "character",
     default = "data-export",
     help = "output directory [default = \"%default\"]",
     metavar = "dir",
     dest = "path"
+  )
+)
+
+delayedAssign("job_index",
+  optparse::make_option(
+    c("-i", "--index"),
+    type = "integer",
+    default = 1L,
+    help = "job index [default = \"%default\"]",
+    metavar = "index",
+    dest = "ind"
   )
 )
 
@@ -80,6 +91,18 @@ check_dir <- function(opt) {
       {res}.\n\n")
 
   res
+}
+
+check_index <- function(opt, ...) {
+
+  arg_opts <- expand.grid(..., KEEP.OUT.ATTRS = FALSE,
+                          stringsAsFactors = FALSE)
+
+  opt <- Sys.getenv("LSB_JOBINDEX", unset = opt$ind)
+
+  assert(is.count(opt), opt <= nrow(arg_opts))
+
+  as.list(arg_opts[opt, ])
 }
 
 format_unit <- function(x, units = "hours") format(`units<-`(x, units))

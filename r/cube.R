@@ -1,34 +1,22 @@
 #!/usr/bin/env Rscript
 
-#BSUB -W 12:00
-#BSUB -n 4
-#BSUB -R rusage[mem=4000]
-#BSUB -J model
-#BSUB -o data-res/model_%J.out
+#BSUB -W 1:00
+#BSUB -n 2
+#BSUB -R rusage[mem=1000]
+#BSUB -J model[1-2]
+#BSUB -o data-res/model_%J/lsf.out
 
 invisible(
   lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)
 )
 
-src <- "mimic_demo"
-
-feat_combos <- c(
-  "_(hours|locf|derived)$",
-  "_(hours|locf|derived|wavelet)$",
-  "_(hours|locf|derived|signature)$",
-  "_(hours|locf|derived|wavelet|signature)$"
+args <- check_index(
+  parse_args(job_index),
+  train_src = "mimic_demo",
+  feat_set = "basic",
+  predictor = c("linear", "rf"),
+  target = "reg",
+  res_dir = file.path(data_path("res"), paste0("model_", jobname()))
 )
 
-for (feats in feat_combos) {
-  for (pred in c("linear", "rf")) {
-    for (targ in c("class", "hybrid", "reg")) {
-
-      msg("running: `", pred, "` model with `", targ, "` response and using `",
-          feats, "` selected features")
-
-      prof(
-        fit_predict(src, feat_reg = feats, predictor = pred, target = targ)
-      )
-    }
-  }
-}
+prof(do.call(fit_predict, args))
