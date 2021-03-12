@@ -3,7 +3,7 @@
 #BSUB -W 12:00
 #BSUB -n 4
 #BSUB -R rusage[mem=4000]
-#BSUB -J export
+#BSUB -J model
 #BSUB -o data-res/model_%J.out
 
 invisible(
