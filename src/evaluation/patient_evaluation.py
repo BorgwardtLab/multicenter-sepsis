@@ -206,11 +206,14 @@ def main(args):
         'tp_precision': flatten_wrapper(
             functools.partial(precision_score, zero_division=0)
         ),
+        #TODO: we need to ensure that physionet score is properly calculated as time steps could be missing
+        # similar to regression target or sklearn scorer
         'tp_physionet2019_score': physionet2019_utility,
         'pat_eval': first_alarm_eval
     }
 
     n_steps = args.num_steps
+    #TODO: thresholds must not be from 0 to 1 when using regression, rather min to max score
     thresholds = np.linspace(0, 1, n_steps)
 
     results = collections.defaultdict(list)

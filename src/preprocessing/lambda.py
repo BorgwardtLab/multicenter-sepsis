@@ -29,7 +29,7 @@ class DaskLambdaCalculator(DaskIDTransformer):
     prevalence correction of clinical utility score.
 
     """
-    def __init__(self, u_fp=-0.05, early_window=12, shift=-6, **kwargs):
+    def __init__(self, u_fp=-0.05, early_window=12, shift=0, **kwargs):
         """
         Inputs:
             - u_fp: U_{FP} value as used in util score
@@ -117,7 +117,7 @@ class LambdaCalculator:
     prevalence correction of clinical utility score.
 
     """
-    def __init__(self, n_jobs=10, n_chunks=10000, u_fp=-0.05, early_window=12, shift=-6):
+    def __init__(self, n_jobs=10, n_chunks=10000, u_fp=-0.05, early_window=12, shift=0):
         """
         Inputs: 
             - n_jobs: number of jobs for parallelism
