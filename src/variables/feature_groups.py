@@ -100,7 +100,10 @@ class ColumnFilter:
              '_raw',
              '_time',
              'height',
-             'weight']
+             'weight',
+             'age',
+             'female',
+            ]
              #'_var',
              #'_wavelet',
              #'_signature', 

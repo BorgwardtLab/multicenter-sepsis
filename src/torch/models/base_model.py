@@ -1,4 +1,5 @@
 """Base model for all models implementing datasets and training."""
+import argparse
 import numpy as np
 
 import torch
@@ -7,9 +8,9 @@ import pytorch_lightning as pl
 
 from sklearn.metrics import (
     average_precision_score, roc_auc_score, balanced_accuracy_score)
-from test_tube import HyperOptArgumentParser
+# from test_tube import HyperOptArgumentParser
 
-import src.datasets
+import src.torch.datasets
 from src.evaluation import physionet2019_utility
 from src.torch.torch_utils import (
     variable_length_collate, ComposeTransformations, LabelPropagation)
@@ -27,8 +28,7 @@ class BaseModel(pl.LightningModule):
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
-            transform=ComposeTransformations(self.transforms),
-            feature_set=self.hparams.feature_set
+            transform=ComposeTransformations(self.transforms)
         )
         return int(data[0]['ts'].shape[-1])
 
@@ -52,7 +52,7 @@ class BaseModel(pl.LightningModule):
                  batch_size, weight_decay, **kwargs):
         super().__init__()
         self.save_hyperparameters()
-        self.dataset_cls = getattr(src.datasets, self.hparams.dataset)
+        self.dataset_cls = getattr(src.torch.datasets, self.hparams.dataset)
         d = self.dataset_cls(split='train')
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
         self.loss = torch.nn.BCEWithLogitsLoss(
@@ -201,8 +201,7 @@ class BaseModel(pl.LightningModule):
             Subset(
                 self.dataset_cls(
                     split='train',
-                    transform=ComposeTransformations(self.transforms),
-                    feature_set=self.hparams.feature_set
+                    transform=ComposeTransformations(self.transforms)
                 ),
                 self.train_indices
             ),
@@ -219,8 +218,7 @@ class BaseModel(pl.LightningModule):
             Subset(
                 self.dataset_cls(
                     split='train',
-                    transform=ComposeTransformations(self.transforms),
-                    feature_set=self.hparams.feature_set
+                    transform=ComposeTransformations(self.transforms)
                 ),
                 self.val_indices
             ),
@@ -236,8 +234,7 @@ class BaseModel(pl.LightningModule):
         return DataLoader(
             self.dataset_cls(
                 split='validation',
-                transform=ComposeTransformations(self.transforms),
-                feature_set=self.hparams.feature_set
+                transform=ComposeTransformations(self.transforms)
             ),
             shuffle=False,
             collate_fn=variable_length_collate,
@@ -248,21 +245,19 @@ class BaseModel(pl.LightningModule):
     @classmethod
     def add_model_specific_args(cls, parent_parser):
         """Specify the hyperparams."""
-        parser = HyperOptArgumentParser(
-            strategy='random_search', parents=[parent_parser])
+        parser = argparse.ArgumentParser(parents=[parent_parser])
         # training specific
         parser.add_argument(
-            '--dataset', type=str, choices=src.datasets.__all__,
-            default='PreprocessedDemoDataset'
+            '--dataset', type=str, choices=src.torch.datasets.__all__,
+            default='MimicDemo'
         )
-        parser.opt_range(
-            '--learning-rate', default=0.01, type=float,
-            tunable=True, log_base=10., low=0.0001, high=0.01
+        parser.add_argument(
+            '--learning-rate', default=0.001, type=float,
+            # tunable=True, log_base=10., low=0.0001, high=0.01
         )
-        parser.opt_list(
+        parser.add_argument(
             '--batch-size', default=32, type=int,
-            options=[16, 32, 64, 128, 256],
-            tunable=True
+            # options=[16, 32, 64, 128, 256], tunable=True
         )
         parser.add_argument('--weight-decay', default=0., type=float)
         parser.add_argument('--label-propagation', default=6, type=int)

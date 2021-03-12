@@ -117,7 +117,8 @@ def load_and_transform_data(
     feature_set='large',
     variable_set='full',
     task='regression',
-    baselines=False
+    baselines=False,
+    form='pandas'
 ):
     """
     Data loading function (for classic models).
@@ -152,13 +153,15 @@ def load_and_transform_data(
         cols.append(VM_DEFAULT('label'))
     else: 
         raise ValueError(f'task {task} not among valid tasks: regression, classification') 
+    if form == 'dask':
+        cols.remove(VM_DEFAULT('id')) #already in index
 
     # determine patient ids of current split:
     si = SplitInfo(split_path)
     ids = si(split, rep)
     
     # 1. Load Patient Data (selected ids and columns):
-    pl = ParquetLoader(data_path)
+    pl = ParquetLoader(data_path, form=form)
     start = time()
     print(f'Loading patient data..')
     df = pl.load(ids, columns=cols)
@@ -173,7 +176,8 @@ def load_and_transform_data(
             VM_DEFAULT('time'),
             VM_DEFAULT('utility'),
             *VM_DEFAULT.all_cat('baseline'),
-            *ind_cols
+            *ind_cols,
+            VM_DEFAULT('id') # for dask in index
         ]
         start = time()
         print('Applying normalization..') 
@@ -205,6 +209,7 @@ def load_and_transform_data(
         timestep_label = df[VM_DEFAULT('label')]
         l = timestep_label.groupby(VM_DEFAULT('id')).sum() > 0 #more nan-stable than .any()
         l = l.astype(int)
+        l = l.reindex(u.index) # again timestep wise label
         # applying lambda to target: if case: times lam, else no change
         # need to drop target instead of overwriting as otherwise pandas 
         # throwed an error due to reindexing with duplicate indices..
@@ -221,6 +226,8 @@ def load_and_transform_data(
         print('Warning: Degenerate values found (inf, -inf), plausibly due to degen. normalization')
     df = df.replace([np.inf, -np.inf], 0)
     print(f'Final imputation took {time() - start} seconds.')
+    if form == 'dask':
+        df = df.compute()
     return df
  
 if __name__ == "__main__":
