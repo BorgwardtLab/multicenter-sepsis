@@ -149,15 +149,11 @@ def main():
     
     # Select split for evaluation:
     split = args.split
-    if split == 'validation':
-        X_eval = data['X_validation']
-        y_eval = data['y_validation']
-    elif split == 'test':
-        X_eval = data['X_test']
-        y_eval = data['y_test']
-    else:
+    if split not in ['validation', 'test']:
         raise ValueError(f'{split} not among the valid eval splits: [validation, test]')
-
+    X_eval = data[f'X_{split}']
+    y_eval = data[f'y_{split}']
+    tp_labels = data[f'tp_labels_{split}'] #only for down-stream eval 
     results = {}
     #cache = {}
     #call = partial(_cached_call, cache)
@@ -190,16 +186,20 @@ def main():
 
     ids = y_eval.index.get_level_values(VM_DEFAULT('id')).unique().tolist() 
     results['ids'] = ids
-    labels = []
+    labels = [] #unshifted, timepoint-wise labels
+    targets = [] # target that was used in training: shifted label or regr. target
     predictions = []
     scores = []
     times = []
+
     for pid in ids:
-        labels.append(y_eval[pid].values.tolist()) 
+        labels.append(tp_labels[pid].values.tolist())
+        targets.append(y_eval[pid].values.tolist()) 
         predictions.append(preds.loc[pid][0].tolist())
         scores.append(probas.loc[pid][0].values.tolist()) 
         times.append(y_eval[pid].index.tolist())
     results['labels'] = labels
+    results['targets'] = targets
     results['predictions'] = predictions
     results['scores'] = scores 
     results['times'] = times

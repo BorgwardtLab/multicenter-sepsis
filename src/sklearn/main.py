@@ -91,6 +91,9 @@ def load_data_splits(args,
                 [VM_DEFAULT('id'), VM_DEFAULT('time')]
             ) 
         d[f'y_{split}'] = data[label]
+        # unshifted labels for down stream eval
+        d[f'tp_labels_{split}'] = data[VM_DEFAULT('label')]
+        data = data.drop(columns=[VM_DEFAULT('label')])
         data = data.drop(columns=[label])
         # sanity check as we must not leak any label info to the input data
         assert all( 
