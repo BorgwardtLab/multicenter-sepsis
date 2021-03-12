@@ -4,7 +4,7 @@
 #BSUB -n 2
 #BSUB -R rusage[mem=1000]
 #BSUB -J model[1-2]
-#BSUB -o data-res/model_%J/lsf.out
+#BSUB -o data-res/model_%J.out
 
 invisible(
   lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)

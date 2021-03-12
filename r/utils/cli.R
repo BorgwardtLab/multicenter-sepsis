@@ -98,7 +98,7 @@ check_index <- function(opt, ...) {
   arg_opts <- expand.grid(..., KEEP.OUT.ATTRS = FALSE,
                           stringsAsFactors = FALSE)
 
-  opt <- Sys.getenv("LSB_JOBINDEX", unset = opt$ind)
+  opt <- as.integer(Sys.getenv("LSB_JOBINDEX", unset = opt$ind))
 
   assert(is.count(opt), opt <= nrow(arg_opts))
 
