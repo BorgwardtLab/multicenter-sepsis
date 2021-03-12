@@ -70,7 +70,7 @@ class CalculateUtilityScores(ChunkedTransformer):
         passthrough=False,
         label='sep3',
         score_name='utility',
-        shift=-6,
+        shift=0,
         **kwargs
     ):
         """Create new instance of class.
