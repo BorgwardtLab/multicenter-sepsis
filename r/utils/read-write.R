@@ -6,19 +6,6 @@ read_to_mat <- function(source, path = data_path("mm"), cols = feature_set(),
                         pids = coh_split(source, split = split),
                         mat_type = c("mem", "big")) {
 
-  might_norm <- function(x, col) {
-
-    res <- as.double(x)
-
-    if (col %in% rownames(sta)) {
-      res <- zero_impute(
-        zscore(res, sta[col, "means"], sta[col, "stds"])
-      )
-    }
-
-    res
-  }
-
   if (length(norm_cols) > 0L) {
     sta <- read_colstats(source, split, norm_cols)
   } else {
@@ -28,28 +15,34 @@ read_to_mat <- function(source, path = data_path("mm"), cols = feature_set(),
   file <- arrow::open_dataset(file.path(path, source))
   subs <- dplyr::filter(file, stay_id %in% pids)$filtered_rows
 
-  scan <- file$NewScan()$Filter(subs)
-
-  col_dat <- scan$Project(cols[1L])$Finish()$ToTable()
+  scan <- file$NewScan()$Filter(subs)$Project(cols)$Finish()
+  tble <- scan$ToTable()
 
   if (identical(match.arg(mat_type), "big")) {
 
     res <- bigmemory::big.matrix(
-      nrow(col_dat), length(cols), type = "double",
+      nrow(tble), length(cols), type = "double",
       dimnames = list(NULL, cols), shared = TRUE
     )
 
   } else {
 
-    res <- matrix(nrow = nrow(col_dat), ncol = length(cols),
+    res <- matrix(nrow = nrow(tble), ncol = length(cols),
                   dimnames = list(NULL, cols))
   }
 
-  res[, cols[1L]] <- might_norm(col_dat[[1L]], cols[1L])
+  for (col in cols) {
 
-  for (col in cols[-1L]) {
-    col_dat <- scan$Project(col)$Finish()$ToTable()
-    res[, col] <- might_norm(col_dat[[1L]], col)
+    tmp <- tble$GetColumnByName(col)$as_vector()
+    tmp <- as.double(tmp)
+
+    if (col %in% rownames(sta)) {
+      tmp <- zero_impute(
+        zscore(tmp, sta[col, "means"], sta[col, "stds"])
+      )
+    }
+
+    res[, col] <- tmp
   }
 
   res
