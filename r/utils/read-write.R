@@ -36,6 +36,10 @@ read_to_mat <- function(source, path = data_path("mm"), cols = feature_set(),
     tmp <- tble$GetColumnByName(col)$as_vector()
     tmp <- as.double(tmp)
 
+    if (identical(col, "female")) {
+      tmp <- replace(tmp, is.na(tmp), 0)
+    }
+
     if (col %in% rownames(sta)) {
       tmp <- zero_impute(
         zscore(tmp, sta[col, "means"], sta[col, "stds"])

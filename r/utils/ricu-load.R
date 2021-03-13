@@ -336,7 +336,7 @@ export_data <- function(src, dest_dir = data_path("export"),
   cohor[[src]]$final <- unique(id_col(dat))
   jsonlite::write_json(cohor, coh_cfg, pretty = TRUE)
 
-  dat <- dat[, c("female") := list(female == "Female")]
+  dat <- dat[, c("female") := list(is_true(female == "Female"))]
 
   dat <- dat[, onset := sep3]
   dat <- replace_na(dat, type = "locf", by_ref = TRUE, vars = "sep3",
