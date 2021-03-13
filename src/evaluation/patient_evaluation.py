@@ -198,6 +198,9 @@ def main(args):
 
     with open(args.input_file, 'r') as f:
         d = json.load(f)
+    score_list = [s for pat in d['scores'] for s in pat]
+    score_max = max(score_list)
+    score_min = min(score_list)
 
     measures = {
         'tp_recall': flatten_wrapper(
@@ -214,8 +217,8 @@ def main(args):
 
     n_steps = args.num_steps
     #TODO: thresholds must not be from 0 to 1 when using regression, rather min to max score
-    thresholds = np.linspace(0, 1, n_steps)
-
+    thresholds = np.linspace(score_min, score_max, n_steps)
+    print(f'Using {n_steps} thresholds between {score_min} and {score_max}.')
     results = collections.defaultdict(list)
 
     for thres in thresholds:
