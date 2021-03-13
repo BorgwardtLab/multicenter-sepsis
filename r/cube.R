@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
-#BSUB -W 1:00
-#BSUB -n 2
+#BSUB -W 24:00
+#BSUB -n 8
 #BSUB -R rusage[mem=1000]
 #BSUB -J model[1-2]
 #BSUB -o data-res/model_%J.out
@@ -12,11 +12,14 @@ invisible(
 
 args <- check_index(
   parse_args(job_index),
-  train_src = "mimic_demo",
-  feat_set = "basic",
+  train_src = "mimic",
+  feat_set = "full",
   predictor = c("linear", "rf"),
-  target = "reg",
-  res_dir = file.path(data_path("res"), paste0("model_", jobid()))
+  target = "reg"
 )
 
-prof(do.call(fit_predict, args))
+dir <- file.path(data_path("res"), paste0("model_", jobid()))
+
+prof(
+  do.call(fit_predict, c(args, list(res_dir = dir)))
+)

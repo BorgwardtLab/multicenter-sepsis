@@ -132,7 +132,7 @@ train_rf <- function(x, y, is_class, n_cores, ...) {
 train_lin <- function(x, y, is_class, n_cores, ...) {
 
   biglasso::cv.biglasso(
-    x, y, family = ifelse(is_class, "binomial", "gaussian"), nfolds = 3L,
+    x, y, family = ifelse(is_class, "binomial", "gaussian"), nfolds = 2L,
     nlambda = 50L, ncores = n_cores, ...
   )
 }
