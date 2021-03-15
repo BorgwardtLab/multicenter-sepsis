@@ -199,8 +199,8 @@ def main(args):
     with open(args.input_file, 'r') as f:
         d = json.load(f)
     score_list = [s for pat in d['scores'] for s in pat]
-    score_max = max(score_list)
-    score_min = min(score_list)
+    score_max = np.percentile(score_list, 99.5) #max(score_list)
+    score_min = np.percentile(score_list, 0.5) #min(score_list)
 
     measures = {
         'tp_recall': flatten_wrapper(
@@ -231,7 +231,7 @@ def main(args):
                 results[k].append(v)
 
     with open(args.output_file, 'w') as f:
-        json.dump(results, f)
+        json.dump(results, f, indent=4)
 
 
 if __name__ in "__main__":
