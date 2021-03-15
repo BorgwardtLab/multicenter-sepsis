@@ -195,10 +195,17 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
                      feat_set = c("basic", "wav", "sig", "full"),
                      predictor = c("linear", "rf"),
                      target = c("class", "hybrid", "reg"),
-                     dir = data_path("res")) {
+                     dir = data_path("res"), jobid = NULL) {
 
-  dir <- grep(paste0("^", file.path(dir, "model_"), "[0-9]+"), list.dirs(dir),
-              value =TRUE)[1L]
+  if (is.null(jobid)) {
+    dir <- grep(
+      paste0("^", file.path(dir, "model_"), "[0-9]+"), list.dirs(dir),
+      value =TRUE
+    )[1L]
+  } else {
+    dir <- file.path(dir, paste0("model_", jobid))
+  }
+
   fil <- list.files(dir,
     paste(predictor, target, feat_set, train_src, test_src, sep = "-"),
     full.names = TRUE
