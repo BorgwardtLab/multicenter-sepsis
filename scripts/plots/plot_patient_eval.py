@@ -9,8 +9,8 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--input_path', default='results/evaluation/extended_features/patient_eval_lgbm_aumc_aumc.json')
-parser.add_argument('--output_path', default='results/evaluation/extended_features/')
+parser.add_argument('--input_path', default='results/evaluation/patient_eval_lgbm_aumc_aumc.json')
+parser.add_argument('--output_path', default='results/evaluation')
 
 args = parser.parse_args()
 input_path = args.input_path
@@ -31,7 +31,7 @@ ax2 = ax1.twinx()
 ax2.set_ylabel('Earliness: mean #hours before onset', fontsize=16, color='red')
 ax2 = sns.lineplot(x='thres', y='earliness_mean', data = df, label='earliness', color='red')
 
-plt.xticks(np.arange(0, 1, step=0.1))
+plt.xticks(np.arange(df['thres'].min(), df['thres'].max(), step=0.05))
 ax1.set_yticks(np.arange(0,1, step=0.1))
 
 lines, labels = ax1.get_legend_handles_labels()
