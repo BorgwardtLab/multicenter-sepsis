@@ -114,15 +114,15 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
 train_rf <- function(x, y, is_class, n_cores, ...) {
   ranger::ranger(
-    y = y, x = x, probability = is_class, min.node.size = 100,
-    num.threads = n_cores, ...
+    y = y, x = x, probability = is_class, min.node.size = 1000,
+    importance = "impurity", num.threads = n_cores, ...
   )
 }
 
 train_lin <- function(x, y, is_class, n_cores, ...) {
   biglasso::biglasso(
     x, y, family = ifelse(is_class, "binomial", "gaussian"),
-    lambda = seq(0.0019, 0.0021, 0.0001), ncores = n_cores, ...
+    lambda = c(0.0036, 0.0031), ncores = n_cores, ...
   )
 }
 
