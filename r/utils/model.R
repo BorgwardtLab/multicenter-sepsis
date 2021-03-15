@@ -15,9 +15,9 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     feat_set <- match.arg(feat_set)
     feat_reg <- switch(feat_set,
       basic = "_(hours|locf|derived)$",
-      wav = "_(hours|locf|derived|wavelet)$",
-      sig = "_(hours|locf|derived|signature)$",
-      full = "_(hours|locf|derived|wavelet|signature)$"
+      wav = "_(hours|locf|derived|wavelet_[0-9]+)$",
+      sig = "_(hours|locf|derived|signature_[0-9]+)$",
+      full = "_(hours|locf|derived|wavelet_[0-9]+|signature_[0-9]+)$"
     )
 
   } else {
