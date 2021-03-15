@@ -10,14 +10,17 @@ import numpy as np
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--input_path', default='results/evaluation/patient_eval_lgbm_aumc_aumc.json')
-parser.add_argument('--output_path', default='results/evaluation')
-
+parser.add_argument('--output_path', default='results/evaluation/plots')
+parser.add_argument('--earliness-stat', default='mean')
 args = parser.parse_args()
 input_path = args.input_path
 with open(input_path, 'r') as f:
     d = json.load(f)
 df = pd.DataFrame(d)
-df['earliness_mean'] *= -1 
+
+earliness_stat = args.earliness_stat
+earliness = f'earliness_{earliness_stat}'
+df[earliness] *= -1 
 
 fig, ax1 = plt.subplots(figsize=(10,6))
 ax1.set_title('Patient-based Evaluation', fontsize=19)
@@ -28,8 +31,8 @@ ax1 = sns.lineplot(x='thres', y='pat_precision', data = df, label='precision', c
 ax1 = sns.lineplot(x='thres', y='pat_recall', data = df, label='recall', color='tab:green')
 
 ax2 = ax1.twinx()
-ax2.set_ylabel('Earliness: mean #hours before onset', fontsize=16, color='red')
-ax2 = sns.lineplot(x='thres', y='earliness_mean', data = df, label='earliness', color='red')
+ax2.set_ylabel(f'Earliness: {earliness_stat} #hours before onset', fontsize=16, color='red')
+ax2 = sns.lineplot(x='thres', y=earliness, data = df, label='earliness', color='red')
 
 plt.xticks(np.arange(df['thres'].min(), df['thres'].max(), step=0.05))
 ax1.set_yticks(np.arange(0,1, step=0.1))
@@ -38,5 +41,5 @@ lines, labels = ax1.get_legend_handles_labels()
 lines2, labels2 = ax2.get_legend_handles_labels()
 ax2.legend(lines + lines2, labels + labels2, loc='upper left', bbox_to_anchor=(0.05,0.8))
 
-out_file = os.path.split(input_path)[-1].split('.')[0] + '.png' 
+out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
 plt.savefig( os.path.join(args.output_path, out_file))
