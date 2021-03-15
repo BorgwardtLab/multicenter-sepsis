@@ -113,16 +113,20 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 }
 
 train_rf <- function(x, y, is_class, n_cores, ...) {
-  ranger::ranger(
-    y = y, x = x, probability = is_class, min.node.size = 100,
-    num.threads = n_cores, ...
-  )
+  for (mns in seq(5000, 15000, 1000)) {
+    mod <- ranger::ranger(
+      y = y, x = x, probability = is_class, min.node.size = mns,
+      importance = "impurity", num.threads = n_cores, ...
+    )
+    qs::qsave(mod, file.path(data_path("res"), paste0("rf_", mns, ".qs")))
+  }
+  mod
 }
 
 train_lin <- function(x, y, is_class, n_cores, ...) {
   biglasso::biglasso(
     x, y, family = ifelse(is_class, "binomial", "gaussian"),
-    lambda = seq(0.0019, 0.0021, 0.0001), ncores = n_cores, ...
+    lambda = c(0.0036, 0.0031), ncores = n_cores, ...
   )
 }
 
