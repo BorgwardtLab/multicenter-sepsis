@@ -2,8 +2,8 @@
 
 #BSUB -W 24:00
 #BSUB -n 16
-#BSUB -R rusage[mem=4000]
-#BSUB -J model[1-2]
+#BSUB -R rusage[mem=8000]
+#BSUB -J model
 #BSUB -o data-res/model_%J.out
 
 invisible(
@@ -11,12 +11,10 @@ invisible(
 )
 
 redir <- file.path(data_path("res"), paste0("model_", jobid()))
-
-args <- check_index(
-  parse_args(job_index),
-  predictor = c("linear", "rf"), train_src = "aumc", res_dir = redir
-)
+extra <- list(test_src = c("mimic", "aumc"), res_dir = redir)
 
 invisible(
-  prof(do.call(fit_predict, args))
+  prof(
+    fit_predict("mimid", feat_set = "full", predictor = "rf", res_dir = redir)
+  )
 )

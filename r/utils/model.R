@@ -15,9 +15,9 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     feat_set <- match.arg(feat_set)
     feat_reg <- switch(feat_set,
       basic = "_(hours|locf|derived)$",
-      wav = "_(hours|locf|derived|wavelet)$",
-      sig = "_(hours|locf|derived|signature)$",
-      full = "_(hours|locf|derived|wavelet|signature)$"
+      wav = "_(hours|locf|derived|wavelet_[0-9]+)$",
+      sig = "_(hours|locf|derived|signature_[0-9]+)$",
+      full = "_(hours|locf|derived|wavelet_[0-9]+|signature_[0-9]+)$"
     )
 
   } else {
@@ -113,27 +113,16 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 }
 
 train_rf <- function(x, y, is_class, n_cores, ...) {
-
-  nde <- c(10L, 20L, 50L)
-  mod <- vector("list", length(nde))
-
-  for (i in seq_along(mod)) {
-    mod[[i]] <- ranger::ranger(
-      y = y, x = x, probability = is_class, min.node.size = nde[i],
-      num.threads = n_cores, ...
-    )
-  }
-
-  mod[[
-    which.min(vapply(mod, `[[`, numeric(1L), "prediction.error"))
-  ]]
+  ranger::ranger(
+    y = y, x = x, probability = is_class, min.node.size = 100,
+    num.threads = n_cores, ...
+  )
 }
 
 train_lin <- function(x, y, is_class, n_cores, ...) {
-
-  biglasso::cv.biglasso(
-    x, y, family = ifelse(is_class, "binomial", "gaussian"), nfolds = 4L,
-    nlambda = 50L, ncores = n_cores, ...
+  biglasso::biglasso(
+    x, y, family = ifelse(is_class, "binomial", "gaussian"),
+    lambda = seq(0.0019, 0.0021, 0.0001), ncores = n_cores, ...
   )
 }
 
