@@ -5,15 +5,17 @@ import collections
 import functools
 import itertools
 import json
+import os
+import pandas as pd
 import pathlib
-
 import numpy as np
-
-from src.evaluation.physionet2019_score import physionet2019_utility
-
 from sklearn.metrics import recall_score
 from sklearn.metrics import precision_score
 from sklearn.metrics import confusion_matrix
+
+from src.evaluation.sklearn_utils import make_consecutive
+from src.evaluation.physionet2019_score import physionet2019_utility
+
 
 
 def fpr(y_true, y_pred):
@@ -150,12 +152,34 @@ def first_alarm_eval(y_true, y_pred, times):
 
     return r
 
+def utility_score_wrapper(lam=1, **kwargs):
+    """ returns a wrapped util score function which can 
+        process list of lists of labels, predictions and times.
+    """
+    def wrapped_func(y_true, y_pred, times):
+        labels = []; preds = []
+        for i in np.arange(len(y_true)):
+            l = y_true[i]; p = y_pred[i]; t = times[i]
+            df = pd.DataFrame( [ l, p, t ] ).T
+            df.columns = ['label','pred','time']
+            df = df.set_index('time')
+            n_nans = df.isnull().sum().sum()
+            assert n_nans == 0
+            # make time series is consecutive:
+            label, pred = make_consecutive(
+                df['label'], df['pred'])
+            labels.append(label.values)
+            preds.append(pred.values)
+        score = physionet2019_utility(labels, preds, lam, **kwargs)
+        return {'physionet2019_utility': score} 
+    return wrapped_func 
 
 def evaluate_threshold(data, labels, thres, measures):
     """Evaluate threshold-based and patient-based measures.
 
     - data: dictionary of experiment output data
-    - thres: float between [0,1]
+    - thres: float between [0,1] for classification, and between [min_score, max_score] 
+        for regression
     - measures: dict of callable evaluation measures to quantify
     """
     results = {}
@@ -195,12 +219,24 @@ def main(args):
     # TODO: missing capability to deal with unshifted labels; this
     # script will currently just use the labels that are available
     # in the input file.
+    
+    # Determine lambda path:
+    lambda_path = os.path.join(args.lambda_path, 
+        'lambda_{}_rep_{}.json' ) 
+    # Compute aggregate lambda over all train reps:
+    lambdas = []
+    for rep in np.arange(5):
+        with open(lambda_path.format(args.eval_dataset, rep), 'r') as f:
+            lam = json.load(f)['lam']
+            lambdas.append(lam)
+    lam = np.mean(lambdas)
+    print(f'Using aggregated lambda: {lam} from the {args.eval_dataset} dataset')  
 
     with open(args.input_file, 'r') as f:
         d = json.load(f)
     score_list = [s for pat in d['scores'] for s in pat]
-    score_max = max(score_list)
-    score_min = min(score_list)
+    score_max = np.percentile(score_list, 99.5) #max(score_list)
+    score_min = np.percentile(score_list, 0.5) #min(score_list)
 
     measures = {
         'tp_recall': flatten_wrapper(
@@ -209,9 +245,8 @@ def main(args):
         'tp_precision': flatten_wrapper(
             functools.partial(precision_score, zero_division=0)
         ),
-        #TODO: we need to ensure that physionet score is properly calculated as time steps could be missing
-        # similar to regression target or sklearn scorer
-        'tp_physionet2019_score': physionet2019_utility,
+        #TODO: if we only have shifted labels we may need to pass the argument here
+        'pat_physionet2019_score' : utility_score_wrapper(lam=lam),
         'pat_eval': first_alarm_eval
     }
 
@@ -231,7 +266,7 @@ def main(args):
                 results[k].append(v)
 
     with open(args.output_file, 'w') as f:
-        json.dump(results, f)
+        json.dump(results, f, indent=4)
 
 
 if __name__ in "__main__":
@@ -260,6 +295,17 @@ if __name__ in "__main__":
         action='store_true',
         help='If set, overwrites output files'
     )
+    parser.add_argument(
+        '--lambda_path', 
+        help='path to lambda file', 
+        default='config/lambdas'
+    )
+    parser.add_argument(
+        '--eval_dataset', 
+        help='name of evaluation dataset (for lambda)', 
+        default='mimic_demo'
+    )
+
 
     args = parser.parse_args()
 

@@ -165,8 +165,8 @@ class SplittedDataset(ParquetDataset):
         times = df[self.TIME_COLUMN].values
         statics = df[self.STATIC_COLUMNS].values[0]
         ts = df.drop(
-            columns=[self.ID_COLUMN, self.TIME_COLUMN] + self.STATIC_COLUMNS)
-
+            columns=[self.ID_COLUMN, self.TIME_COLUMN, self.LABEL_COLUMN] + self.STATIC_COLUMNS)
+        from IPython import embed; embed()
         out = {
             'id': id,
             'times': times,
