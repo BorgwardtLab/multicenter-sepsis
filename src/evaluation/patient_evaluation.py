@@ -219,21 +219,25 @@ def main(args):
     # TODO: missing capability to deal with unshifted labels; this
     # script will currently just use the labels that are available
     # in the input file.
-    
+   
+    # Load input json 
+    with open(args.input_file, 'r') as f:
+        d = json.load(f)
+
     # Determine lambda path:
     lambda_path = os.path.join(args.lambda_path, 
         'lambda_{}_rep_{}.json' ) 
     # Compute aggregate lambda over all train reps:
     lambdas = []
+    eval_dataset = d['dataset_eval']
     for rep in np.arange(5):
-        with open(lambda_path.format(args.eval_dataset, rep), 'r') as f:
+        with open(lambda_path.format(eval_dataset, rep), 'r') as f:
             lam = json.load(f)['lam']
             lambdas.append(lam)
     lam = np.mean(lambdas)
-    print(f'Using aggregated lambda: {lam} from the {args.eval_dataset} dataset')  
-
-    with open(args.input_file, 'r') as f:
-        d = json.load(f)
+    print(f'Using aggregated lambda: {lam} from the {eval_dataset} dataset')  
+   
+    # Determine min and max threshold 
     score_list = [s for pat in d['scores'] for s in pat]
     score_max = np.percentile(score_list, 99.5) #max(score_list)
     score_min = np.percentile(score_list, 0.5) #min(score_list)
@@ -300,12 +304,6 @@ if __name__ in "__main__":
         help='path to lambda file', 
         default='config/lambdas'
     )
-    parser.add_argument(
-        '--eval_dataset', 
-        help='name of evaluation dataset (for lambda)', 
-        default='mimic_demo'
-    )
-
 
     args = parser.parse_args()
 
