@@ -144,7 +144,7 @@ class TransformerEncoderLayer(nn.Module):
 class AttentionModel(BaseModel):
     """Sequence to sequence model based on MultiHeadAttention."""
 
-    def __init__(self, d_model, ff_dim, n_layers, n_heads, dropout, norm, indicators=True,
+    def __init__(self, d_model, ff_dim, n_layers, n_heads, dropout, norm, indicators=False,
                  **kwargs):
         """AttentionModel.
 
