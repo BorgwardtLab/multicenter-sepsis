@@ -20,7 +20,8 @@ VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 def apply_label_shift(labels, shift):
     """Apply label shift to labels."""
     labels = labels.copy()
-    patients = labels.index.get_level_values(VM_DEFAULT('id')).unique()
+    patients = labels.index.get_level_values(VM_DEFAULT('id')).unique().sort_values()
+    # added above sort as get_level_values did change order!
     # sanity check: assert that no reordering occured:
     assert np.all(labels.index.levels[0] == patients)
     new_labels = pd.DataFrame() 
