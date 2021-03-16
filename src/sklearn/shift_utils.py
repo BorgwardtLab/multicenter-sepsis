@@ -58,27 +58,16 @@ def handle_label_shift(args, d):
         #    y_test = load_pickle(cached_test)
         #else:
         # unpack dict
-        y_train = d['y_train']
-        y_val = d['y_validation'] 
-        y_test = d['y_test']
-
-        # do label-shifting here: 
+        # keys to shift:
+        keys = ['y_train','y_validation','y_test']
         start = time()
-        y_train = apply_label_shift(y_train, -args.label_propagation)
-        y_val = apply_label_shift(y_val, -args.label_propagation)
-        y_test = apply_label_shift(y_test, -args.label_propagation)
-
+        for key in keys:
+            if key in d.keys():
+                print(f'Shifting {key} ..')
+                d[key] = apply_label_shift(d[key], -args.label_propagation)
         elapsed = time() - start
         print(f'Label shift took {elapsed:.2f} seconds')
         #and cache data to quickly reuse from now:
-        #print('Caching shifted labels..')
-        #save_pickle(y_train, cached_train) #save pickle also creates folder if needed 
-        #save_pickle(y_val, cached_validation)
-        #save_pickle(y_test, cached_test)
-        # update the shifted labels in data dict:
-        d['y_train'] = y_train
-        d['y_validation'] = y_val
-        d['y_test'] = y_test 
     else:
         print('No label shift applied.')
     return d
