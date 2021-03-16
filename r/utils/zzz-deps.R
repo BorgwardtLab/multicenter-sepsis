@@ -10,6 +10,7 @@ if (!all(vapply(pkgs, requireNamespace, logical(1L)))) {
 
 library(ricu)
 library(assertthat)
+library(ggplot2)
 
 arrow::set_cpu_count(n_cores())
 data.table::setDTthreads(n_cores())
