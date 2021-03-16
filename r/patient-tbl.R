@@ -12,7 +12,7 @@ invisible(lapply(list.files(utils_dir, full.names = TRUE), source))
 Sys.setenv(RICU_CONFIG_PATH = file.path(root, "config", "ricu-dict"))
 
 src <- c("mimic", "eicu", "hirid", "aumc")
-cohort_list <- read_json(file.path(root, "config", "cohorts.json"),                                      simplifyVector = T)
+cohort_list <- read_json(file.path(root, "config", "cohorts.json"), simplifyVector = T)
 cohorts <- lapply(src, function(x) cohort_list[[x]][["final"]])
 names(cohorts) <- src
 
@@ -89,12 +89,12 @@ pts_source_sum <- function(source, patient_ids) {
   for (var in names(vars)) {
     x <- vars[[var]]
 
-    if (var %in% c("DM", "CPD", "CRF", "LD", "Cancer") & 
+    if (var %in% c("DM", "CPD", "CRF", "LD", "Cancer") &
         source %in% c("eicu_demo", "hirid", "aumc")) next
     if (var %in% c("admission") & source %in% c("hirid")) next
-    
-    data <- load_concepts(x[["concept"]], source, 
-                          patient_ids = patient_ids, 
+
+    data <- load_concepts(x[["concept"]], source,
+                          patient_ids = patient_ids,
                           keep_components = T)
 
     if (var == "sofa") dat <- data.table::copy(data)
@@ -109,7 +109,7 @@ pts_source_sum <- function(source, patient_ids) {
     )
   )
 
-  cohort_info <- as.data.frame(cbind("Cohort size", "n", 
+  cohort_info <- as.data.frame(cbind("Cohort size", "n",
                                      length(patient_ids)))
 
   si <- load_concepts("susp_inf_mc", source, patient_ids = patient_ids)
@@ -145,11 +145,10 @@ pts_source_sum <- function(source, patient_ids) {
 }
 
 res <- Reduce(
-  function(x, y) merge(x, y, by = c("Variable", "Reported"), 
+  function(x, y) merge(x, y, by = c("Variable", "Reported"),
                        sort = F, all = T),
   Map(pts_source_sum, src, cohorts)
 )
 
-print(xtable(res, align = c("c", "l", "c", "c", "c", "c", "c")), 
+print(xtable(res, align = c("c", "l", "c", "c", "c", "c", "c")),
       floating=FALSE, latex.environments=NULL, include.rownames = F)
-
