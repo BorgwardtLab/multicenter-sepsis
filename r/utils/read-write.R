@@ -1,10 +1,17 @@
 
-read_to_bm <- function(...) read_to_mat(..., mat_type = "big")
+read_to_bm <- function(...) read_train(..., mat_type = "big")
 
-read_to_mat <- function(source, path = data_path("mm"), cols = feature_set(),
-                        norm_cols = norm_sel(cols), split = "split_0",
-                        pids = coh_split(source, split = split),
-                        mat_type = c("mem", "big")) {
+read_to_df <- function(...) read_train(..., mat_type = "df")
+
+read_to_mat <- function(...) read_train(..., mat_type = "mem")
+
+read_train <- function(source, path = data_path("mm"), cols = feature_set(),
+                       norm_cols = norm_sel(cols), split = "split_0",
+                       pids = coh_split(source, split = split),
+                       mat_type = c("mem", "df", "big")) {
+
+  normalize <- function(x, mean, std) zero_impute(zscore(x, mean, std))
+  is_female <- function(x) replace(x, is.na(x), 0)
 
   if (length(norm_cols) > 0L) {
     sta <- read_colstats(source, split, norm_cols)
@@ -17,6 +24,25 @@ read_to_mat <- function(source, path = data_path("mm"), cols = feature_set(),
 
   scan <- file$NewScan()$Filter(subs)$Project(cols)$Finish()
   tble <- scan$ToTable()
+
+  if (identical(match.arg(mat_type), "df")) {
+
+    res <- as.data.frame(tble)
+    res <- data.table::setDT(res)
+
+    if (length(norm_cols) > 0L) {
+
+      fea <- rownames(sta)
+      res <- res[, c(fea) := Map(normalize, .SD, sta[, "means"],
+                                 sta[, "stds"]), .SDcols = fea]
+    }
+
+    if ("female" %in% colnames(res)) {
+      res <- res[, female := is_female(female)]
+    }
+
+    return(res)
+  }
 
   if (identical(match.arg(mat_type), "big")) {
 
@@ -37,57 +63,15 @@ read_to_mat <- function(source, path = data_path("mm"), cols = feature_set(),
     tmp <- as.double(tmp)
 
     if (identical(col, "female")) {
-      tmp <- replace(tmp, is.na(tmp), 0)
-    }
-
-    if (col %in% rownames(sta)) {
-      tmp <- zero_impute(
-        zscore(tmp, sta[col, "means"], sta[col, "stds"])
-      )
+      tmp <- is_female(tmp)
+    } else if (col %in% rownames(sta)) {
+      tmp <- normalize(tmp, sta[col, "means"], sta[col, "stds"])
     }
 
     res[, col] <- tmp
   }
 
   res
-}
-
-read_to_df <- function(source, path = data_path("mm"), cols = feature_set(),
-                       norm_cols = norm_sel(cols), split = "split_0",
-                       pids = coh_split(source, split = split)) {
-
-  file <- arrow::open_dataset(file.path(path, source))
-
-  if (length(pids) > 0L && length(cols) > 0L) {
-    res <- dplyr::filter(file, stay_id %in% pids)
-    res <- dplyr::select(res, dplyr::all_of(cols))
-  } else if (length(pids) > 0L) {
-    res <- dplyr::filter(file, stay_id %in% pids)
-  } else if (length(cols) > 0L) {
-    res <- dplyr::select(file, dplyr::all_of(cols))
-  } else {
-    res <- file
-  }
-
-  res <- dplyr::collect(res)
-
-  if (length(norm_cols) > 0L) {
-    res <- data.table::setDT(res)
-    sta <- read_colstats(source, split, norm_cols)
-    fea <- rownames(sta)
-    res <- res[, c(fea) := Map(zscore, .SD, sta[, "means"], sta[, "stds"]),
-               .SDcols = fea]
-    res <- res[, c(fea) := lapply(.SD, zero_impute), .SDcols = fea]
-    res <- data.table::setDF(res)
-  }
-
-  try_id_tbl(res)
-}
-
-read_to_vec <- function(source, path = data_path("mm"), col = "sep3",
-                        pids = coh_split(source)) {
-
-  read_to_df(source, path, col, pids)[[col]]
 }
 
 read_var_json <- function(path = cfg_path("variables.json")) {
