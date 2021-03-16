@@ -8,7 +8,7 @@ from src.torch.torch_utils import add_indicators
 class RecurrentModel(BaseModel):
     """Recurrent Model."""
 
-    def __init__(self, model_name, d_model, n_layers, dropout, indicators=True, **kwargs):
+    def __init__(self, model_name, d_model, n_layers, dropout, indicators=False, **kwargs):
         """Recurrent Model.
 
         Args:

@@ -18,7 +18,7 @@ from src.sklearn.data.utils import load_pickle, save_pickle
 from src.sklearn.loading import load_and_transform_data
 from src.sklearn.shift_utils import handle_label_shift
 from src.evaluation import (
-    get_physionet2019_scorer, StratifiedPatientKFold, shift_onset_label)
+    get_physionet2019_scorer, StratifiedPatientKFold)
 
 VM_CONFIG_PATH = str(
     pathlib.Path(__file__).parent.parent.parent.joinpath(
@@ -94,7 +94,8 @@ def load_data_splits(args,
         # unshifted labels for down stream eval
         d[f'tp_labels_{split}'] = data[VM_DEFAULT('label')]
         data = data.drop(columns=[VM_DEFAULT('label')])
-        data = data.drop(columns=[label])
+        if args.task == 'regression':
+            data = data.drop(columns=[label])
         # sanity check as we must not leak any label info to the input data
         assert all( 
             [ VM_DEFAULT(x) not in data.columns 

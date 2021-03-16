@@ -63,13 +63,18 @@ class DaskLambdaCalculator(DaskIDTransformer):
             is_septic = 1
             onset = np.argmax(y)
             t_plus = max(0, onset - self.early_window)
+            mask = y.isnull() 
+            nan_ones = np.ones(len(y)) 
+            nan_ones[mask] = np.nan  # nans stay nan, non-nans become 1.
+            nan_zeros = np.zeros(len(y)) 
+            nan_zeros[mask] = np.nan  # nans stay nan, non-nans become 0.
             g = compute_prediction_utility(
-                    y, np.ones(len(y)), u_fp=self.u_fp, 
+                    y, nan_ones, u_fp=self.u_fp, 
                     return_all_scores=True, shift_labels=self.shift)
             g = np.maximum(g,0) #here we only need the non-negative utilities
             g = g.sum()
             h = compute_prediction_utility(
-                    y, np.zeros(len(y)), u_fp=self.u_fp, 
+                    y, nan_zeros, u_fp=self.u_fp, 
                     return_all_scores=True, shift_labels=self.shift)
             h = h.sum()
         else: # if control
