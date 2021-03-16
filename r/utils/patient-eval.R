@@ -1,7 +1,7 @@
-dat <- read_res("aumc", feat_set = "basic", predictor = "rf",
-                target = "class", jobid = 165221956L)
+# dat <- read_res("aumc", feat_set = "basic", predictor = "rf",
+#                 target = "class", jobid = 165221956L)
 
-patient_eval <- function(x) {
+patient_eval <- function(dat) {
   
   x <- data.table::copy(dat)
   grid <- quantile(x$prediction, prob = seq(0.01, 0.99, 0.01))
@@ -70,4 +70,4 @@ patient_eval <- function(x) {
   
 }
 
-patient_eval(dat)
+#patient_eval(dat)

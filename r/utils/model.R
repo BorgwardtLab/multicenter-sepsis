@@ -34,27 +34,34 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   mat <- switch(predictor, rf = "mem", linear = "big")
   job <- file.path(res_dir, paste(predictor, target, feat_set, train_src,
                                   sep = "-"))
-
+  
+  pids <- coh_split(train_src, "train", split)
+  
   y <- switch(target,
     class = y_class(train_src, hours(6L), hours(Inf), path = data_dir,
-                    split = split),
+                    split = split, pids = pids),
     hybrid = y_class(train_src, hours(6L), hours(6L), path = data_dir,
-                     split = split),
-    reg = y_reg(train_src, path = data_dir, split = split)
+                     split = split, pids = pids),
+    reg = y_reg(train_src, path = data_dir, split = split, pids = pids)
   )
 
+  
+  
   msg("reading train data")
 
   x <- prof(
     read_to_mat(train_src, cols = feature_sel(feat_reg, predictor),
-      path = data_dir, split = split, mat_type = mat
+      path = data_dir, split = split, mat_type = mat, pids = pids
     )
   )
-
+  
   msg("training model")
-
+  
+  pids <- read_to_df(train_src, data_dir, cols = c("stay_id", "stay_time"),
+                     norm_cols = NULL, split = split, pids = pids)
+  
   fun <- switch(predictor, linear = train_lin, rf = train_rf)
-  mod <- prof(fun(x, y, !identical(target, "reg"), n_cores(), ...))
+  mod <- prof(fun(x, y, !identical(target, "reg"), pids, n_cores(), ...))
 
   qs::qsave(mod, paste0(job, ".qs"))
 
@@ -112,22 +119,49 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   invisible(NULL)
 }
 
-train_rf <- function(x, y, is_class, n_cores, ...) {
-  for (mns in seq(5000, 15000, 1000)) {
-    mod <- ranger::ranger(
+train_rf <- function(x, y, is_class, id_vec, n_cores, ...) {
+  
+  pids <- unique(id_vec$stay_id)
+  folds <- sample(1:5, length(pids), replace = T)
+  
+  id_vec <- id_vec[, fold := folds[which(stay_id == pids)], by = "stay_id"]
+  id_vec <- id_vec[, fold := as.integer(fold == 5)]
+  
+  opt_ope <- Inf
+  for (mns in c(10, 20, 50, 100, 500)) {
+    
+    mod_cand <- ranger::ranger(
       y = y, x = x, probability = is_class, min.node.size = mns,
-      importance = "impurity", num.threads = n_cores, ...
+      importance = "impurity", num.threads = n_cores, 
+      case.weights = id_vec[["folds"]], holdout = T,
+      ...
     )
-    qs::qsave(mod, file.path(data_path("res"), paste0("rf_", mns, ".qs")))
+    
+    if (mod_cand$prediction.error < opt_ope) {
+      
+      opt_ope <- mod_cand$prediction.error
+      mod <- mod_cand
+      
+    }
+    
   }
+  
   mod
+  
 }
 
-train_lin <- function(x, y, is_class, n_cores, ...) {
-  biglasso::biglasso(
+train_lin <- function(x, y, is_class, id_vec, n_cores, ...) {
+  
+  pids <- unique(id_vec$stay_id)
+  folds <- sample(1:5, length(pids), replace = T)
+  
+  id_vec <- id_vec[, fold := folds[which(stay_id == pids)], by = "stay_id"]
+  
+  biglasso::cv.biglasso(
     x, y, family = ifelse(is_class, "binomial", "gaussian"),
-    lambda = c(0.0036, 0.0031), ncores = n_cores, ...
+    lambda = c(0.0036, 0.0031), ncores = n_cores, cv.ind = id_vec[["fold"]], ...
   )
+  
 }
 
 pred_rf <- function(mod, x) {
