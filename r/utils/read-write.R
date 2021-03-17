@@ -197,7 +197,9 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
     full.names = TRUE
   )
 
-  if (length(fil) == 0L) return(NULL)
+  if (length(fil) == 0L) {
+    return(NULL)
+  }
 
   res <- jsonlite::read_json(fil, simplifyVector = TRUE, flatten = TRUE)
 
@@ -206,7 +208,8 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
     stay_time = do.call(c, res$times),
     prediction = do.call(c, res$scores),
     label = do.call(c, res$labels),
-    utility = do.call(c, res$utility)
+    utility = do.call(c, res$utility),
+    onset = rep(as.integer(res$onset), lengths(res$times))
   )
 
   try_id_tbl(res)
