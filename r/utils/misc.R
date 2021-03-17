@@ -127,9 +127,8 @@ y_class <- function(source, start_offset = 6L, end_offset = Inf, ...) {
 
   sep <- win[, list(stay_time = seq(start_time, end_time)), by = "stay_id"]
   sep <- sep[, sep3 := TRUE]
-
-  dat <- merge(dat[, sep3 := NULL], sep, all.x = TRUE,
-               by = c("stay_id", "stay_time"))
+  dat <- dat[, sep3 := NULL]
+  dat <- sep[dat, on = c("stay_id", "stay_time")]
 
   is_true(dat[["sep3"]])
 }
