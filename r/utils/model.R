@@ -163,7 +163,7 @@ train_rf <- function(x, y, is_class, folds, n_cores, ...) {
   opt_mns <- 10
   opt_ope <- Inf
 
-  for (mns in c(10, 100, 1000)) {
+  for (mns in c(10, 30, 100, 1000)) {
 
     msg("trying min node size: {mns}")
 
@@ -193,7 +193,7 @@ train_rf <- function(x, y, is_class, folds, n_cores, ...) {
 train_lin <- function(x, y, is_class, folds, n_cores, ...) {
   biglasso::cv.biglasso(
     x, y, family = ifelse(is_class, "binomial", "gaussian"),
-    ncores = n_cores, cv.ind = folds, ...
+    ncores = n_cores, cv.ind = folds, nlambda = 50, verbose = TRUE, ...
   )
 }
 
@@ -236,7 +236,7 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
         lgb_CV <- lightgbm::lgb.cv(
           params = params, data = dtrain, num_leaves = num_leaf,
           nrounds = num_trees, learning_rate = lr, boosting = "gbdt",
-          folds = folds, verbose = -1L, num_threads = n_cores
+          folds = folds, num_threads = n_cores
         )
 
         msg("--> best score: {lgb_CV$best_score}")
