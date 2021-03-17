@@ -1,7 +1,7 @@
 
 fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
                         feat_set = c("locf", "basic", "wav", "sig", "full"),
-                        feat_reg, predictor = c("linear", "rf"),
+                        feat_reg, predictor = c("linear", "rf", "lgbm"),
                         target = c("class", "hybrid", "reg"),
                         split = "split_0", data_dir = data_path("mm"),
                         res_dir = data_path("res"), seed = 11, ...) {
@@ -49,7 +49,9 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
   msg("reading train data")
 
-  read_x_fun <- switch(predictor, rf = read_to_mat, linear = read_to_bm)
+  read_x_fun <- switch(predictor,
+    rf = read_to_mat, linear = read_to_bm, lgbm = read_to_mat
+  )
 
   x <- prof(
     read_x_fun(train_src, cols = feature_sel(feat_reg, predictor),
@@ -75,8 +77,10 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   pids <- pids[, fold := c(cafd, ctfd)[which(stay_id == c(case, ctrl))],
                by = "stay_id"]
 
-  fun <- switch(predictor, linear = train_lin,
-                rf = function(...) train_rf(..., seed = seed))
+  fun <- switch(predictor,
+    linear = train_lin, rf = function(...) train_rf(..., seed = seed),
+    lgbm = train_lgbm
+  )
   mod <- prof(fun(x, y, !identical(target, "reg"), pids$fold, n_cores(), ...))
 
   qs::qsave(mod, paste0(job, ".qs"))
@@ -97,7 +101,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
     msg("predicting")
 
-    fun <- switch(predictor, linear = pred_lin, rf = pred_rf)
+    fun <- switch(predictor, linear = pred_lin, rf = pred_rf, lgbm = pred_lgbm)
     res <- prof(fun(mod, x))
 
     y <- switch(target,
@@ -186,4 +190,45 @@ pred_rf <- function(mod, x) {
 
 pred_lin <- function(mod, x) {
   predict(mod, x, type = "response")[, 1L]
+}
+
+train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
+
+  folds <- lapply(seq_along(unique(folds)), `==`, folds)
+  folds <- lapply(folds, which)
+
+  dtrain <- lightgbm::lgb.Dataset(x, label = y)
+  params <- list(objective = ifelse(is_class, "binary", "regression"))
+
+  best_score <- Inf
+  opt_params <- c(30, 100, 0.001)
+
+  for (num_leaf in c(30, 50, 100))  {
+    for (num_trees in c(100, 200, 500)) {
+      for (lr in c(0.001, 0.01, 0.1, 0.5, 1)) {
+
+        lgb_CV <- lightgbm::lgb.cv(
+          params = params, data = dtrain, num_leaves = num_leaf,
+          nrounds = num_trees, learning_rate = lr, boosting = "gbdt",
+          folds = pts_folds, verbose = -1L, num_threads = n_cores
+        )
+
+        if (lgb_CV$best_score < best_score) {
+          opt_params <- c(num_leaf, num_trees, lr)
+          best_score <- lgb_CV$best_score
+        }
+      }
+    }
+  }
+
+  lightgbm::lgb.train(
+    params = params, data = dtrain, num_leaves = opt_params[1],
+    nrounds = opt_params[2], learning_rate = opt_params[3],
+    boosting = "gbdt", verbose = -1L, num_threads = n_cores
+  )
+}
+
+pred_lgbm <- function(mod, x) {
+  browser()
+  predict(mod, x)
 }
