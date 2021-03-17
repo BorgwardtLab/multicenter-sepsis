@@ -127,7 +127,7 @@ def main():
     task = args.task
 
     args.dataset = eval_dataset #load_data_splits expect this property
-    data = load_data_splits(args, splits=[args.split])
+    data, lam = load_data_splits(args, splits=[args.split])
 
     # label_shift function assumes a dataset arg:
     if task == 'classification':
