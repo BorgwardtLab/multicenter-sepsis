@@ -213,6 +213,8 @@ def evaluate_threshold(data, thres, measures):
 def format_check(x, y):
     """Sanity check that two nested lists x,y have identical format."""
     for x_, y_ in zip(x, y):
+        #if len(x_) != len(y_):
+        #    from IPython import embed; embed()
         assert len(x_) == len(y_)
 
 
@@ -232,6 +234,9 @@ def main(args):
     # Compute aggregate lambda over all train reps:
     lambdas = []
     eval_dataset = d['dataset_eval']
+    if isinstance(eval_dataset, list): # the R jsons had lists of str
+        eval_dataset = eval_dataset[0]
+    
     for rep in np.arange(5):
         with open(lambda_path.format(eval_dataset, rep), 'r') as f:
             lam = json.load(f)['lam']
