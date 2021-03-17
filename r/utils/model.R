@@ -104,22 +104,37 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     fun <- switch(predictor, linear = pred_lin, rf = pred_rf, lgbm = pred_lgbm)
     res <- prof(fun(mod, x))
 
-    y <- switch(target,
-      class = y_class(src, 6L, Inf, path = data_dir,
-                      split = split, pids = pids),
-      hybrid = y_class(src, 6L, 6L, path = data_dir,
-                       split = split, pids = pids),
-      reg = y_reg(src, path = data_dir, split = split, pids = pids)
-    )
+    reg <- y_reg(src, path = data_dir, split = split, pids = pids)
 
-    pids <- read_to_df(src, data_dir, cols = c("stay_id", "stay_time"),
+    if (identical(target, "reg")) {
+
+      y <- reg
+      reg <- NULL
+
+    } else {
+
+      y <- switch(target,
+        class = y_class(src, 6L, Inf, path = data_dir,
+                        split = split, pids = pids),
+        hybrid = y_class(src, 6L, 6L, path = data_dir,
+                         split = split, pids = pids)
+      )
+    }
+
+    pids <- read_to_df(src, data_dir, cols = c("stay_id", "stay_time", "sep3"),
                        norm_cols = NULL, split = split, pids = pids)
     pids <- pids[, stay_time := as.double(stay_time)]
 
     y <- split(y, pids[["stay_id"]])
     res <- split(res, pids[["stay_id"]])
+    reg <- split(reg, pids[["stay_id"]])
 
     pids <- split(pids, by = "stay_id", keep.by = FALSE)
+    onse <- lapply(pids, `[[`, "sep3")
+
+    onse <- lapply(lapply(lapply(onse, `==`, 1), which), `[`, 1L)
+    onse <- Map(`[`, lapply(pids, `[[`, "stay_time"), onse)
+
     pids <- lapply(pids, `[[`, "stay_time")
 
     res <- list(
@@ -127,10 +142,12 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
       dataset_train = train_src,
       dataset_eval = src,
       split = split,
-      labels = y,
-      scores = res,
-      times = pids,
-      ids = names(pids)
+      labels = unname(y),
+      utility = unname(reg),
+      scores = unname(res),
+      times = unname(pids),
+      ids = names(pids),
+      onset = unname(onse)
     )
 
     jsonlite::write_json(res, paste0(job, "-", src, ".json"))
@@ -148,6 +165,8 @@ train_rf <- function(x, y, is_class, folds, n_cores, ...) {
 
   for (mns in c(10, 30, 100, 500)) {
 
+    msg("trying min node size: {mns}")
+
     mod <- ranger::ranger(
       y = y, x = x, probability = is_class, min.node.size = mns,
       num.threads = n_cores, case.weights = ids[["folds"]], holdout = TRUE,
@@ -160,6 +179,8 @@ train_rf <- function(x, y, is_class, folds, n_cores, ...) {
       opt_mns <- mns
     }
   }
+
+  msg("choosing min node size: {opt_mns}")
 
   ranger::ranger(
     y = y, x = x, probability = is_class, min.node.size = opt_mns,
@@ -203,14 +224,17 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
   best_score <- Inf
   opt_params <- c(30, 100, 0.001)
 
-  for (num_leaf in c(30, 50, 100))  {
+  for (num_leaf in c(31, 50, 100))  {
     for (num_trees in c(100, 200, 500)) {
       for (lr in c(0.001, 0.01, 0.1, 0.5, 1)) {
+
+        msg("trying num leaves: {num_leaf}, num trees: {num_trees}, learning ",
+            "rate: {lr}")
 
         lgb_CV <- lightgbm::lgb.cv(
           params = params, data = dtrain, num_leaves = num_leaf,
           nrounds = num_trees, learning_rate = lr, boosting = "gbdt",
-          folds = pts_folds, verbose = -1L, num_threads = n_cores
+          folds = folds, verbose = -1L, num_threads = n_cores
         )
 
         if (lgb_CV$best_score < best_score) {
@@ -221,6 +245,9 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
     }
   }
 
+  msg("choosing: num leaves: {opt_params[1]}, num trees: {opt_params[2]}, ",
+      "learning rate: {opt_params[3]}")
+
   lightgbm::lgb.train(
     params = params, data = dtrain, num_leaves = opt_params[1],
     nrounds = opt_params[2], learning_rate = opt_params[3],
@@ -228,7 +255,4 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
   )
 }
 
-pred_lgbm <- function(mod, x) {
-  browser()
-  predict(mod, x)
-}
+pred_lgbm <- function(mod, x) predict(mod, x)
