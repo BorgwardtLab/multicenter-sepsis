@@ -158,7 +158,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
 train_rf <- function(x, y, is_class, folds, n_cores, ...) {
 
-  folds <- as.integer(folds == 1)
+  folds <- as.integer(folds != 1)
 
   opt_mns <- 10
   opt_ope <- Inf
@@ -169,7 +169,7 @@ train_rf <- function(x, y, is_class, folds, n_cores, ...) {
 
     mod <- ranger::ranger(
       y = y, x = x, probability = is_class, min.node.size = mns,
-      num.threads = n_cores, case.weights = ids[["folds"]], holdout = TRUE,
+      num.threads = n_cores, case.weights = folds, holdout = TRUE,
       ...
     )
 
