@@ -1,8 +1,23 @@
 
-patient_eval <- function(dat) {
+patient_eval <- function(dat, run) {
+  
+  integrate <- function(x, y) {
+    
+    assertthat::assert_that(length(x) == length(y))
+    
+    x_left <- x[1:(length(x)-1)]
+    x_right <- x[2:(length(x))]
+    
+    y_left <- y[1:(length(x)-1)]
+    y_right <- y[2:(length(x))]
+    
+    sum((x_right - x_left) * (y_left + y_right) / 2)
+    
+  }
 
   x <- data.table::copy(dat)
-  grid <- quantile(x$prediction, prob = seq(0.01, 0.99, 0.01))
+  prob_grid <- c(0, 0.001, seq(0.01, 0.99, 0.01), 0.999)
+  grid <- quantile(x$prediction, prob = prob_grid)
 
   x[, is_case := any(label), by = c(id_vars(x))]
 
@@ -14,11 +29,11 @@ patient_eval <- function(dat) {
 
   x <- merge(x, onset, by = id_vars(x), all.x = T)
 
-  res <- NULL
+  res <- c(1, 0, 1, 1, 0, 0)
   for (i in 1:length(grid)) {
 
     thresh <- grid[i]
-
+    
     trig <- x[prediction > thresh, head(.SD, 1L), by = c(id_vars(x))]
     trig <- trig[, c("stay_id", "stay_time"), with=F]
     trig <- rename_cols(trig, "trigger", "stay_time")
@@ -28,8 +43,13 @@ patient_eval <- function(dat) {
       unique(x[, c(id_vars(x), "is_case", "onset_time"), with = F]),
       trig, all.x = T
     )
+    
+    
 
-    dcs <- as.vector(table(fin$is_case, !is.na(fin$trigger)))
+    dcs <- as.vector(
+      table(fin$is_case, factor(!is.na(fin$trigger), levels = c(F, T)))
+    )
+    
     tn <- dcs[1]
     fn <- dcs[2]
     fp <- dcs[3]
@@ -42,29 +62,40 @@ patient_eval <- function(dat) {
     sens <- tp / (tp + fn)
     spec <- tn / (tn + fp)
     ppv <- tp / (tp + fp)
+    util <- sum((x[["prediction"]] > thresh) * x[["utility"]])
 
-    res <- rbind(res, c(i/100, sens, spec, ppv, as.numeric(erl)))
+    res <- rbind(res, c(prob_grid[i], sens, spec, ppv, as.numeric(erl), util))
 
   }
 
   res <- as.data.frame(res)
-  names(res) <- c("threshold", "sens", "spec", "ppv", "earliness")
-
+  names(res) <- c("threshold", "sens", "spec", "ppv", "earliness", "utility")
+  res <- res[order(res$threshold), ]
+  
+  auroc <- -integrate(1 - res$spec, res$sens)
+  auprc <- -integrate(res$sens, res$ppv)
   roc <- ggplot(res, aes(x = 1-spec, y = sens)) +
     geom_line(color = "blue") +
     theme_bw() + ylim(c(0, 1)) + xlim(c(0,1)) +
     geom_abline(slope = 1, intercept = 0, linetype = "dotdash") +
-    ggtitle("ROC curve")
+    ggtitle(paste0("ROC curve of ", run, " with AUROC ", 
+                   round(auroc, 4)))
 
   prc <- ggplot(res, aes(x = sens, y = ppv)) + geom_line(color = "red") +
-    theme_bw() + ylim(c(0, 1)) + ggtitle("PR curve") +
-    geom_hline(yintercept = mean(fin$is_case), linetype = "dotdash")
+    theme_bw() + ylim(c(0, 1)) + 
+    geom_hline(yintercept = mean(fin$is_case), linetype = "dotdash") +
+    ggtitle(paste0("PR curve of ", run,  " with AUPRC ", round(auprc, 4)))
 
   earl <- ggplot(res, aes(x = threshold, y = earliness)) +
     geom_line(color = "green") +
     theme_bw() + ggtitle("Earliness curve")
+  
+  phys <- ggplot(res, aes(x = threshold, y = utility)) +
+    geom_line(color = "pink") + theme_bw() +
+    ggtitle(paste0("Utility curve with maximum", round(max(res$utility), 4)))
+    
 
-  cowplot::plot_grid(roc, prc, earl, ncol = 3L)
+  cowplot::plot_grid(roc, prc, earl, phys, ncol = 2L, labels = "auto")
 
 }
 
