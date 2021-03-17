@@ -137,7 +137,9 @@ def load_and_transform_data(
     - variable_set: full or physionet (fewer variables)
     - task: regression or classification
     - baselines: flag, if set overrides feature and variable set
-        and only loads baselines as input features 
+        and only loads baselines as input features
+
+    returns data and lambda 
     """
     # determine columns to load:
     with open(feature_path, 'r') as f:
@@ -196,13 +198,13 @@ def load_and_transform_data(
         df = norm.transform(df)
         print(f'.. took {time() - start} seconds.')
 
-    # 3. Apply lambda sample weight if we use regression target:
+    # 3. Load and apply lambda sample weight if we use regression target:
+    with open(lambda_path, 'r') as f:
+        lam = json.load(f)['lam']
     if task == 'regression':
         # For regression, we apply lambda sample weights and remove label
         start = time()
         print('Applying lambda..')
-        with open(lambda_path, 'r') as f:
-            lam = json.load(f)['lam']
         # regression target without adjustment:
         u = df[VM_DEFAULT('utility')]
         # patient-level label:
@@ -218,6 +220,7 @@ def load_and_transform_data(
         df[VM_DEFAULT('utility')] = new_target 
         # df = df.drop(columns=[VM_DEFAULT('label')]) 
         print(f'.. took {time() - start} seconds.')
+
     # 4. Remove remaining NaN values and check for invalid values 
     # e.g. due to degenerate stats in normalization
     start = time()
@@ -228,7 +231,7 @@ def load_and_transform_data(
     print(f'Final imputation took {time() - start} seconds.')
     if form == 'dask':
         df = df.compute()
-    return df
+    return df, lam
  
 if __name__ == "__main__":
 

@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import pathlib
 import numpy as np
+from joblib import Parallel, delayed
 from sklearn.metrics import recall_score
 from sklearn.metrics import precision_score
 from sklearn.metrics import confusion_matrix
@@ -174,7 +175,7 @@ def utility_score_wrapper(lam=1, **kwargs):
         return {'physionet2019_utility': score} 
     return wrapped_func 
 
-def evaluate_threshold(data, labels, thres, measures):
+def evaluate_threshold(data, thres, measures):
     """Evaluate threshold-based and patient-based measures.
 
     - data: dictionary of experiment output data
@@ -184,6 +185,7 @@ def evaluate_threshold(data, labels, thres, measures):
     """
     results = {}
     predictions = apply_threshold(data['scores'], thres, pat_level=False)
+    labels = data['labels']
     times = data['times']  # list of lists of incrementing patient hours
 
     # sanity check that format fits:
@@ -238,9 +240,12 @@ def main(args):
     print(f'Using aggregated lambda: {lam} from the {eval_dataset} dataset')  
    
     # Determine min and max threshold 
-    score_list = [s for pat in d['scores'] for s in pat]
-    score_max = np.percentile(score_list, 99.5) #max(score_list)
-    score_min = np.percentile(score_list, 0.5) #min(score_list)
+    if args.task == 'regression':
+        score_list = [s for pat in d['scores'] for s in pat]
+        score_max = np.percentile(score_list, 99.5) #max(score_list)
+        score_min = np.percentile(score_list, 0.5) #min(score_list)
+    else:
+        score_max = 1; score_min = 0
 
     measures = {
         'tp_recall': flatten_wrapper(
@@ -255,14 +260,16 @@ def main(args):
     }
 
     n_steps = args.num_steps
-    #TODO: thresholds must not be from 0 to 1 when using regression, rather min to max score
     thresholds = np.linspace(score_min, score_max, n_steps)
     print(f'Using {n_steps} thresholds between {score_min} and {score_max}.')
     results = collections.defaultdict(list)
 
-    for thres in thresholds:
-        current = evaluate_threshold(d, d['labels'], thres, measures)
-
+    # evaluate thresholds in parallel:
+    result_list = Parallel(n_jobs=args.n_jobs, verbose=1)(
+        delayed(evaluate_threshold)(d, thres, measures) for thres in thresholds) 
+ 
+    for thres, current in zip(thresholds, result_list):
+        #current = evaluate_threshold(d, thres, measures)
         results['thres'].append(thres)
 
         for k, v in current.items():
@@ -304,6 +311,17 @@ if __name__ in "__main__":
         help='path to lambda file', 
         default='config/lambdas'
     )
+    parser.add_argument(
+        '--task', 
+        help='prediction task [regression, classification]', 
+        default='regression'
+    )
+    parser.add_argument(
+        '--n_jobs', 
+        help='number of jobs for parallelizing over thresholds', 
+        default=10, type=int
+    )
+
 
     args = parser.parse_args()
 
