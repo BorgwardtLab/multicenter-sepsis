@@ -155,62 +155,41 @@ read_parquet <- function(source, dir = data_path(), cols = NULL, pids = NULL) {
   try_id_tbl(res)
 }
 
-try_id_tbl <- function(x) {
+y_class <- function(source, start_offset = 6L, end_offset = Inf, ...) {
 
-  if ("stay_id" %in% colnames(x)) {
+  dat <- read_to_df(source, cols = c("stay_id", "stay_time", "sep3"),
+                    norm_cols = NULL, ...)
+  sep <- dat[sep3 == 1L, head(.SD, n = 1L), by = "stay_id"]
 
-    if ("stay_time" %in% colnames(x)) {
+  win <- merge(sep,
+    dat[, list(in_time = min(stay_time), out_time = max(stay_time)),
+        by = "stay_id"],
+    by = "stay_id", all.x = TRUE
+  )
 
-      x <- data.table::set(x, j = "stay_time",
-        value = as.difftime(x[["stay_time"]], units = "hours")
-      )
+  win <- win[, c("start_time", "end_time") := list(
+    pmax(stay_time - start_offset, in_time),
+    pmin(stay_time + end_offset, out_time)
+  )]
 
-      x <- as_ts_tbl(x, id_vars = "stay_id", index_var = "stay_time",
-                     interval = hours(1L), by_ref = TRUE)
+  sep <- win[, list(stay_time = seq(start_time, end_time)), by = "stay_id"]
+  sep <- sep[, sep3 := TRUE]
+  dat <- dat[, sep3 := NULL]
+  dat <- sep[dat, on = c("stay_id", "stay_time")]
 
-    } else {
-
-      x <- as_id_tbl(x, id_vars = "stay_id", by_ref = TRUE)
-    }
-  }
-
-  x
+  is_true(dat[["sep3"]])
 }
 
-read_res <- function(train_src = "mimic_demo", test_src = train_src,
-                     feat_set = c("basic", "wav", "sig", "full"),
-                     predictor = c("linear", "rf"),
-                     target = c("class", "hybrid", "reg"),
-                     dir = data_path("res"), jobid = NULL) {
+y_reg <- function(source, split = "split_0", ...) {
 
-  if (is.null(jobid)) {
-    dir <- grep(
-      paste0("^", file.path(dir, "model_"), "[0-9]+"), list.dirs(dir),
-      value =TRUE
-    )[1L]
-  } else {
-    dir <- file.path(dir, paste0("model_", jobid))
-  }
-
-  fil <- list.files(dir,
-    paste(predictor, target, feat_set, train_src, test_src, sep = "-"),
-    full.names = TRUE
+  dat <- read_to_df(source,
+    cols = c("stay_id", "stay_time", "sep3", "utility"),
+    norm_cols = NULL, ..., split = split
   )
 
-  if (length(fil) == 0L) {
-    return(NULL)
-  }
+  lmb <- read_lambda(source, split)
+  dat <- dat[, is_case := any(sep3 == 1L), by = "stay_id"]
+  dat <- dat[, lambda := data.table::fifelse(is_case, lmb, 1)]
 
-  res <- jsonlite::read_json(fil, simplifyVector = TRUE, flatten = TRUE)
-
-  res <- data.frame(
-    stay_id = rep(as.integer(res$ids), lengths(res$times)),
-    stay_time = do.call(c, res$times),
-    prediction = do.call(c, res$scores),
-    label = do.call(c, res$labels),
-    utility = do.call(c, res$utility),
-    onset = rep(as.integer(res$onset), lengths(res$times))
-  )
-
-  try_id_tbl(res)
+  dat[["utility"]] * dat[["lambda"]]
 }

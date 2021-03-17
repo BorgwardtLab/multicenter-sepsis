@@ -108,43 +108,26 @@ read_lambda <- function(source, split = paste0("split_", 0:4)) {
   jsonlite::read_json(cfg_path(file.path("lambdas", file)))$lam
 }
 
-y_class <- function(source, start_offset = 6L, end_offset = Inf, ...) {
+try_id_tbl <- function(x) {
 
-  dat <- read_to_df(source, cols = c("stay_id", "stay_time", "sep3"),
-                    norm_cols = NULL, ...)
-  sep <- dat[sep3 == 1L, head(.SD, n = 1L), by = "stay_id"]
+  if ("stay_id" %in% colnames(x)) {
 
-  win <- merge(sep,
-    dat[, list(in_time = min(stay_time), out_time = max(stay_time)),
-        by = "stay_id"],
-    by = "stay_id", all.x = TRUE
-  )
+    if ("stay_time" %in% colnames(x)) {
 
-  win <- win[, c("start_time", "end_time") := list(
-    pmax(stay_time - start_offset, in_time),
-    pmin(stay_time + end_offset, out_time)
-  )]
+      x <- data.table::set(x, j = "stay_time",
+        value = as.difftime(x[["stay_time"]], units = "hours")
+      )
 
-  sep <- win[, list(stay_time = seq(start_time, end_time)), by = "stay_id"]
-  sep <- sep[, sep3 := TRUE]
-  dat <- dat[, sep3 := NULL]
-  dat <- sep[dat, on = c("stay_id", "stay_time")]
+      x <- as_ts_tbl(x, id_vars = "stay_id", index_var = "stay_time",
+                     interval = hours(1L), by_ref = TRUE)
 
-  is_true(dat[["sep3"]])
-}
+    } else {
 
-y_reg <- function(source, split = "split_0", ...) {
+      x <- as_id_tbl(x, id_vars = "stay_id", by_ref = TRUE)
+    }
+  }
 
-  dat <- read_to_df(source,
-    cols = c("stay_id", "stay_time", "sep3", "utility"),
-    norm_cols = NULL, ..., split = split
-  )
-
-  lmb <- read_lambda(source, split)
-  dat <- dat[, is_case := any(sep3 == 1L), by = "stay_id"]
-  dat <- dat[, lambda := data.table::fifelse(is_case, lmb, 1)]
-
-  dat[["utility"]] * dat[["lambda"]]
+  x
 }
 
 delayedAssign("root_dir", here::here())
