@@ -1,5 +1,5 @@
 
-patient_eval <- function(x) {
+patient_eval <- function(dat) {
 
   x <- data.table::copy(dat)
   grid <- quantile(x$prediction, prob = seq(0.01, 0.99, 0.01))
@@ -67,3 +67,4 @@ patient_eval <- function(x) {
   cowplot::plot_grid(roc, prc, earl, ncol = 3L)
 
 }
+
