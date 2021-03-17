@@ -85,7 +85,7 @@ def load_data_splits(args,
     else:
         raise ValueError(f'Task {args.task} not among valid tasks. ')
     for split in splits:
-        data = load_data(args, split)
+        data, lam = load_data(args, split)
         if args.index == 'multi':   
             data = data.reset_index().set_index(
                 [VM_DEFAULT('id'), VM_DEFAULT('time')]
@@ -103,7 +103,7 @@ def load_data_splits(args,
             ]
         )
         d[f'X_{split}'] = data 
-    return d
+    return d, lam
 
 def get_pipeline_and_grid(args):
     """Get sklearn pipeline and parameter grid."""
@@ -258,8 +258,8 @@ def main():
     ## Process arguments:
     task = args.task 
  
-    # Load data and apply on-the-fly transforms:
-    data = load_data_splits(args)
+    # Load data and current lambda and apply on-the-fly transforms:
+    data, lam = load_data_splits(args)
 
     #data = load_data_from_input_path(
     #    args.input_path, args.dataset, args.index, args.extended_features)
@@ -282,7 +282,9 @@ def main():
     if task == 'classification':
         target_name = 'physionet_utility'
         scores = {
-            target_name: get_physionet2019_scorer(args.label_propagation),
+            target_name: get_physionet2019_scorer(args.label_propagation,
+                kwargs={'lam': lam}    
+            ),
             #'roc_auc': SCORERS['roc_auc'],
             #'average_precision': SCORERS['average_precision'],
             #'balanced_accuracy': SCORERS['balanced_accuracy'],
