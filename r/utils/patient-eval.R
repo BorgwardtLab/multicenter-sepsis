@@ -71,16 +71,22 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
                      feat_set = c("basic", "wav", "sig", "full"),
                      predictor = c("linear", "rf"),
                      target = c("class", "hybrid", "reg"),
-                     dir = data_path("res"), jobid = NULL) {
+                     dir = data_path("res"), jobid = NULL, fix_order = FALSE) {
 
   if (is.null(jobid)) {
-    dir <- grep(
-      paste0("^", file.path(dir, "model_"), "[0-9]+"), list.dirs(dir),
-      value =TRUE
-    )[1L]
+
+    dir <- paste0("^", file.path(dir, "model_"), "[0-9]+")
+    dir <- grep(dir, list.dirs(dir), value =TRUE)
+    dir <- tail(dir, n = 1L)
+
+    jobid <- sub("^model_", "", basename(dir))
+
   } else {
+
     dir <- file.path(dir, paste0("model_", jobid))
   }
+
+  assert_that(dir.exists(dir))
 
   fil <- list.files(dir,
     paste(predictor, target, feat_set, train_src, test_src, sep = "-"),
@@ -92,6 +98,13 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
   }
 
   res <- jsonlite::read_json(fil, simplifyVector = TRUE, flatten = TRUE)
+
+  if (fix_order || as.integer(jobid) == 165674415L) {
+    perm <- order(as.integer(res$ids))
+    res$ids <- res$ids[perm]
+    res$times <- res$times[perm]
+    res$onset <- res$onset[perm]
+  }
 
   res <- data.frame(
     stay_id = rep(as.integer(res$ids), lengths(res$times)),
