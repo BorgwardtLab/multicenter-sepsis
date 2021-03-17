@@ -20,4 +20,20 @@ names(sep) <- srcs
 for (src in srcs) {
   sep[[src]] <- sepsis3_crit(src, pids = cohorts[[src]],
                              keep_components = TRUE)
+  
+  if (src %in% c("eicu", "hirid")) next
+  
+  tbl <- sep[[src]]
+  
+  tbl <- tbl[, class := (get(index_var(tbl)) < samp_time) + 
+               (get(index_var(tbl)) < abx_time)]
+  
+  res <- table(tbl[["class"]])
+  res <- 100 * res / sum(res)
+  names(res) <- c("Delta last", "Delta middle", "Delta first")
+  
+  print(res)
+  
 }
+
+

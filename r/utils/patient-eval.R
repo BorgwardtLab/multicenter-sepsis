@@ -30,7 +30,7 @@ patient_eval <- function(dat, run) {
 
   x <- merge(x, onset, by = id_vars(x), all.x = TRUE)
 
-
+  util_opt <- sum(x[["utility"]][x[["utility"]] > 0])
   res <- c(1, 0, 1, 1, 0, 0)
 
   for (i in 1:length(grid)) {
@@ -65,6 +65,7 @@ patient_eval <- function(dat, run) {
     spec <- tn / (tn + fp)
     ppv <- tp / (tp + fp)
     util <- sum((x[["prediction"]] > thresh) * x[["utility"]])
+    util <- util / util_opt
 
     res <- rbind(res, c(prob_grid[i], sens, spec, ppv, as.numeric(erl), util))
 
@@ -94,7 +95,7 @@ patient_eval <- function(dat, run) {
   
   phys <- ggplot(res, aes(x = threshold, y = utility)) +
     geom_line(color = "pink") + theme_bw() +
-    ggtitle(paste0("Utility curve with maximum", round(max(res$utility), 4)))
+    ggtitle(paste0("Utility curve with maximum ", round(max(res$utility), 4)))
     
   cowplot::plot_grid(roc, prc, earl, phys, ncol = 2L, labels = "auto")
 
