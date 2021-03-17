@@ -238,9 +238,12 @@ def main(args):
     print(f'Using aggregated lambda: {lam} from the {eval_dataset} dataset')  
    
     # Determine min and max threshold 
-    score_list = [s for pat in d['scores'] for s in pat]
-    score_max = np.percentile(score_list, 99.5) #max(score_list)
-    score_min = np.percentile(score_list, 0.5) #min(score_list)
+    if args.task == 'regression':
+        score_list = [s for pat in d['scores'] for s in pat]
+        score_max = np.percentile(score_list, 99.5) #max(score_list)
+        score_min = np.percentile(score_list, 0.5) #min(score_list)
+    else:
+        score_max = 1; score_min = 0
 
     measures = {
         'tp_recall': flatten_wrapper(
@@ -303,6 +306,11 @@ if __name__ in "__main__":
         '--lambda_path', 
         help='path to lambda file', 
         default='config/lambdas'
+    )
+    parser.add_argument(
+        '--task', 
+        help='prediction task [regression, classification]', 
+        default='regression'
     )
 
     args = parser.parse_args()
