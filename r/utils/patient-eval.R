@@ -2,49 +2,49 @@
 patient_eval <- function(dat) {
 
   x <- data.table::copy(dat)
+
   grid <- quantile(x$prediction, prob = seq(0.01, 0.99, 0.01))
 
   x[, is_case := any(label), by = c(id_vars(x))]
 
-  onset <- x[label == T, head(.SD, 1L), by = c(id_vars(x))]
-  onset <- onset[, c("stay_id", "stay_time"), with=F]
+  onset <- x[label == TRUE, head(.SD, 1L), by = c(id_vars(x))]
+  onset <- onset[, c("stay_id", "stay_time"), with = FALSE]
   onset <- rename_cols(onset, "onset_time", "stay_time")
   onset[, onset_time := onset_time + hours(6L)]
   onset <- as_id_tbl(onset)
 
-  x <- merge(x, onset, by = id_vars(x), all.x = T)
+  x <- merge(x, onset, by = id_vars(x), all.x = TRUE)
 
   res <- NULL
+
   for (i in 1:length(grid)) {
 
     thresh <- grid[i]
 
     trig <- x[prediction > thresh, head(.SD, 1L), by = c(id_vars(x))]
-    trig <- trig[, c("stay_id", "stay_time"), with=F]
+    trig <- trig[, c("stay_id", "stay_time"), with = FALSE]
     trig <- rename_cols(trig, "trigger", "stay_time")
     trig <- as_id_tbl(trig)
 
     fin <- merge(
-      unique(x[, c(id_vars(x), "is_case", "onset_time"), with = F]),
-      trig, all.x = T
+      unique(x[, c(id_vars(x), "is_case", "onset_time"), with = FALSE]),
+      trig, all.x = TRUE
     )
 
     dcs <- as.vector(table(fin$is_case, !is.na(fin$trigger)))
+    erl <- fin[!is.na(onset_time) & !is.na(trigger),
+               median(onset_time - trigger)]
+
     tn <- dcs[1]
     fn <- dcs[2]
     fp <- dcs[3]
     tp <- dcs[4]
-
-    erl <- fin[!is.na(onset_time) & !is.na(trigger),
-               median(onset_time - trigger)]
-
 
     sens <- tp / (tp + fn)
     spec <- tn / (tn + fp)
     ppv <- tp / (tp + fp)
 
     res <- rbind(res, c(i/100, sens, spec, ppv, as.numeric(erl)))
-
   }
 
   res <- as.data.frame(res)
@@ -65,7 +65,6 @@ patient_eval <- function(dat) {
     theme_bw() + ggtitle("Earliness curve")
 
   cowplot::plot_grid(roc, prc, earl, ncol = 3L)
-
 }
 
 read_res <- function(train_src = "mimic_demo", test_src = train_src,
