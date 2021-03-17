@@ -3,7 +3,7 @@
 #BSUB -W 24:00
 #BSUB -n 16
 #BSUB -R rusage[mem=8000]
-#BSUB -J model[1-48]%24
+#BSUB -J model[1-90]%45
 #BSUB -o data-res/model_%J.out
 
 invisible(
@@ -13,8 +13,8 @@ invisible(
 args <- check_index(
   parse_args(job_index),
   train_src = c("mimic", "aumc"),
-  feat_set = c("basic", "wav", "sig", "full"),
-  predictor = c("linear", "rf"),
+  feat_set = c("locf", "basic", "wav", "sig", "full"),
+  predictor = c("linear", "rf", "lgbm"),
   target = c("class", "hybrid", "reg")
 )
 

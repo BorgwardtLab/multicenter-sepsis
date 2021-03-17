@@ -87,7 +87,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
   for (src in test_src) {
 
-    rm(x, y)
+    rm(x)
 
     pids <- coh_split(src, "validation", split)
 
