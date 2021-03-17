@@ -54,7 +54,7 @@ feature_set <- function(name = c("full-small", "full-large",
 norm_sel <- function(x) {
   setdiff(
     grep("_(indicator|count)$", x, invert = TRUE, value = TRUE),
-    c("stay_id", "stay_time", "female")
+    c("stay_id", "stay_time", "female", "sep3")
   )
 }
 
@@ -108,20 +108,16 @@ read_lambda <- function(source, split = paste0("split_", 0:4)) {
   jsonlite::read_json(cfg_path(file.path("lambdas", file)))$lam
 }
 
-y_class <- function(source, start_offset = hours(6L),
-                    end_offset = hours(Inf), ...) {
+y_class <- function(source, start_offset = 6L, end_offset = Inf, ...) {
 
   dat <- read_to_df(source, cols = c("stay_id", "stay_time", "sep3"),
                     norm_cols = NULL, ...)
   sep <- dat[sep3 == 1L, head(.SD, n = 1L), by = "stay_id"]
 
-  units(start_offset) <- units(interval(dat))
-  units(end_offset) <- units(interval(dat))
-
   win <- merge(sep,
     dat[, list(in_time = min(stay_time), out_time = max(stay_time)),
         by = "stay_id"],
-    all.x = TRUE
+    by = "stay_id", all.x = TRUE
   )
 
   win <- win[, c("start_time", "end_time") := list(
@@ -129,10 +125,10 @@ y_class <- function(source, start_offset = hours(6L),
     pmin(stay_time + end_offset, out_time)
   )]
 
-  sep <- expand(win, start_var = "start_time", end_var = "end_time")
+  sep <- win[, list(stay_time = seq(start_time, end_time)), by = "stay_id"]
   sep <- sep[, sep3 := TRUE]
-
-  dat <- merge(dat[, sep3 := NULL], sep, all.x = TRUE)
+  dat <- dat[, sep3 := NULL]
+  dat <- sep[dat, on = c("stay_id", "stay_time")]
 
   is_true(dat[["sep3"]])
 }
