@@ -202,10 +202,11 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
   res <- jsonlite::read_json(fil, simplifyVector = TRUE, flatten = TRUE)
 
   res <- data.frame(
-    stay_id = rep(as.integer(names(res$times)), lengths(res$times)),
+    stay_id = rep(as.integer(res$ids), lengths(res$times)),
     stay_time = do.call(c, res$times),
     prediction = do.call(c, res$scores),
-    label = do.call(c, res$labels)
+    label = do.call(c, res$labels),
+    utility = do.call(c, res$utility)
   )
 
   try_id_tbl(res)
