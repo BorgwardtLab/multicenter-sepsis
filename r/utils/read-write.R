@@ -5,6 +5,8 @@ read_to_df <- function(...) read_train(..., mat_type = "df")
 
 read_to_mat <- function(...) read_train(..., mat_type = "mem")
 
+read_to_vec <- function(...) read_train(..., mat_type = "mem")[, 1L]
+
 read_train <- function(source, path = data_path("mm"), cols = feature_set(),
                        norm_cols = norm_sel(cols), split = "split_0",
                        pids = coh_split(source, split = split),
