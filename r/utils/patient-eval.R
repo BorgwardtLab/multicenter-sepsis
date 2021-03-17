@@ -68,3 +68,40 @@ patient_eval <- function(dat) {
 
 }
 
+read_res <- function(train_src = "mimic_demo", test_src = train_src,
+                     feat_set = c("basic", "wav", "sig", "full"),
+                     predictor = c("linear", "rf"),
+                     target = c("class", "hybrid", "reg"),
+                     dir = data_path("res"), jobid = NULL) {
+
+  if (is.null(jobid)) {
+    dir <- grep(
+      paste0("^", file.path(dir, "model_"), "[0-9]+"), list.dirs(dir),
+      value =TRUE
+    )[1L]
+  } else {
+    dir <- file.path(dir, paste0("model_", jobid))
+  }
+
+  fil <- list.files(dir,
+    paste(predictor, target, feat_set, train_src, test_src, sep = "-"),
+    full.names = TRUE
+  )
+
+  if (length(fil) == 0L) {
+    return(NULL)
+  }
+
+  res <- jsonlite::read_json(fil, simplifyVector = TRUE, flatten = TRUE)
+
+  res <- data.frame(
+    stay_id = rep(as.integer(res$ids), lengths(res$times)),
+    stay_time = do.call(c, res$times),
+    prediction = do.call(c, res$scores),
+    label = do.call(c, res$labels),
+    utility = do.call(c, res$utility),
+    onset = rep(as.integer(res$onset), lengths(res$times))
+  )
+
+  try_id_tbl(res)
+}
