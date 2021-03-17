@@ -2,6 +2,9 @@ import os
 import pickle
 import json
 from collections import defaultdict
+from src.variables.mapping import VariableMapping as VM
+
+vm = VM()
 
 def save_pickle(obj, filename, protocol=4):
     """ Basic pickle dumping """
@@ -26,11 +29,11 @@ def load_json(filename):
 
 def index_check(full_data):
     #Sanity check that time index is properly set: FIXME this has to be ensured at the end of preprocessing!
-    index_cols = ['id', 'time']
+    index_cols = [vm('id'), vm('time')]
     if any([col in full_data.columns for col in index_cols]):
         print('Formatting multi-index propery!..')
         full_data.reset_index(inplace=True)
-        full_data.set_index(['id', 'time'], inplace=True) 
+        full_data.set_index(index_cols, inplace=True) 
     return full_data
 
 def handle_index(data, index):
