@@ -1,10 +1,12 @@
 
 fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
-                        feat_set = c("basic", "locf", "wav", "sig", "full"),
+                        feat_set = c("locf", "basic", "wav", "sig", "full"),
                         feat_reg, predictor = c("linear", "rf"),
                         target = c("class", "hybrid", "reg"),
                         split = "split_0", data_dir = data_path("mm"),
-                        res_dir = data_path("res"), ...) {
+                        res_dir = data_path("res"), seed = 11, ...) {
+
+  set.seed(seed)
 
   if (!dir.exists(res_dir)) {
     dir.create(res_dir, showWarnings = FALSE)
@@ -15,7 +17,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     feat_set <- match.arg(feat_set)
     feat_reg <- switch(feat_set,
       basic = "_(hours|locf|derived)$",
-      locf = "_(locf|derived)$",
+      locf = "_locf$",
       wav = "_(hours|locf|derived|wavelet_[0-9]+)$",
       sig = "_(hours|locf|derived|signature_[0-9]+)$",
       full = "_(hours|locf|derived|wavelet_[0-9]+|signature_[0-9]+)$"
@@ -45,8 +47,6 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     reg = y_reg(train_src, path = data_dir, split = split)
   )
 
-
-
   msg("reading train data")
 
   read_x_fun <- switch(predictor, rf = read_to_mat, linear = read_to_bm)
@@ -59,11 +59,25 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
   msg("training model")
 
-  pids <- read_to_df(train_src, data_dir, cols = c("stay_id", "stay_time"),
+  pids <- read_to_df(train_src, data_dir, cols = c("stay_id", "sep3"),
                      norm_cols = NULL, split = split, pids = pids)
+  pids <- pids[, sep3 := as.logical(sep3)]
+  pids <- pids[, sep3 := any(sep3), by = "stay_id"]
 
-  fun <- switch(predictor, linear = train_lin, rf = train_rf)
-  mod <- prof(fun(x, y, !identical(target, "reg"), pids, n_cores(), ...))
+  n_fold <- 5L
+
+  case <- sample(unique(pids[ (sep3), ])[["stay_id"]])
+  ctrl <- sample(unique(pids[!(sep3), ])[["stay_id"]])
+
+  cafd <- rep(seq_len(n_fold), ceiling(length(case) / n_fold))[seq_along(case)]
+  ctfd <- rep(seq_len(n_fold), ceiling(length(ctrl) / n_fold))[seq_along(ctrl)]
+
+  pids <- pids[, fold := c(cafd, ctfd)[which(stay_id == c(case, ctrl))],
+               by = "stay_id"]
+
+  fun <- switch(predictor, linear = train_lin,
+                rf = function(...) train_rf(..., seed = seed))
+  mod <- prof(fun(x, y, !identical(target, "reg"), pids$fold, n_cores(), ...))
 
   qs::qsave(mod, paste0(job, ".qs"))
 
@@ -121,49 +135,39 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   invisible(NULL)
 }
 
-train_rf <- function(x, y, is_class, id_vec, n_cores, ...) {
+train_rf <- function(x, y, is_class, folds, n_cores, ...) {
 
-  pids <- unique(id_vec$stay_id)
-  folds <- sample(1:5, length(pids), replace = T)
+  folds <- as.integer(folds == 1)
 
-  id_vec <- id_vec[, fold := folds[which(stay_id == pids)], by = "stay_id"]
-  id_vec <- id_vec[, fold := as.integer(fold == 5)]
-
+  opt_mns <- 10
   opt_ope <- Inf
-  for (mns in c(10, 20, 50, 100, 500)) {
 
-    mod_cand <- ranger::ranger(
+  for (mns in c(10, 30, 100, 500)) {
+
+    mod <- ranger::ranger(
       y = y, x = x, probability = is_class, min.node.size = mns,
-      importance = "impurity", num.threads = n_cores,
-      case.weights = id_vec[["folds"]], holdout = T,
+      num.threads = n_cores, case.weights = ids[["folds"]], holdout = TRUE,
       ...
     )
 
-    if (mod_cand$prediction.error < opt_ope) {
+    if (mod$prediction.error < opt_ope) {
 
-      opt_ope <- mod_cand$prediction.error
-      mod <- mod_cand
-
+      opt_ope <- mod$prediction.error
+      opt_mns <- mns
     }
-
   }
 
-  mod
-
+  ranger::ranger(
+    y = y, x = x, probability = is_class, min.node.size = opt_mns,
+    importance = "impurity", num.threads = n_cores, ...
+  )
 }
 
-train_lin <- function(x, y, is_class, id_vec, n_cores, ...) {
-
-  pids <- unique(id_vec$stay_id)
-  folds <- sample(1:5, length(pids), replace = T)
-
-  id_vec <- id_vec[, fold := folds[which(stay_id == pids)], by = "stay_id"]
-
+train_lin <- function(x, y, is_class, folds, n_cores, ...) {
   biglasso::cv.biglasso(
     x, y, family = ifelse(is_class, "binomial", "gaussian"),
-    lambda = c(0.0036, 0.0031), ncores = n_cores, cv.ind = id_vec[["fold"]], ...
+    ncores = n_cores, cv.ind = folds, ...
   )
-
 }
 
 pred_rf <- function(mod, x) {
