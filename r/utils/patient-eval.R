@@ -78,6 +78,7 @@ patient_eval <- function(dat) {
   structure(
     list(
       dat = res,
+      prop_sep = mean(fin$is_case),
       auroc = -integrate(1 - res$spec, res$sens),
       auprc = -integrate(res$sens, res$ppv),
       max_util = max(res$utility)
@@ -104,7 +105,7 @@ patient_plot <- function(dat, run = NULL) {
 
   prc <- ggplot(dat$dat, aes(x = sens, y = ppv)) + geom_line(color = "red") +
     theme_bw() + ylim(c(0, 1)) +
-    geom_hline(yintercept = mean(fin$is_case), linetype = "dotdash") +
+    geom_hline(yintercept = dat$prop_sep, linetype = "dotdash") +
     ggtitle(
       paste0("PR curve of ", run,  " with AUPRC ", round(dat$auprc, 4))
     )
