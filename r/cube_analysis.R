@@ -4,10 +4,10 @@ invisible(
 )
 
 dims <- list(
-  train_src = "aumc",
-  feat_set = c("locf", "basic", "wav", "sig", "full"),
-  predictor = c("rf", "linear"),
-  target = c("class", "hybrid")
+  train_src = "mimic",
+  feat_set = c("locf"),
+  predictor = c("rf"),
+  target = c("class")
 )
 
 res <- array(vector("list", prod(lengths(dims))), lengths(dims), dims)
@@ -27,3 +27,6 @@ for (train in dims$train_src) {
     }
   }
 }
+
+patient_plot(evl["mimic", "locf", "rf", "class"][[1L]])
+

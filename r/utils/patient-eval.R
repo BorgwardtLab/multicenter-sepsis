@@ -14,24 +14,31 @@ patient_eval <- function(dat) {
     sum((x_right - x_left) * (y_left + y_right) / 2)
 
   }
+  
+  convex_comb <- function(a, b, val1, val2, mid = 0.9) {
+    
+    assertthat::assert_that(a >= mid, b <= mid)
+    
+    val2 + (val1 - val2) * (mid - b) / (a - b)
+    
+  }
 
   x <- data.table::copy(dat)
 
   prob_grid <- c(0, 0.001, seq(0.01, 0.99, 0.01), 0.999)
-  grid <- quantile(x$prediction, prob = prob_grid)
+  grid <- quantile(x[, max(prediction), by = "stay_id"][["V1"]], 
+                   prob = prob_grid)
 
-  x[, is_case := any(label), by = c(id_vars(x))]
-
-  onset <- x[label == TRUE, head(.SD, 1L), by = c(id_vars(x))]
-  onset <- onset[, c("stay_id", "stay_time"), with = FALSE]
-  onset <- rename_cols(onset, "onset_time", "stay_time")
-  onset[, onset_time := onset_time + hours(6L)]
-  onset <- as_id_tbl(onset)
+  x <- x[, is_case := any(!is.na(onset)), by = c(id_vars(x))]
+  onset <- x[!is.na(onset), head(.SD, 1L), by = c(id_vars(x)),
+             .SD = "onset"]
+  onset <- onset[, c("onset_time", "onset") := list(
+    as.difftime(onset, units = "hours"), NULL)]
 
   x <- merge(x, onset, by = id_vars(x), all.x = TRUE)
 
   util_opt <- sum(x[["utility"]][x[["utility"]] > 0])
-  res <- c(1, 0, 1, 1, 0, 0)
+  res <- c(1, 0, 1, 1, 0, 0, 0)
 
   for (i in 1:length(grid)) {
 
@@ -50,10 +57,11 @@ patient_eval <- function(dat) {
     dcs <- as.vector(
       table(fin$is_case, factor(!is.na(fin$trigger), levels = c(F, T)))
     )
-
+    
+    
     erl <- fin[!is.na(onset_time) & !is.na(trigger),
-               median(onset_time - trigger)]
-
+               list(onset_time - trigger)][["V1"]]
+    
     tn <- dcs[1]
     fn <- dcs[2]
     fp <- dcs[3]
@@ -65,12 +73,30 @@ patient_eval <- function(dat) {
     util <- sum((x[["prediction"]] > thresh) * x[["utility"]])
     util <- util / util_opt
 
-    res <- rbind(res, c(prob_grid[i], sens, spec, ppv, as.numeric(erl), util))
+    res <- rbind(res, c(prob_grid[i], sens, spec, ppv, as.numeric(median(erl)), 
+                        mean(erl > hours(2L)), util))
   }
 
   res <- as.data.frame(res)
-  names(res) <- c("threshold", "sens", "spec", "ppv", "earliness", "utility")
+  names(res) <- c("threshold", "sens", "spec", "ppv", "earliness", "advance_2h", 
+                  "utility")
   res <- res[order(res$threshold), ]
+  
+  prec_90r <- earliness_90r <- advance_90r <- -Inf
+  for (i in 1:nrow(res)) {
+    
+    if(res$sens[i] > 0.9 & res$sens[i+1] <= 0.9) {
+      
+      prec_90r <- convex_comb(res$sens[i], res$sens[i+1], res$ppv[i], res$ppv[i+1])
+      earliness_90r <- convex_comb(res$sens[i], res$sens[i+1], res$earliness[i], 
+                                   res$earliness[i+1])
+      advance_90r <- convex_comb(res$sens[i], res$sens[i+1], res$advance_2h[i], 
+                                 res$advance_2h[i+1])
+      
+    }
+    
+  }
+  
 
   auroc <- -integrate(1 - res$spec, res$sens)
   auprc <- -integrate(res$sens, res$ppv)
@@ -81,7 +107,10 @@ patient_eval <- function(dat) {
       prop_sep = mean(fin$is_case),
       auroc = -integrate(1 - res$spec, res$sens),
       auprc = -integrate(res$sens, res$ppv),
-      max_util = max(res$utility)
+      max_util = max(res$utility),
+      prec_90r = prec_90r,
+      earliness_90r = earliness_90r,
+      advance_90r = advance_90r
     ),
     class = "eval"
   )
@@ -107,12 +136,20 @@ patient_plot <- function(dat, run = NULL) {
     theme_bw() + ylim(c(0, 1)) +
     geom_hline(yintercept = dat$prop_sep, linetype = "dotdash") +
     ggtitle(
-      paste0("PR curve of ", run,  " with AUPRC ", round(dat$auprc, 4))
-    )
+      paste0("AUPRC ", round(dat$auprc, 4), "; At 90% rec. precision ",
+             round(dat$prec_90r*100, 2), "%")
+    ) + 
+    geom_vline(xintercept = 0.9, linetype = "dashed", color = "red")
 
-  earl <- ggplot(dat$dat, aes(x = threshold, y = earliness)) +
-    geom_line(color = "green") +
-    theme_bw() + ggtitle("Earliness curve")
+  earl <- ggplot(dat$dat, aes(x = sens, y = earliness)) +
+    geom_line(color = "green") + theme_bw() + 
+    ggtitle(
+      paste0("At 90% rec. med. earl. ", 
+             round(dat$earliness_90r, 2), "; ",
+             round(dat$advance_90r*100, 2), "% >=2h before"
+            )
+    ) + 
+    geom_vline(xintercept = 0.9, linetype = "dashed", color = "red")
 
   phys <- ggplot(dat$dat, aes(x = threshold, y = utility)) +
     geom_line(color = "pink") + theme_bw() +
