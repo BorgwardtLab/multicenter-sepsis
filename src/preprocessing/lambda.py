@@ -29,18 +29,20 @@ class DaskLambdaCalculator(DaskIDTransformer):
     prevalence correction of clinical utility score.
 
     """
-    def __init__(self, u_fp=-0.05, early_window=12, shift=0, **kwargs):
+    def __init__(self, u_fp=-0.05, early_window=12, shift=0, cost=1, **kwargs):
         """
         Inputs:
             - u_fp: U_{FP} value as used in util score
             - early_window: duration from t_early to t_sepsis 
                 in util score
             - shift: label shift, default: -6 for 6 hours into the past
+            - cost: magnitude of utility punishment for all positive classifier
         """
         super().__init__(**kwargs)
         self.u_fp = u_fp
         self.early_window = early_window
         self.shift = shift
+        self.cost = cost
  
     def transform_id(self, df):
         df = df.reset_index().set_index(VM_DEFAULT('time')) 
@@ -106,8 +108,9 @@ class DaskLambdaCalculator(DaskIDTransformer):
         # Column sumns of output:
         s = output.sum(axis=0)
         
-        lam = (-u_fp * s['t_minus']) / ( 2 * s['g'] - 2 * s['h'] + u_fp * s['t_plus']) 
-        
+        #lam = (-u_fp * s['t_minus']) / ( 2 * s['g'] - 2 * s['h'] + u_fp * s['t_plus']) 
+        lam = (-u_fp * s['t_minus']) / ( (self.cost + 1) * (s['g'] - s['h']) + u_fp * s['t_plus']) 
+ 
         self.lam = lam
         self.t_minus = s['t_minus']
         self.t_plus = s['t_plus']
@@ -346,6 +349,13 @@ if __name__ == "__main__":
         default=True,
         help="using dask implementation"
     )
+    parser.add_argument(
+        "--cost",
+        type=int,
+        default=1,
+        help="Utility Cost for positive classifier"
+    )
+
     args = parser.parse_args()
    
     si = SplitInfo(args.split_file)
@@ -374,8 +384,10 @@ if __name__ == "__main__":
         #    axis='index', level=VM_DEFAULT('id'), inplace=True, sort_remaining=True)
         #df.reset_index(level=VM_DEFAULT('time'), drop=False, inplace=True)
         #df = dd.from_pandas(df, npartitions=n_partitions, sort=True)
-        calc = DaskLambdaCalculator()
+        calc = DaskLambdaCalculator(cost=args.cost)
     else:
+        if args.cost != 1:
+            raise ValueError('Costs other than 1 only implemented for Dask lambda calculator!')
         calc = LambdaCalculator(n_jobs=args.n_jobs)
 
     # loading data and actually computing lambda:
