@@ -5,10 +5,11 @@ output_dir=$2 #intermediate results are written folders of this name
 base_dir=results
 eval_dir=${base_dir}/evaluation
 
-train_dataset=mimic
-eval_dataset=mimic
+train_dataset=aumc #mimic
+eval_dataset=aumc #mimic
 method=lgbm
 task=regression
+feature_set=middle #large
 
 # here we write out the predictions as json
 pred_dir=${eval_dir}/prediction_output/${output_dir}
@@ -23,7 +24,8 @@ python -m src.sklearn.eval_model \
     --method $method \
     --task $task \
     --train_dataset $train_dataset \
-    --eval_dataset $eval_dataset 
+    --eval_dataset $eval_dataset \
+    --feature_set $feature_set 
 
 # Patient-based Evaluation:
 python -m src.evaluation.patient_evaluation \
