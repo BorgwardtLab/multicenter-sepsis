@@ -1,18 +1,18 @@
 
-patient_eval <- function(dat, run) {
-  
+patient_eval <- function(dat) {
+
   integrate <- function(x, y) {
-    
-    assertthat::assert_that(length(x) == length(y))
-    
+
+    assert_that(length(x) == length(y))
+
     x_left <- x[1:(length(x)-1)]
     x_right <- x[2:(length(x))]
-    
+
     y_left <- y[1:(length(x)-1)]
     y_right <- y[2:(length(x))]
-    
+
     sum((x_right - x_left) * (y_left + y_right) / 2)
-    
+
   }
 
   x <- data.table::copy(dat)
@@ -36,7 +36,7 @@ patient_eval <- function(dat, run) {
   for (i in 1:length(grid)) {
 
     thresh <- grid[i]
-    
+
     trig <- x[prediction > thresh, head(.SD, 1L), by = c(id_vars(x))]
     trig <- trig[, c("stay_id", "stay_time"), with = FALSE]
     trig <- rename_cols(trig, "trigger", "stay_time")
@@ -46,13 +46,11 @@ patient_eval <- function(dat, run) {
       unique(x[, c(id_vars(x), "is_case", "onset_time"), with = FALSE]),
       trig, all.x = TRUE
     )
-    
-    
 
     dcs <- as.vector(
       table(fin$is_case, factor(!is.na(fin$trigger), levels = c(F, T)))
     )
-    
+
     erl <- fin[!is.na(onset_time) & !is.na(trigger),
                median(onset_time - trigger)]
 
@@ -68,37 +66,58 @@ patient_eval <- function(dat, run) {
     util <- util / util_opt
 
     res <- rbind(res, c(prob_grid[i], sens, spec, ppv, as.numeric(erl), util))
-
   }
 
   res <- as.data.frame(res)
   names(res) <- c("threshold", "sens", "spec", "ppv", "earliness", "utility")
   res <- res[order(res$threshold), ]
-  
+
   auroc <- -integrate(1 - res$spec, res$sens)
   auprc <- -integrate(res$sens, res$ppv)
-  roc <- ggplot(res, aes(x = 1-spec, y = sens)) +
+
+  structure(
+    list(
+      dat = res,
+      auroc = -integrate(1 - res$spec, res$sens),
+      auprc = -integrate(res$sens, res$ppv),
+      max_util = max(res$utility)
+    ),
+    class = "eval"
+  )
+}
+
+patient_plot <- function(dat, run = NULL) {
+
+  if (!inherits(dat, "eval")) {
+    dat <- patient_eval(dat)
+  }
+
+  assert_that(inherits(dat, "eval"))
+
+  roc <- ggplot(dat$dat, aes(x = 1-spec, y = sens)) +
     geom_line(color = "blue") +
     theme_bw() + ylim(c(0, 1)) + xlim(c(0,1)) +
     geom_abline(slope = 1, intercept = 0, linetype = "dotdash") +
-    ggtitle(paste0("ROC curve of ", run, " with AUROC ", 
-                   round(auroc, 4)))
+    ggtitle(
+      paste0("ROC curve of ", run, " with AUROC ", round(dat$auroc, 4))
+    )
 
-  prc <- ggplot(res, aes(x = sens, y = ppv)) + geom_line(color = "red") +
-    theme_bw() + ylim(c(0, 1)) + 
+  prc <- ggplot(dat$dat, aes(x = sens, y = ppv)) + geom_line(color = "red") +
+    theme_bw() + ylim(c(0, 1)) +
     geom_hline(yintercept = mean(fin$is_case), linetype = "dotdash") +
-    ggtitle(paste0("PR curve of ", run,  " with AUPRC ", round(auprc, 4)))
+    ggtitle(
+      paste0("PR curve of ", run,  " with AUPRC ", round(dat$auprc, 4))
+    )
 
-  earl <- ggplot(res, aes(x = threshold, y = earliness)) +
+  earl <- ggplot(dat$dat, aes(x = threshold, y = earliness)) +
     geom_line(color = "green") +
     theme_bw() + ggtitle("Earliness curve")
-  
-  phys <- ggplot(res, aes(x = threshold, y = utility)) +
-    geom_line(color = "pink") + theme_bw() +
-    ggtitle(paste0("Utility curve with maximum ", round(max(res$utility), 4)))
-    
-  cowplot::plot_grid(roc, prc, earl, phys, ncol = 2L, labels = "auto")
 
+  phys <- ggplot(dat$dat, aes(x = threshold, y = utility)) +
+    geom_line(color = "pink") + theme_bw() +
+    ggtitle(paste0("Utility curve with maximum ", round(dat$max_util, 4)))
+
+  cowplot::plot_grid(roc, prc, earl, phys, ncol = 2L, labels = "auto")
 }
 
 read_res <- function(train_src = "mimic_demo", test_src = train_src,
