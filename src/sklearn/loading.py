@@ -225,9 +225,7 @@ def load_and_transform_data(
     # e.g. due to degenerate stats in normalization
     start = time()
     df = df.fillna(0)
-    if (df.max().max() < np.inf) or (df.min().min() > np.inf):
-        print('Warning: Degenerate values found (inf, -inf), plausibly due to degen. normalization')
-    df = df.replace([np.inf, -np.inf], 0)
+    df = df.replace([np.inf, -np.inf], 0) #sanity check if there is degenerate normalization
     print(f'Final imputation took {time() - start} seconds.')
     if form == 'dask':
         df = df.compute()
