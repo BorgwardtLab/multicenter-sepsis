@@ -275,10 +275,19 @@ class MIMIC(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        self.pd_transform = Normalize(
+        normalize = Normalize(
             'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold),
             self.columns
         )
+        apply_lam = ApplyLambda(
+            lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}.json' 
+        ) 
+        transforms = [
+            normalize,
+            apply_lam,
+            Impute(),
+        ]
+        self.pd_transform = ComposeTransformations(transforms)
 
 
 class Hirid(SplittedDataset):
