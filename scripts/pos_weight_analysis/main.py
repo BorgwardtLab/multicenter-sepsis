@@ -119,7 +119,7 @@ if __name__ == "__main__":
     # hard-coded parameters:
     n_draws = 5
     rep = 0
-    
+    cost = 2 # None 
 
     if not split:
         splits = ['train', 'validation', 'test']
@@ -148,8 +148,12 @@ if __name__ == "__main__":
     res_list = [] 
     for dataset in datasets:
         # Determine current lambda:
+        if cost:
+            lam_file = f'lambda_{dataset}_rep_{rep}_cost_{cost}.json'
+        else:
+            lam_file = f'lambda_{dataset}_rep_{rep}.json'
         lambda_path = os.path.join(args.lambda_path, 
-            f'lambda_{dataset}_rep_{rep}.json' )
+            lam_file )
         if args.ignore_lam:
             lam = 1.0
         else:
@@ -208,11 +212,11 @@ if __name__ == "__main__":
     df = pd.DataFrame.from_dict(results)
     
     os.makedirs(out_path, exist_ok=True)
-    out_path = os.path.join(out_path, 'random_baselines_parquet_{}.csv')
+    out_path = os.path.join(out_path, 'random_baselines_parquet_{}_cost_{}.csv')
     if args.ignore_lam:
-        out_path = out_path.format('no_lam')
+        out_path = out_path.format('no_lam', cost)
     else:
-        out_path = out_path.format('')
+        out_path = out_path.format('', cost)
     df.to_csv(
         out_path
     ) 
