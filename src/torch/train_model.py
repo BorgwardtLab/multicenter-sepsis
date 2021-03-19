@@ -6,6 +6,8 @@ import os
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.loggers import WandbLogger
+import wandb
 
 import src.torch.models
 import src.torch.datasets
@@ -26,18 +28,31 @@ def namespace_without_none(namespace):
 def main(hparams, model_cls):
     """Main function train model."""
     # init module
-
+    wandb.init(project='mc-sepsis', entity='sepsis', config=hparams)
+    config = wandb.config
+     
     model = model_cls(**vars(namespace_without_none(hparams)))
-    logger = TbWithBestValueLogger(
-        hparams.log_path,
-        model.metrics_initial,
-        add_best=True,
-        name=hparams.exp_name,
-        version=hparams.version,
-        default_hp_metric=False
-    )
-    checkpoint_dir = os.path.join(
-        logger.log_dir, 'checkpoints')
+    wandb.watch(model)
+
+    # Wandb logger:
+   # Loggers and callbacks
+    wandb_logger = WandbLogger(
+        name=f"{hparams.model}_{hparams.dataset}",
+        project="mc-sepsis",
+        entity="sepsis",
+        log_model=True,
+        tags=[hparams.model, hparams.dataset]
+    ) 
+    #logger = TbWithBestValueLogger(
+    #    hparams.log_path,
+    #    model.metrics_initial,
+    #    add_best=True,
+    #    name=hparams.exp_name,
+    #    version=hparams.version,
+    #    default_hp_metric=False
+    #)
+    #checkpoint_dir = os.path.join(
+    #    logger.log_dir, 'checkpoints')
 
     monitor_score = hparams.monitor
     monitor_mode = hparams.monitor_mode
@@ -46,7 +61,7 @@ def main(hparams, model_cls):
         monitor=monitor_score,
         mode=monitor_mode,
         save_top_k=1,
-        dirpath=checkpoint_dir
+        dirpath=wandb_logger.experiment.dir #checkpoint_dir
     )
     early_stopping_cb = EarlyStopping(
         monitor=monitor_score, patience=10, mode=monitor_mode, strict=True,
@@ -57,25 +72,26 @@ def main(hparams, model_cls):
         callbacks=[early_stopping_cb],
         checkpoint_callback=model_checkpoint_cb,
         max_epochs=hparams.max_epochs,
-        logger=logger,
+        logger=wandb_logger,
         gpus=hparams.gpus
     )
     trainer.fit(model)
-    trainer.logger.save()
+    #trainer.logger.save()
     print('Loading model with', monitor_mode, monitor_score)
     print(model_checkpoint_cb.best_model_path)
     loaded_model = model_cls.load_from_checkpoint(
         checkpoint_path=model_checkpoint_cb.best_model_path)
-    trainer.test(loaded_model)
-    trainer.logger.save()
-    all_metrics = {**trainer.logger.last, **trainer.logger.best}
-    all_metrics = {n: v for n, v in all_metrics.items() if '/' in n}
-    prefixes = {name.split('/')[0] for name in all_metrics.keys()}
-    results = defaultdict(dict)
-    for name, value in all_metrics.items():
-        for prefix in prefixes:
-            if name.startswith(prefix):
-                results[prefix][name.split('/')[1]] = value
+    results = trainer.test(loaded_model)
+    #trainer.test(loaded_model)
+    #trainer.logger.save()
+    #all_metrics = {**trainer.logger.last, **trainer.logger.best}
+    #all_metrics = {n: v for n, v in all_metrics.items() if '/' in n}
+    #prefixes = {name.split('/')[0] for name in all_metrics.keys()}
+    #results = defaultdict(dict)
+    #for name, value in all_metrics.items():
+    #    for prefix in prefixes:
+    #        if name.startswith(prefix):
+    #            results[prefix][name.split('/')[1]] = value
 
     from src.torch.eval_model import online_eval
     masked_result = online_eval(
@@ -85,8 +101,10 @@ def main(hparams, model_cls):
         feature_set=hparams.feature_set
     )
     results['validation_masked'] = masked_result
-    with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
-        json.dump(results, f, cls=JsonEncoder)
+    #with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
+    #    json.dump(results, f, cls=JsonEncoder)
+    for name, value in results.items():
+        wandb_logger.experiment.summary[name] = value
 
     print('MASKED TEST RESULTS')
     print({
@@ -94,14 +112,14 @@ def main(hparams, model_cls):
         if key not in ['labels', 'predictions']
     })
 
-    # Filter out parts of hparams which belong to Hyperargparse
-    config = {
-        key: value
-        for key, value in vars(hparams).items()
-        if not callable(value)
-    }
-    with open(os.path.join(logger.log_dir, 'config.json'), 'w') as f:
-        json.dump(config, f, cls=JsonEncoder)
+    ## Filter out parts of hparams which belong to Hyperargparse
+    #config = {
+    #    key: value
+    #    for key, value in vars(hparams).items()
+    #    if not callable(value)
+    #}
+    #with open(os.path.join(logger.log_dir, 'config.json'), 'w') as f:
+    #    json.dump(config, f, cls=JsonEncoder)
 
 
 if __name__ == '__main__':
@@ -141,12 +159,12 @@ if __name__ == '__main__':
 
     parser = model_cls.add_model_specific_args(parser)
     hparams = parser.parse_args()
-    if hparams.hyperparam_draws > 0:
-        for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
-            print(hyperparam_draw)
-            hyperparam_draw = Namespace(**hyperparam_draw.__getstate__())
-            main(hyperparam_draw, model_cls)
-    else:
-        # Need to do this in order to allow pickling
-        hparams = Namespace(**vars(hparams))
-        main(hparams, model_cls)
+    #if hparams.hyperparam_draws > 0:
+    #    for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
+    #        print(hyperparam_draw)
+    #        hyperparam_draw = Namespace(**hyperparam_draw.__getstate__())
+    #        main(hyperparam_draw, model_cls)
+    #else:
+    # Need to do this in order to allow pickling
+    hparams = Namespace(**vars(hparams))
+    main(hparams, model_cls)
