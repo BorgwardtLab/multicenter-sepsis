@@ -204,7 +204,7 @@ def load_and_transform_data(
     if task == 'regression':
         # For regression, we apply lambda sample weights and remove label
         start = time()
-        print('Applying lambda..')
+        print(f'Applying lambda {lam}..')
         # regression target without adjustment:
         u = df[VM_DEFAULT('utility')]
         # patient-level label:
