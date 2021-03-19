@@ -39,10 +39,12 @@ f_neg <- function(delta_t) {
 # )
 
 
-x <- read_parquet("aumc", cols = c("stay_time", "stay_id", "onset"))
+# x <- read_parquet("aumc", cols = c("stay_time", "stay_id", "onset", "all_miss"),
+#                   pids = coh_split("aumc"))
 
 lambda_module <- function(x) {
   
+  x <- x[get(index_var(x)) >= hours(0L)]
   x[, is_case := any(is_true(onset)), by = "stay_id"]
   
   x[is_case == T, onset_time := stay_time[which(!is.na(onset))], by = "stay_id"]
@@ -74,7 +76,3 @@ lambda_module <- function(x) {
   list(lambda = lambda, utility = x[["pos"]] - x[["neg"]])
   
 }
-
-# res <- lambda_module(x)
-# res[["lambda"]]
-# res
