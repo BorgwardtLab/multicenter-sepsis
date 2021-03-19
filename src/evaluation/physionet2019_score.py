@@ -146,7 +146,7 @@ def physionet2019_utility(y_true, y_score, shift_labels=0, u_fp=-0.05, lam=1):
     inaction_utilities = []
 
     for labels, observed_predictions in zip(y_true, y_score):
-        observed_predictions = np.round(observed_predictions)
+        observed_predictions = np.round(observed_predictions.astype(np.double))
         num_rows = len(labels)
         best_predictions = np.zeros(num_rows)
         inaction_predictions = np.zeros(num_rows)
