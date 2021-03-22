@@ -249,17 +249,17 @@ class BaseModel(pl.LightningModule):
         # training specific
         parser.add_argument(
             '--dataset', type=str, choices=src.torch.datasets.__all__,
-            default='MimicDemo'
+            default='MIMICDemo'
         )
         parser.add_argument(
-            '--learning-rate', default=0.001, type=float,
+            '--learning_rate', default=0.001, type=float,
             # tunable=True, log_base=10., low=0.0001, high=0.01
         )
         parser.add_argument(
-            '--batch-size', default=32, type=int,
+            '--batch_size', default=32, type=int,
             # options=[16, 32, 64, 128, 256], tunable=True
         )
-        parser.add_argument('--weight-decay', default=0., type=float)
-        parser.add_argument('--label-propagation', default=6, type=int)
-        parser.add_argument('--pos-weight', type=float, default=1.)
+        parser.add_argument('--weight_decay', default=0., type=float)
+        parser.add_argument('--label_propagation', default=6, type=int)
+        parser.add_argument('--pos_weight', type=float, default=1.)
         return parser
