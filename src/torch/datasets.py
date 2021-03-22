@@ -145,6 +145,9 @@ class ParquetDataset(Dataset):
         if self.as_pandas:
             return table.to_pandas(self_destruct=True, ignore_metadata=True)
         return table
+    
+    def __len__(self):
+        return len(self.ids)
 
 
 class SplittedDataset(ParquetDataset):
