@@ -3,11 +3,13 @@ from argparse import ArgumentParser, Namespace
 import json
 from collections import defaultdict
 import os
-
+import sys
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 import wandb
+
+sys.path.append(os.getcwd()) # hack for executing module as script (for wandb)
 
 import src.torch.models
 import src.torch.datasets
@@ -28,11 +30,11 @@ def namespace_without_none(namespace):
 def main(hparams, model_cls):
     """Main function train model."""
     # init module
-    wandb.init(project='mc-sepsis', entity='sepsis', config=hparams)
-    config = wandb.config
+    ##wandb.init(project='mc-sepsis', entity='sepsis', config=hparams)
+    ##config = wandb.config
      
     model = model_cls(**vars(namespace_without_none(hparams)))
-    wandb.watch(model)
+    ##wandb.watch(model)
 
     # Wandb logger:
    # Loggers and callbacks
@@ -82,6 +84,8 @@ def main(hparams, model_cls):
     loaded_model = model_cls.load_from_checkpoint(
         checkpoint_path=model_checkpoint_cb.best_model_path)
     results = trainer.test(loaded_model)
+    # results is a single-element list of a dict:
+    results = results[0]
     #trainer.test(loaded_model)
     #trainer.logger.save()
     #all_metrics = {**trainer.logger.last, **trainer.logger.best}
@@ -93,24 +97,28 @@ def main(hparams, model_cls):
     #        if name.startswith(prefix):
     #            results[prefix][name.split('/')[1]] = value
 
-    from src.torch.eval_model import online_eval
-    masked_result = online_eval(
-        loaded_model,
-        getattr(src.datasets, hparams.dataset, 'validation'),
-        'validation',
-        feature_set=hparams.feature_set
-    )
-    results['validation_masked'] = masked_result
+    ##TODO: issue in expand_time in online_eval! --> skipping for now
+    ##from src.torch.eval_model import online_eval
+    ##masked_result = online_eval(
+    ##    loaded_model,
+    ##    getattr(src.torch.datasets, hparams.dataset, 'validation'),
+    ##    'validation',
+    ##    #feature_set=hparams.feature_set
+    ##)
+    ##results['validation_masked'] = masked_result
+
     #with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
     #    json.dump(results, f, cls=JsonEncoder)
     for name, value in results.items():
+        if name in ['labels', 'predictions']:
+            continue
         wandb_logger.experiment.summary[name] = value
 
-    print('MASKED TEST RESULTS')
-    print({
-        key: value for key, value in results['validation_masked'].items()
-        if key not in ['labels', 'predictions']
-    })
+    ##print('MASKED TEST RESULTS')
+    ##print({
+    ##    key: value for key, value in results['validation_masked'].items()
+    ##    if key not in ['labels', 'predictions']
+    ##})
 
     ## Filter out parts of hparams which belong to Hyperargparse
     #config = {
@@ -124,17 +132,17 @@ def main(hparams, model_cls):
 
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
-    parser.add_argument('--log-path', default='logs')
-    parser.add_argument('--exp-name', default='train_torch_model')
+    parser.add_argument('--log_path', default='logs')
+    parser.add_argument('--exp_name', default='train_torch_model')
     parser.add_argument('--version', default=None, type=str)
     parser.add_argument('--model', choices=src.torch.models.__all__, type=str,
                         default='AttentionModel')
-    parser.add_argument('--max-epochs', default=100, type=int)
+    parser.add_argument('--max_epochs', default=100, type=int)
     parser.add_argument('--gpus', type=int, default=None)
     parser.add_argument('--hyperparam-draws', default=0, type=int)
     parser.add_argument('--monitor', type=str,
                         default='online_val/loss')
-    parser.add_argument('--monitor-mode', type=str, choices=['max', 'min'],
+    parser.add_argument('--monitor_mode', type=str, choices=['max', 'min'],
                         default='min')
     parser.add_argument('--indicators', type=bool,
                         default=True)
