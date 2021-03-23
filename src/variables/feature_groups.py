@@ -177,6 +177,7 @@ class ColumnFilterLight(ColumnFilter):
     def __init__(self, dataset_columns):
         self.columns = dataset_columns
         self.groups = self.columns_to_groups(self.columns)
+        self.physionet_prefixes = self.get_physionet_prefixes()
 
 if __name__ == "__main__":
 
