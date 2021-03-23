@@ -128,7 +128,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     y <- split(y, pids[["stay_id"]])
     res <- split(res, pids[["stay_id"]])
 
-    if (identical(target, "reg")) {
+    if (!identical(target, "reg")) {
       reg <- split(reg, pids[["stay_id"]])
     }
 
