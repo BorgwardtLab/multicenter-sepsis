@@ -119,6 +119,12 @@ def main():
         '--index', default='multi',
         help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
     )
+    parser.add_argument(
+        '--cost', default=0,
+        type=int,
+        help='lambda cost to use (default 0, inactive)'
+    )
+
 
     args = parser.parse_args()
     method = args.method

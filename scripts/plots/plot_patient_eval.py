@@ -20,8 +20,13 @@ df = pd.DataFrame(d)
 
 earliness_stat = args.earliness_stat
 earliness = f'earliness_{earliness_stat}'
-df[earliness] *= -1 
 
+
+# Get precision at 90% Recall
+greater = df['pat_recall'] > 0.9
+index = df['pat_recall'][greater].argmin()
+info = df.loc[index]
+print(info)
 fig, ax1 = plt.subplots(figsize=(10,6))
 ax1.set_title('Patient-based Evaluation', fontsize=19)
 ax1.set_xlabel('Decision threshold', fontsize=16)

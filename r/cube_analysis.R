@@ -31,3 +31,6 @@ for (train in dims$train_src) {
     }
   }
 }
+
+patient_plot(evl["mimic", "locf", "rf", "class"][[1L]])
+
