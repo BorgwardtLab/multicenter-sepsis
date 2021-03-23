@@ -1,7 +1,35 @@
 
+eicu_hosp_coh <- function(sep, coh, thresh = 0.05) {
+
+  assert(is.numeric(thresh), is.scalar(thresh), thresh > 0, thresh < 1)
+
+  idv <- id_var(sep)
+  hid <- "hospitalid"
+  sep <- unique(sep[, c(idv, "sep3"), with = FALSE])
+
+  hsp <- load_id("patient", "eicu", cols = c(idv, hid))
+  hsp <- merge(hsp, coh, all.y = TRUE)
+
+  dat <- merge(sep, hsp, all = TRUE)
+  dat <- dat[, list(septic = sum(sep3, na.rm = TRUE),
+                    total = .N), by = c(hid)]
+  dat <- dat[, prop := septic / total]
+  nrw <- nrow(dat)
+  dat <- dat[prop >= thresh, hid, with = FALSE]
+
+  msg("--> selecting {nrow(dat)} hospitals from {nrw} based on a sep3",
+      " prevalence of {thresh}\n")
+
+  res <- merge(hsp, dat, all.y = TRUE, by = hid)
+  nrw <- nrow(coh)
+
+  msg("--> removing {nrw - nrow(res)} from {nrw} ids based on hosp",
+      " selection\n")
+}
+
 load_physionet <- function(var_cfg = cfg_path("variables.json"),
-                           coh_cfg = cfg_path("cohorts.json"),
-                           data_dir = data_path("physionet2019")) {
+                           data_dir = data_path("physionet2019"),
+                           min_age = 14) {
 
   concepts <- read_var_json(var_cfg)
   data_dir <- file.path(data_dir, "training_setB")
@@ -34,6 +62,9 @@ load_physionet <- function(var_cfg = cfg_path("variables.json"),
   win <- collapse(dat, start = "intime", end = "outtime")
   dat <- rename_cols(dat, feats, names(feats), by_ref = TRUE)
 
+  dat <- dat[age >= min_age, ]
+  coh <- unique(id_col(dat))
+
   res <- unmerge(dat)
   names(res) <- vapply(res, data_vars, character(1L))
 
@@ -47,7 +78,7 @@ load_physionet <- function(var_cfg = cfg_path("variables.json"),
     res <- c(res, add)
   }
 
-  list(win = win, dat = res[cnc], sep = sep)
+  list(win = win, dat = res[cnc], sep = sep, coh = list(initial = coh))
 }
 
 sepsis3_crit <- function(source, pids = NULL, keep_components = FALSE,
@@ -85,22 +116,36 @@ sepsis3_crit <- function(source, pids = NULL, keep_components = FALSE,
 }
 
 load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
-                      coh_cfg = cfg_path("cohorts.json")) {
+                      min_age = 14, eicu_hosp_thresh = 0.05) {
 
   feats <- read_var_json(var_cfg)[["concept"]]
-  feats <- feats[!is.na(feats)]
-  cohor <- jsonlite::read_json(coh_cfg, simplifyVector = TRUE, flatten = TRUE)
-  pids  <- unlist(cohor[[source]]$initial)
+  feats <- setdiff(feats[!is.na(feats)], "sofa")
+
+  msg("--> determining cohort for {source}\n")
+
+  coh <- load_concepts("age", source, id_type = "icustay")
+  nrw <- nrow(coh)
+  pid <- coh[age >= min_age, ]
+
+  msg("--> removing {nrw - nrow(coh)} from {nrw} ids due to min age of",
+      " {min_age}\n")
+
+  sof <- load_concepts("sofa", source, patient_ids = pid)
+  sep <- sepsis3_crit(source, pid, dat = sof)
+
+  if (identical("eicu", source)) {
+    pid <- eicu_hosp_coh(sep, pid, thresh = eicu_hosp_thresh)
+  }
 
   win <- stay_windows(source, id_type = "icustay", win_type = "icustay",
                       in_time = "intime", out_time = "outtime",
-                      patient_ids = pids)
+                      patient_ids = pid)
 
   dat <- load_concepts(feats, source, merge_data = FALSE,
-                       id_type = "icustay", patient_ids = pids)
-  sep <- sepsis3_crit(source, pids, dat = dat)
+                       id_type = "icustay", patient_ids = pid)
 
-  list(win = win, dat = dat, sep = sep)
+  list(win = win, dat = c(dat, list(sofa = sof)), sep = sep,
+       coh = list(initial = unique(id_col(pid))))
 }
 
 load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
@@ -153,6 +198,7 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
     }
   )
 
+  coh <- dat$coh
   nav <- vapply(dat$dat, nrow, integer(1L)) == 0
 
   msg("--> successfully loaded {length(dat$dat)} features, {sum(nav)}",
@@ -273,7 +319,9 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
 
   msg("--> loading complete")
 
-  dat
+  coh$final <- unique(id_col(dat))
+
+  list(dat = dat, coh = coh)
 }
 
 augment <- function(x, fun, suffix,
@@ -313,7 +361,7 @@ augment <- function(x, fun, suffix,
 
     assert_that(all(vapply(funs, is.function, logical(1L))))
 
-    for (col %in% cols) {
+    for (col in cols) {
 
       tmp_cols <- paste0(col, lags)
       targ_col <- paste0(sub("_raw$", "", col), "_", fun, as.integer(win),
@@ -337,7 +385,7 @@ augment <- function(x, fun, suffix,
 
       x <- x[, lapply(.SD, fun, ...), .SDcols = c(cols), by = c(by)]
 
-    } else  else {
+    } else {
 
       x <- slide(x, lapply(.SD, fun, ...), win, .SDcols = c(cols))
     }
@@ -351,36 +399,24 @@ augment <- function(x, fun, suffix,
   x
 }
 
-prof <- function(expr, envir = parent.frame()) {
-
-  mem <- memuse::Sys.procmem()
-  tim <- Sys.time()
-
-  res <- eval(expr, envir = envir)
-
-  cur <- memuse::Sys.procmem()
-  cil <- cur[["peak"]] - mem[["peak"]]
-
-  msg("    Runtime: {format(Sys.time() - tim, digits = 4)}")
-  if (length(cil)) msg("    Memory ceiling increased by: {as.character(cil)}")
-  msg("    Current memory usage: {as.character(cur[['size']])}")
-
-  res
-}
-
-export_data <- function(src, dest_dir = data_path("export"),
-                        coh_cfg = cfg_path("cohorts.json"), legacy = FALSE,
-                        ...) {
+export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
+                        seed = 11L, ...) {
 
   augment_prof <- function(...) prof(augment(...))
 
-  assert(is.string(src), dir.exists(dir))
+  assert(is.string(src), dir.exists(dest_dir))
 
-  dat <- load_data(src, coh_cfg = coh_cfg, ...)
+  dat <- load_data(src, ...)
 
-  cohor <- jsonlite::read_json(coh_cfg, simplifyVector = TRUE, flatten = TRUE)
-  cohor[[src]]$final <- unique(id_col(dat))
-  jsonlite::write_json(cohor, coh_cfg, pretty = TRUE)
+  atr <- list(
+    ricu = list(
+      id_vars = id_vars(dat$dat), index_var = index_var(dat$dat),
+      time_unit = units(interval(dat$dat)), time_step = time_step(dat$dat)
+    ),
+    mcsep = list(cohorts = dat$coh)
+  )
+
+  dat <- dat$dat
 
   dat <- dat[, c("female") := list(is_true(female == "Female"))]
 
@@ -412,9 +448,7 @@ export_data <- function(src, dest_dir = data_path("export"),
 
   res <- c(dat, ind, lof, lbk)
   res <- data.table::setDT(res)
+  fil <- file.path(dest_dir, paste(src, packageVersion("ricu"), sep = "_"))
 
-  create_parquet(res,
-    file.path(dest_dir, paste(src, packageVersion("ricu"), sep = "_")),
-    chunk_size = 1e3
-  )
+  create_parquet(res, fil, atr, chunk_size = 1e3)
 }

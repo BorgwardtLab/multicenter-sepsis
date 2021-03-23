@@ -97,7 +97,13 @@ read_var_json <- function(path = cfg_path("variables.json")) {
   )
 }
 
-create_parquet <- function(x, name, ...) {
+create_parquet <- function(x, name, attr = NULL, ...) {
+
+  if (!is.null(attr)) {
+    x <- arrow::Table$create(x)
+    x$metadata <- c(x$metadata, lapply(attr, jsonlite::toJSON))
+  }
+
   arrow::write_parquet(x, paste0(name, ".parquet"), ...)
 }
 

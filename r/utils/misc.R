@@ -9,7 +9,7 @@ jobid <- function() {
   Sys.getenv("LSB_JOBID", unset = as.numeric(Sys.time()))
 }
 
-cfg_path <- function(file) file.path(root_dir, "config", file)
+cfg_path <- function(...) file.path(root_dir, "config", ...)
 
 coh_split <- function(src, set = c("train", "validation", "test"),
                       split = paste0("split_", 0:4)) {
@@ -130,4 +130,23 @@ try_id_tbl <- function(x) {
   x
 }
 
+prof <- function(expr, envir = parent.frame()) {
+
+  mem <- memuse::Sys.procmem()
+  tim <- Sys.time()
+
+  res <- eval(expr, envir = envir)
+
+  cur <- memuse::Sys.procmem()
+  cil <- cur[["peak"]] - mem[["peak"]]
+
+  msg("    Runtime: {format(Sys.time() - tim, digits = 4)}")
+  if (length(cil)) msg("    Memory ceiling increased by: {as.character(cil)}")
+  msg("    Current memory usage: {as.character(cur[['size']])}")
+
+  res
+}
+
 delayedAssign("root_dir", here::here())
+
+preproc_version <- "001"
