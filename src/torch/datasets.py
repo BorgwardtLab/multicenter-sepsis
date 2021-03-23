@@ -5,9 +5,12 @@ import os
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 import pyarrow.parquet as pq
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
+
+from src.torch.torch_utils import ComposeTransformations
 
 from src.variables.feature_groups import ColumnFilterLight
 from src.variables.mapping import VariableMapping
@@ -49,6 +52,37 @@ class Normalize:
         df[norm_df.columns] = norm_df
         return df
 
+class ApplyLambda:
+    """ Apply lambda to regression target """
+    def __init__(self, lambda_path):
+        with open(lambda_path, 'r') as f:
+            self.lam = json.load(f)['lam']
+
+    def __call__(self, df):
+        u = df[VM_DEFAULT('utility')]
+        # patient-level label:
+        timestep_label = df[VM_DEFAULT('label')]
+        l = timestep_label.sum() > 0 #more nan-stable than .any()
+        l = l.astype(int)
+        #l = l.reindex(u.index) # again timestep wise label
+        # applying lambda to target: if case: times lam, else no change
+        # need to drop target instead of overwriting as otherwise pandas 
+        # throwed an error due to reindexing with duplicate indices..
+        df = df.drop(columns=[VM_DEFAULT('utility')])
+        new_target = l*u*self.lam + (1-l)*u 
+        df[VM_DEFAULT('utility')] = new_target
+        return df
+
+class Impute:
+    """ Transform to impute and remove invalid values"""
+    def __init__(self, fill_value=0):
+        self.fill_value = fill_value
+    def __call__(self, df):
+        df = df.fillna(self.fill_value)
+        # sanity check if there is degenerate normalization
+        df = df.replace([np.inf, -np.inf], 0)
+        return df
+        
 
 class ParquetDataset(Dataset):
     METADATA_FILENAME = '_metadata'
@@ -111,6 +145,9 @@ class ParquetDataset(Dataset):
         if self.as_pandas:
             return table.to_pandas(self_destruct=True, ignore_metadata=True)
         return table
+    
+    def __len__(self):
+        return len(self.ids)
 
 
 class SplittedDataset(ParquetDataset):
@@ -121,6 +158,7 @@ class SplittedDataset(ParquetDataset):
     # TODO: It looks like age and sex are not present in the data anymore
     STATIC_COLUMNS = VM_DEFAULT.all_cat('static')
     LABEL_COLUMN = VM_DEFAULT('label')
+    UTILITY_COLUMN = VM_DEFAULT('utility')
 
     def __init__(self, path, split_file, split, feature_set,
                  only_physionet_features=False, fold=0, pd_transform=None, transform=None):
@@ -143,7 +181,7 @@ class SplittedDataset(ParquetDataset):
         else:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).feature_set(name=feature_set)
-        self.columns = self.columns + [self.LABEL_COLUMN]
+        self.columns = self.columns + [self.LABEL_COLUMN, self.UTILITY_COLUMN]
         self.pd_transform = pd_transform
         self.transform = transform
 
@@ -165,14 +203,14 @@ class SplittedDataset(ParquetDataset):
         times = df[self.TIME_COLUMN].values
         statics = df[self.STATIC_COLUMNS].values[0]
         ts = df.drop(
-            columns=[self.ID_COLUMN, self.TIME_COLUMN, self.LABEL_COLUMN] + self.STATIC_COLUMNS)
-        from IPython import embed; embed()
+            columns=[self.ID_COLUMN, self.TIME_COLUMN, self.LABEL_COLUMN, self.UTILITY_COLUMN] + self.STATIC_COLUMNS)
         out = {
             'id': id,
             'times': times,
             'statics': statics,
             'ts': ts.values,
-            'labels': df[self.LABEL_COLUMN].values
+            'labels': df[self.LABEL_COLUMN].values,
+            'targets': df[self.UTILITY_COLUMN].values
         }
 
         if self.transform:
@@ -212,10 +250,19 @@ class MIMICDemo(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        self.pd_transform = Normalize(
+        normalize = Normalize(
             'config/normalizer/normalizer_mimic_demo_rep_{}.json'.format(fold),
             self.columns
         )
+        apply_lam = ApplyLambda(
+            lambda_path =  f'config/lambdas/lambda_mimic_demo_rep_{fold}.json' 
+        ) 
+        transforms = [
+            normalize,
+            apply_lam,
+            Impute(),
+        ]
+        self.pd_transform = ComposeTransformations(transforms)
 
 
 class MIMIC(SplittedDataset):
@@ -231,10 +278,19 @@ class MIMIC(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        self.pd_transform = Normalize(
+        normalize = Normalize(
             'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold),
             self.columns
         )
+        apply_lam = ApplyLambda(
+            lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}.json' 
+        ) 
+        transforms = [
+            normalize,
+            apply_lam,
+            Impute(),
+        ]
+        self.pd_transform = ComposeTransformations(transforms)
 
 
 class Hirid(SplittedDataset):

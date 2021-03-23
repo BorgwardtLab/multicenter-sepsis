@@ -134,7 +134,7 @@ def first_alarm_eval(y_true, y_pred, times):
     onset_indices = extract_onset_index(y_true)
     alarm_times = extract_first_alarm(times, indices=pred_indices)
     onset_times = extract_first_alarm(times, indices=onset_indices)
-    delta = alarm_times[case_mask] - onset_times[case_mask]
+    delta = onset_times[case_mask] - alarm_times[case_mask]  
 
     r = {
         'pat_recall': recall_score(labels, y_pred, zero_division=0),
@@ -213,6 +213,8 @@ def evaluate_threshold(data, thres, measures):
 def format_check(x, y):
     """Sanity check that two nested lists x,y have identical format."""
     for x_, y_ in zip(x, y):
+        #if len(x_) != len(y_):
+        #    from IPython import embed; embed()
         assert len(x_) == len(y_)
 
 
@@ -227,17 +229,47 @@ def main(args):
         d = json.load(f)
 
     # Determine lambda path:
+    if args.cost > 0:
+        lam_file = 'lambda_{}_rep_{}_cost_{}.json'
+    else:
+        lam_file = 'lambda_{}_rep_{}.json'
     lambda_path = os.path.join(args.lambda_path, 
-        'lambda_{}_rep_{}.json' ) 
+        lam_file )
+
+    #lambda_path = os.path.join(args.lambda_path, 
+    #     'lambda_{}_rep_{}.json' ) 
     # Compute aggregate lambda over all train reps:
     lambdas = []
     eval_dataset = d['dataset_eval']
-    for rep in np.arange(5):
-        with open(lambda_path.format(eval_dataset, rep), 'r') as f:
+    cost = args.cost
+    if isinstance(eval_dataset, list): # the R jsons had lists of str
+        eval_dataset = eval_dataset[0]
+    
+    #handle (and sort) R formatted json:
+    if isinstance(d['ids'][0], str):
+        # times are sorted wrong:
+        times = d['times']
+        ids = [int(i) for i in d['ids']]
+        perm = np.argsort(ids)
+        times = np.array(times)
+        # properly sorted times (consistent with scores, labels)
+        times_p = list(times[perm]) 
+        d['times'] = times_p
+        # also reformat labels to ints:
+        labels = d['labels']
+        labels = [[int(x) for x in pat] for pat in labels]
+        d['labels'] = labels 
+ 
+    for rep in np.arange(1): #5
+        if cost > 0:
+            curr_path = lambda_path.format(eval_dataset, rep, cost)
+        else: 
+            curr_path = lambda_path.format(eval_dataset, rep)
+        with open(curr_path, 'r') as f:
             lam = json.load(f)['lam']
             lambdas.append(lam)
     lam = np.mean(lambdas)
-    print(f'Using aggregated lambda: {lam} from the {eval_dataset} dataset')  
+    print(f'Using aggregated lambda: {lam} from the {eval_dataset} dataset and cost {cost}')  
    
     # Determine min and max threshold 
     if args.task == 'regression':
@@ -321,7 +353,10 @@ if __name__ in "__main__":
         help='number of jobs for parallelizing over thresholds', 
         default=10, type=int
     )
-
+    parser.add_argument(
+        '--cost', default=0, type=int,
+        help='lambda cost to use (default 0, inactive)'
+    )
 
     args = parser.parse_args()
 

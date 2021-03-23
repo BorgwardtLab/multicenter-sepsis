@@ -90,7 +90,17 @@ class ColumnFilter:
         - groups: return feature groups instead of all columns
         """
         if name == 'large':
-            used_groups = self.groups
+            used_groups = self.groups.copy()
+        elif name == 'middle':
+            used_groups = self.groups.copy()
+            drop_groups = ['_wavelet', '_signature']
+            for group in drop_groups:
+                used_groups.remove(group)
+        elif name == 'middle2':
+            used_groups = self.groups.copy()
+            drop_groups = ['_wavelet']
+            for group in drop_groups:
+                used_groups.remove(group)
         elif name == 'small':
             used_groups  = [ 
              '_count',
@@ -181,7 +191,7 @@ if __name__ == "__main__":
     dataset_name = args.dataset 
     path = f'datasets/{dataset_name}/data/parquet/features'
 
-    feature_sets = ['large', 'small']
+    feature_sets = ['large', 'small', 'middle']
     variable_sets = ['full', 'physionet']
 
     cf = ColumnFilter(path=path)

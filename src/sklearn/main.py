@@ -37,8 +37,12 @@ def load_data(args, split):
     input_path = args.input_path.format(dataset)
     normalizer_path = os.path.join(args.normalizer_path, 
         f'normalizer_{dataset}_rep_{rep}.json' )
+    if args.cost > 0:
+        lam_file = f'lambda_{dataset}_rep_{rep}_cost_{args.cost}.json'
+    else:
+        lam_file = f'lambda_{dataset}_rep_{rep}.json'
     lambda_path = os.path.join(args.lambda_path, 
-        f'lambda_{dataset}_rep_{rep}.json' )
+        lam_file )
     split_path = os.path.join(args.split_path, 
         f'splits_{dataset}.json' ) 
 
@@ -253,6 +257,16 @@ def main():
         '--index', default='multi',
         help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
     )
+    parser.add_argument(
+        '--cost', default=0,
+        type=int,
+        help='lambda cost to use (default 0 (inactive))'
+    )
+    parser.add_argument(
+        '--target_name', default='physionet_utility',
+        help='Only for classification: which objective to optimize in model selection [physionet_utility, roc_auc, average_precision]'
+    )
+
 
     args = parser.parse_args()
     ## Process arguments:
@@ -260,7 +274,6 @@ def main():
  
     # Load data and current lambda and apply on-the-fly transforms:
     data, lam = load_data_splits(args)
-
     #data = load_data_from_input_path(
     #    args.input_path, args.dataset, args.index, args.extended_features)
     if task == 'classification':
@@ -280,15 +293,24 @@ def main():
     pipeline, hparam_grid = get_pipeline_and_grid(args)
     
     if task == 'classification':
-        target_name = 'physionet_utility'
-        scores = {
-            target_name: get_physionet2019_scorer(args.label_propagation,
-                kwargs={'lam': lam}    
-            ),
-            #'roc_auc': SCORERS['roc_auc'],
-            #'average_precision': SCORERS['average_precision'],
-            #'balanced_accuracy': SCORERS['balanced_accuracy'],
-        }
+        target_name = args.target_name
+        if target_name == 'physionet_utility':
+            scores = {
+                target_name: get_physionet2019_scorer(args.label_propagation,
+                    kwargs={'lam': lam}    
+                ),
+                #'roc_auc': SCORERS['roc_auc'],
+                #'average_precision': SCORERS['average_precision'],
+                #'balanced_accuracy': SCORERS['balanced_accuracy'],
+            }
+        elif target_name in ['roc_auc', 'average_precision']:
+            scores = {
+                target_name: SCORERS[target_name]
+            }
+        else:
+            raise ValueError(f'{target_name} not among valid targets.')
+        print(f'Optimizing for {target_name}')
+ 
     elif task == 'regression':
         target_name = 'neg_mse'
         scores = { target_name: SCORERS['neg_mean_squared_error']

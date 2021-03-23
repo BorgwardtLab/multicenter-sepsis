@@ -50,10 +50,13 @@ load_physionet <- function(var_cfg = cfg_path("variables.json"),
   list(win = win, dat = res[cnc], sep = sep)
 }
 
-sepsis3_crit <- function(source, pids = NULL,
-  dat = load_concepts("sofa", source, patient_ids = pids)) {
+sepsis3_crit <- function(source, pids = NULL, keep_components = FALSE,
+                         dat = NULL) {
 
-  if (!is_ts_tbl(dat)) {
+  if (is.null(dat)) {
+    dat <- load_concepts("sofa", source, patient_ids = pids,
+                         keep_components = keep_components)
+  } else if (!is_ts_tbl(dat)) {
     dat <- data.table::copy(dat[["sofa"]])
   }
 
@@ -63,21 +66,22 @@ sepsis3_crit <- function(source, pids = NULL,
 
     si <- load_concepts("susp_inf", source, abx_min_count = 2L,
                         positive_cultures = TRUE, id_type = "icustay",
-                        patient_ids = pids, si_mode = "or")
+                        patient_ids = pids, si_mode = "or",
+                        keep_components = keep_components)
 
   } else if (identical(source, "hirid")) {
 
     si <- load_concepts("susp_inf", source, abx_min_count = 2L,
                         id_type = "icustay", patient_ids = pids,
-                        si_mode = "or")
+                        si_mode = "or", keep_components = keep_components)
 
   } else {
 
     si <- load_concepts("susp_inf", source, id_type = "icustay",
-                        patient_ids = pids)
+                        patient_ids = pids, keep_components = keep_components)
   }
 
-  sep3(dat, si, si_window = "any")
+  sep3(dat, si, si_window = "any", keep_components = keep_components)
 }
 
 load_ricu <- function(source, var_cfg = cfg_path("variables.json"),

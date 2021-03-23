@@ -119,6 +119,12 @@ def main():
         '--index', default='multi',
         help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
     )
+    parser.add_argument(
+        '--cost', default=0,
+        type=int,
+        help='lambda cost to use (default 0, inactive)'
+    )
+
 
     args = parser.parse_args()
     method = args.method
@@ -127,7 +133,7 @@ def main():
     task = args.task
 
     args.dataset = eval_dataset #load_data_splits expect this property
-    data = load_data_splits(args, splits=[args.split])
+    data, lam = load_data_splits(args, splits=[args.split])
 
     # label_shift function assumes a dataset arg:
     if task == 'classification':

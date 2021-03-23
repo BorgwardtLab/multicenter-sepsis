@@ -204,7 +204,7 @@ def load_and_transform_data(
     if task == 'regression':
         # For regression, we apply lambda sample weights and remove label
         start = time()
-        print('Applying lambda..')
+        print(f'Applying lambda {lam}..')
         # regression target without adjustment:
         u = df[VM_DEFAULT('utility')]
         # patient-level label:
@@ -225,9 +225,7 @@ def load_and_transform_data(
     # e.g. due to degenerate stats in normalization
     start = time()
     df = df.fillna(0)
-    if (df.max().max() < np.inf) or (df.min().min() > np.inf):
-        print('Warning: Degenerate values found (inf, -inf), plausibly due to degen. normalization')
-    df = df.replace([np.inf, -np.inf], 0)
+    df = df.replace([np.inf, -np.inf], 0) #sanity check if there is degenerate normalization
     print(f'Final imputation took {time() - start} seconds.')
     if form == 'dask':
         df = df.compute()

@@ -127,9 +127,12 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
     y <- split(y, pids[["stay_id"]])
     res <- split(res, pids[["stay_id"]])
-    reg <- split(reg, pids[["stay_id"]])
 
-    pids <- split(pids, by = "stay_id", keep.by = FALSE)
+    if (identical(target, "reg")) {
+      reg <- split(reg, pids[["stay_id"]])
+    }
+
+    pids <- split(pids, by = "stay_id", keep.by = FALSE, sorted = TRUE)
     onse <- lapply(pids, `[[`, "sep3")
 
     onse <- lapply(lapply(lapply(onse, `==`, 1), which), `[`, 1L)

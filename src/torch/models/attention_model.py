@@ -209,19 +209,19 @@ class AttentionModel(BaseModel):
         parser = super().add_model_specific_args(parent_parser)
         # MODEL specific
         parser.add_argument(
-            '--d-model', type=int, default=128,
+            '--d_model', type=int, default=128,
             # tunable=True, options=[128, 256, 512]
         )
         parser.add_argument(
-            '--n-layers', type=int, default=1,
+            '--n_layers', type=int, default=1,
             # tunable=True, options=[1, 2, 3, 4, 5]
         )
         parser.add_argument(
-            '--n-heads', type=int, default=8,
+            '--n_heads', type=int, default=8,
             # tunable=True, options=[4, 8, 16, 32]
         )
         parser.add_argument(
-            '--ff-dim', type=int, default=32,
+            '--ff_dim', type=int, default=32,
             # tunable=True, options=[256, 512, 1028]
         )
         parser.add_argument(
