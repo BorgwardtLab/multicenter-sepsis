@@ -224,7 +224,10 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
   folds <- lapply(folds, which)
 
   dtrain <- lightgbm::lgb.Dataset(x, label = y)
-  params <- list(objective = ifelse(is_class, "binary", "regression"))
+  params <- list(
+    objective = ifelse(is_class, "binary", "regression"),
+    force_col_wise = TRUE
+  )
 
   best_score <- Inf
   opt_params <- c(30, 100, 0.001)
@@ -239,7 +242,7 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
         lgb_CV <- lightgbm::lgb.cv(
           params = params, data = dtrain, num_leaves = num_leaf,
           nrounds = num_trees, learning_rate = lr, boosting = "gbdt",
-          folds = folds, num_threads = n_cores
+          folds = folds, num_threads = n_cores, reset_data = TRUE
         )
 
         msg("--> best score: {lgb_CV$best_score}")
@@ -248,6 +251,8 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
           opt_params <- c(num_leaf, num_trees, lr)
           best_score <- lgb_CV$best_score
         }
+
+        gc(verbose = FALSE)
       }
     }
   }
