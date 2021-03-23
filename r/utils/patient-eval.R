@@ -20,13 +20,12 @@ patient_eval <- function(dat) {
   prob_grid <- c(0, 0.001, seq(0.01, 0.99, 0.01), 0.999)
   grid <- quantile(x$prediction, prob = prob_grid)
 
-  x[, is_case := any(label), by = c(id_vars(x))]
+  x <- x[, is_case := any(!is.na(onset)), by = c(id_vars(x))]
 
-  onset <- x[label == TRUE, head(.SD, 1L), by = c(id_vars(x))]
-  onset <- onset[, c("stay_id", "stay_time"), with = FALSE]
-  onset <- rename_cols(onset, "onset_time", "stay_time")
-  onset[, onset_time := onset_time + hours(6L)]
-  onset <- as_id_tbl(onset)
+  onset <- x[!is.na(onset), head(.SD, 1L), by = c(id_vars(x)),
+             .SD = "onset"]
+  onset <- onset[, c("onset_time", "onset") := list(
+    as.difftime(onset, units = "hours"), NULL)]
 
   x <- merge(x, onset, by = id_vars(x), all.x = TRUE)
 
@@ -160,12 +159,14 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
     res$onset <- res$onset[perm]
   }
 
+  util <- if (length(res$utility)) res$utility else res$labels
+
   res <- data.frame(
     stay_id = rep(as.integer(res$ids), lengths(res$times)),
     stay_time = do.call(c, res$times),
     prediction = do.call(c, res$scores),
     label = do.call(c, res$labels),
-    utility = do.call(c, res$utility),
+    utility = do.call(c, util),
     onset = rep(as.integer(res$onset), lengths(res$times))
   )
 
