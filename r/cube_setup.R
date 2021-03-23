@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 #BSUB -W 24:00
-#BSUB -n 16
+#BSUB -n 20
 #BSUB -R rusage[mem=8000]
 #BSUB -J model[1-90]%45
 #BSUB -o data-res/model_%J.out
