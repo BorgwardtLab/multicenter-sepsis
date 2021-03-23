@@ -98,7 +98,7 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
 
   dat <- load_concepts(feats, source, merge_data = FALSE,
                        id_type = "icustay", patient_ids = pids)
-  sep <- sepsis3_crit(source, pids, dat)
+  sep <- sepsis3_crit(source, pids, dat = dat)
 
   list(win = win, dat = dat, sep = sep)
 }
@@ -278,10 +278,7 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
 
 augment <- function(x, fun, suffix,
                     cols = grep("_raw$", colnames(x), value = TRUE),
-                    by = NULL, win = NULL, tmpdir = tempdir(),
-                    names = sub("_raw$", paste0("_", suffix), cols), ...) {
-
-  inf_to_na <- function(x) replace(x, is.infinite(x), NA)
+                    by = NULL, win = NULL, ...) {
 
   msg("--> augmentation step {suffix}")
 
@@ -289,25 +286,69 @@ augment <- function(x, fun, suffix,
     win <- as.difftime(win, units = "hours")
   }
 
-  if (is.null(win) && is.null(by)) {
+  orig_rows <- data.table::copy(nrow(x))
 
-    res <- x[, lapply(.SD, fun, ...), .SDcols = c(cols)]
+  if (is.character(fun)) {
 
-  } else if (is.null(win)) {
+    assert_that(is.null(by))
 
-    res <- x[, lapply(.SD, fun, ...), .SDcols = c(cols), by = c(by)]
+    inf_to_na <- function(x) replace(x, is.infinite(x), NA)
+    nan_to_na <- function(x) replace(x, is.nan(x), NA)
+
+    ival  <- interval(x)
+    idcol <- id_vars(x)
+
+    win <- as.double(win, units = units(ival))
+
+    lags <- seq_len(
+      ceiling(win / as.double(ival))
+    )
+
+    funs <- c(
+      min = function(x) inf_to_na(matrixStats::rowMins(x, na.rm = TRUE)),
+      max = function(x) inf_to_na(matrixStats::rowMaxs(x, na.rm = TRUE)),
+      mean = function(x) nan_to_na(rowMeans(x, na.rm = TRUE)),
+      var = function(x) matrixStats::rowVars(x, na.rm = TRUE)
+    )[fun]
+
+    assert_that(all(vapply(funs, is.function, logical(1L))))
+
+    for (col %in% cols) {
+
+      tmp_cols <- paste0(col, lags)
+      targ_col <- paste0(sub("_raw$", "", col), "_", fun, as.integer(win),
+                         suffix)
+
+      x <- x[, c(tmp_cols) := data.table::shift(get(col), lags), by = c(idcol)]
+      x <- x[, c(targ_col) := lapply(funs, do.call, list(as.matrix(.SD))),
+             .SDcols = c(col, tmp_cols)]
+      x <- x[, c(col, tmp_cols) := NULL]
+    }
 
   } else {
 
-    res <- slide(x, lapply(.SD, fun, ...), win, .SDcols = c(cols))
+    names <- sub("_raw$", paste0("_", suffix), cols)
+
+    if (is.null(win) && is.null(by)) {
+
+      x <- x[, lapply(.SD, fun, ...), .SDcols = c(cols)]
+
+    } else if (is.null(win)) {
+
+      x <- x[, lapply(.SD, fun, ...), .SDcols = c(cols), by = c(by)]
+
+    } else  else {
+
+      x <- slide(x, lapply(.SD, fun, ...), win, .SDcols = c(cols))
+    }
+
+    x <- rename_cols(x, names, cols, by_ref = TRUE)
+    x <- rm_cols(x, setdiff(colnames(x), names), by_ref = TRUE)
   }
 
-  assert(identical(nrow(x), nrow(res)))
+  assert(identical(orig_rows, nrow(x)))
 
-  res <- rename_cols(res, names, cols, by_ref = TRUE)
-  res <- rm_cols(res, setdiff(colnames(res), names), by_ref = TRUE)
-
-  res
+  x
 }
 
 prof <- function(expr, envir = parent.frame()) {
@@ -328,7 +369,8 @@ prof <- function(expr, envir = parent.frame()) {
 }
 
 export_data <- function(src, dest_dir = data_path("export"),
-                        coh_cfg = cfg_path("cohorts.json"), ...) {
+                        coh_cfg = cfg_path("cohorts.json"), legacy = FALSE,
+                        ...) {
 
   augment_prof <- function(...) prof(augment(...))
 
@@ -353,11 +395,22 @@ export_data <- function(src, dest_dir = data_path("export"),
   lof <- augment_prof(dat, data.table::nafill, "locf", by = id_vars(dat),
                       type = "locf")
 
+  lbk <- if (!legacy) {
+
+    funs <- c("min", "max", "mean", "var")
+    wins <- c(4L, 8L, 16L)
+
+    do.call("c",
+      Map(augment_prof, list(dat), fun = list(funs), suffix = "lbk",
+          win = hours(wins))
+    )
+  }
+
   dat <- dat[, c(index_var(dat)) := as.double(
     get(index_var(dat)), units = "hours"
   )]
 
-  res <- c(dat, ind, lof)
+  res <- c(dat, ind, lof, lbk)
   res <- data.table::setDT(res)
 
   create_parquet(res,
