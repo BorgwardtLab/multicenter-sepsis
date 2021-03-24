@@ -1,25 +1,25 @@
 #!/usr/bin/env Rscript
 
-#BSUB -W 8:00
+#BSUB -W 4:00
 #BSUB -n 1
 #BSUB -R rusage[mem=32000]
-#BSUB -J export
-#BSUB -o results/export_%J.out
+#BSUB -J export[1-5]
+#BSUB -o data-export/export_%J.out
 
 invisible(
   lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)
 )
 
-args <- parse_args(src_opt, out_dir)
+args <- parse_args(job_index, out_dir)
 
-src <- check_src(args, "physionet2019")
+src <- check_index(args, list(
+  c("mimic_demo", "eicu_demo", "physionet2019"),
+  "mimic", "eicu", "hirid", "aumc"
+))
+
 dir <- check_dir(args)
 
-data.table::setDTthreads(n_cores())
-
-msg("\n\nusing {data.table::getDTthreads()} omp thread{?s}\n")
-
 for (x in src) {
-  msg("\n\nexporting data for {x}\n\n")
+  msg("exporting data for {x}\n")
   export_data(x, dest_dir = dir)
 }

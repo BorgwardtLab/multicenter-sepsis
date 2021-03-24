@@ -95,14 +95,27 @@ check_dir <- function(opt) {
 
 check_index <- function(opt, ...) {
 
-  arg_opts <- expand.grid(..., KEEP.OUT.ATTRS = FALSE,
-                          stringsAsFactors = FALSE)
-
   opt <- as.integer(Sys.getenv("LSB_JOBINDEX", unset = opt$ind))
 
-  assert(is.count(opt), opt <= nrow(arg_opts))
+  assert(is.count(opt))
 
-  as.list(arg_opts[opt, ])
+  if (...length() == 1L) {
+
+    arg_opts <- as.list(..1)
+
+    assert(opt <= length(arg_opts))
+
+    arg_opts[[opt]]
+
+  } else {
+
+    arg_opts <- expand.grid(..., KEEP.OUT.ATTRS = FALSE,
+                            stringsAsFactors = FALSE)
+
+    assert(opt <= nrow(arg_opts))
+
+    as.list(arg_opts[opt, ])
+  }
 }
 
 format_unit <- function(x, units = "hours") format(`units<-`(x, units))
