@@ -25,6 +25,8 @@ eicu_hosp_coh <- function(sep, coh, thresh = 0.05) {
 
   msg("--> removing {nrw - nrow(res)} from {nrw} ids based on hosp",
       " selection\n")
+
+  res
 }
 
 load_physionet <- function(var_cfg = cfg_path("variables.json"),
@@ -124,10 +126,9 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
   msg("--> determining cohort for {source}\n")
 
   coh <- load_concepts("age", source, id_type = "icustay")
-  nrw <- nrow(coh)
   pid <- coh[age >= min_age, ]
 
-  msg("--> removing {nrw - nrow(coh)} from {nrw} ids due to min age of",
+  msg("--> removing {nrow(coh) - nrow(pid)} from {nrw} ids due to min age of",
       " {min_age}\n")
 
   sof <- load_concepts("sofa", source, patient_ids = pid)
