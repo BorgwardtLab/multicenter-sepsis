@@ -513,8 +513,97 @@ derived_misc <- function(dat) {
   dat <- dat[, c("shkind_der", "buncr_der", "pafi_der") := list(
     hr_locf / sbp_locf,
     bun_locf / crea_locf,
-    po2_locf / fio2_locf,
+    po2_locf / fio2_locf
   )]
+}
+
+score_calc <- function(dat) {
+
+  pos_fun <- function(delta_t) {
+    data.table::fifelse(
+      delta_t < -12, -0.05, data.table::fifelse(
+        delta_t <= -6, (delta_t + 12) / 6, data.table::fifelse(
+          delta_t <= 3, 1 - ((delta_t + 6) / 9), 0
+        )
+      )
+    )
+  }
+
+  neg_fun <- function(delta_t) {
+    data.table::fifelse(
+      delta_t <= -6, 0, data.table::fifelse(
+        delta_t <= 3, -2 * (delta_t + 6) / 9, 0
+      )
+    )
+  }
+
+  dat <- dat[, onset_time := stay_time[which(!is.na(onset))], by = "stay_id"]
+  dat <- dat[, delta_time := as.double(stay_time - onset_time,
+                                       units = "hours")]
+
+  dat <- dat[, c("pos_utility", "neg_utility") := 0]
+  dat <- dat[!(is_case), pos_utility := -0.05]
+
+  dat <- dat[(is_case), c("pos_utility", "neg_utility") := list(
+    pos_fun(delta_time), neg_fun(delta_time)
+  )]
+
+  dat <- dat[, c("cum_utility", "opt_utility") := list(
+    pos_utility - neg_utility, pmax(pos_utility, neg_utility)
+  )]
+
+  dat <- dat[, c("onset_time", "delta_time") := NULL]
+
+  dat
+}
+
+lambda_calc <- function(x) {
+
+  case <- which(x[["is_case"]])
+  ctrl <- which(!x[["is_case"]])
+
+  denom <-     sum(x[["pos_utility"]][case]) -
+           2 * sum(x[["neg_utility"]][case]) +
+               sum(x[["opt_utility"]][case])
+
+  numer <- 2 * sum(x[["neg_utility"]][ctrl]) -
+               sum(x[["pos_utility"]][ctrl]) -
+               sum(x[["opt_utility"]][ctrl])
+
+  numer / denom
+}
+
+train_stats <- function(x, train_ids) {
+
+  pos_tim <- index_col(x) > 0
+
+  norm <- setNames(vector("list", length(train_ids)), names(train_ids))
+  lamb <- setNames(vector("list", length(train_ids)), names(train_ids))
+
+  for (split in names(train_ids)) {
+
+    is_train <- id_col(x) %in% train_ids[[split]]
+    hit_rows <- which(pos_tim & is_train)
+
+    cols <- data_vars(x)
+
+    norm[[split]] <- list(
+      means = setNames(vector("numeric", length(cols)), cols),
+      stds  = setNames(vector("numeric", length(cols)), cols)
+    )
+
+    for (col in cols) {
+      norm[[split]]$means[col] <- mean(x[[col]][hit_rows], na.rm = TRUE)
+      norm[[split]]$stds[col]  <- sd(x[[col]][hit_rows], na.rm = TRUE)
+    }
+
+    lamb[[split]] <- lambda_calc(
+      x[hit_rows, c("is_case", "pos_utility", "neg_utility",
+                      "opt_utility"), with = FALSE]
+    )
+  }
+
+  list(normalization = norm, lambda = lamb)
 }
 
 export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
@@ -559,6 +648,9 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
 
   if (!legacy) {
 
+    msg("--> physionet score calculation")
+    dat <- prof(score_calc(dat))
+
     msg("--> derived feature calculation")
     dat <- prof(derived_feats(dat))
 
@@ -566,6 +658,10 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
       dat <- augment_prof(paste("lbk", win), dat,
                           c("min", "max", "mean", "var"), "lbk", win = win)
     }
+
+    msg("--> train set stats calculation")
+    sta <- prof(train_stats(dat, spt))
+    atr$mcsep[names(sta)] <- sta
   }
 
   dat <- dat[, c(index_var(dat)) := as.double(
@@ -573,7 +669,9 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   )]
 
   dat <- as.data.frame(dat)
-  fil <- file.path(dest_dir, paste(src, packageVersion("ricu"), sep = "_"))
+  fil <- file.path(dest_dir,
+    paste(src, packageVersion("ricu"), preproc_version, sep = "-")
+  )
 
   create_parquet(dat, fil, atr, chunk_size = 1e3)
 }
