@@ -105,7 +105,7 @@ check_index <- function(opt, ...) {
 
     assert(opt <= length(arg_opts))
 
-    arg_opts[[opt]]
+    setNames(arg_opts[[opt]], names(list(...)))
 
   } else {
 
