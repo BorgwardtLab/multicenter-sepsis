@@ -144,13 +144,25 @@ class ColumnFilter:
             for p in prefixes
         ] 
  
-    def physionet_set(self, columns=None, feature_set='large'):
+    def physionet_set(self, columns=None, feature_set=None):
         """
         map set of columns to the corresponding physionet subset
         --> acts on explicit columns, not feature groups.
+        if columns are not provided explicitly, feature_set is used
+        as the set of columns. Only specify columns XOR feature_set!
+        Arguments:
+        - columns: list of columns to subset for variables available in 
+            physionet data
+        - feature_set: one of ['small','middle','large'], specifies 3 groups
+            of feature groups
+        - groups: return column groups instead of columns
         """
+        c_none = columns is None
+        f_none = feature_set is None
+        assert c_none ^ f_none
+ 
         if not columns:
-            columns = self.columns
+            columns = self.feature_set(name=feature_set)
         # groups we need to add:
         groups = [ 
              '_derived',
@@ -177,6 +189,7 @@ class ColumnFilterLight(ColumnFilter):
     def __init__(self, dataset_columns):
         self.columns = dataset_columns
         self.groups = self.columns_to_groups(self.columns)
+        self.physionet_prefixes = self.get_physionet_prefixes()
 
 if __name__ == "__main__":
 

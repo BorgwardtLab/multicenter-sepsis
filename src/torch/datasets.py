@@ -178,6 +178,7 @@ class SplittedDataset(ParquetDataset):
         if only_physionet_features:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).physionet_set(feature_set=feature_set)
+            self.STATIC_COLUMNS = [col for col in self.STATIC_COLUMNS if col in self.columns]
         else:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).feature_set(name=feature_set)
