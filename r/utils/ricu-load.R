@@ -347,8 +347,8 @@ augment <- function(x, fun, suffix,
     win <- as.double(win, units = units(ival))
 
     lags <- seq_len(
-      ceiling(win / as.double(ival))
-    )
+      ceiling(win / as.double(ival)) + 1L
+    ) - 1L
 
     funs <- c(
       min = function(x) inf_to_na(matrixStats::rowMins(x, na.rm = TRUE)),
@@ -361,14 +361,18 @@ augment <- function(x, fun, suffix,
 
     for (col in cols) {
 
-      tmp_cols <- paste0(col, lags)
       targ_col <- paste0(sub("_raw$", "", col), "_", fun, as.integer(win),
                          suffix)
 
-      x <- x[, c(tmp_cols) := data.table::shift(get(col), lags), by = c(idcol)]
-      x <- x[, c(targ_col) := lapply(funs, do.call, list(as.matrix(.SD))),
-             .SDcols = c(col, tmp_cols)]
-      x <- x[, c(tmp_cols) := NULL]
+      tmp <- x[, data.table::shift(get(col), lags), by = c(idcol)]
+      tmp <- tmp[, c(idcol) := NULL]
+      tmp <- as.matrix(tmp)
+
+      for (i in seq_along(fun)) {
+        x <- data.table::set(x, j = targ_col[i], value = funs[[i]](tmp))
+      }
+
+      rm(tmp)
     }
 
   } else {
@@ -613,6 +617,9 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
     msg("--> augmentation step {name}")
     prof(augment(...))
   }
+
+  old_opts <- options(datatable.alloccol = 2048L)
+  on.exit(options(old_opts))
 
   assert(is.string(src), dir.exists(dest_dir))
 
