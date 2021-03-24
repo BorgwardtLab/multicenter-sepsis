@@ -229,12 +229,16 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
     force_col_wise = TRUE
   )
 
-  best_score <- Inf
-  opt_params <- c(30, 100, 0.001)
+  num_leaves <- c(31, 50, 100)
+  num_trees  <- c(250, 500)
+  learn_rate <- c(0.001, 0.01, 0.1, 1)
 
-  for (num_leaf in c(31, 50, 100))  {
-    for (num_trees in c(100, 200, 500)) {
-      for (lr in c(0.001, 0.01, 0.1, 0.5, 1)) {
+  best_score <- Inf
+  opt_params <- c(num_leaves[1L], num_trees[1L], learn_rate[1L])
+
+  for (num_leaf in num_leaves)  {
+    for (num_trees in num_trees) {
+      for (lr in learn_rate) {
 
         msg("trying num leaves: {num_leaf}, num trees: {num_trees}, learning ",
             "rate: {lr}")
