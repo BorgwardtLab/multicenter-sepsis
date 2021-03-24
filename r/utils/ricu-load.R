@@ -399,6 +399,49 @@ augment <- function(x, fun, suffix,
   x
 }
 
+create_splits <- function(x, test_size = 0.1, val_size = 0.1, boost_size = 0.8,
+                          n_splits = 5, seed = 11L) {
+
+  set.seed(seed)
+
+  ids <- x$stay_id
+  cas <- x$is_case
+  nms <- paste0("split_", seq_len(n_splits) - 1)
+
+  sep <- ids[cas]
+  ctr <- ids[!cas]
+
+  tst_sep <- sample(sep, ceiling(length(sep) * test_size))
+  tst_ctr <- sample(ctr, ceiling(length(ctr) * test_size))
+  dev_sep <- setdiff(sep, tst_sep)
+  dev_ctr <- setdiff(ctr, tst_ctr)
+
+  tst_all <- sort(c(tst_sep, tst_ctr))
+  dev_all <- sort(c(dev_sep, dev_ctr))
+
+  dev <- replicate(n_splits, {
+    val <- c(sample(dev_sep, ceiling(length(dev_sep) * val_size)),
+             sample(dev_ctr, ceiling(length(dev_ctr) * val_size)))
+    list(train = sort(setdiff(dev_all, val)), validation = sort(val))
+  }, simplify = FALSE)
+
+  names(dev) <- nms
+
+  dev <- c(list(total = dev_all), dev)
+
+  tst <- replicate(n_splits,
+    sort(c(sample(tst_sep, ceiling(length(tst_sep) * boost_size)),
+           sample(tst_ctr, ceiling(length(tst_ctr) * boost_size)))),
+    simplify = FALSE
+  )
+
+  names(tst) <- nms
+
+  tst <- c(list(total = tst_all), tst)
+
+  list(total = ids, labels = as.integer(cas), dev = dev, test = tst)
+}
+
 export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
                         seed = 11L, ...) {
 
@@ -426,6 +469,11 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   dat <- replace_na(dat, FALSE, by_ref = TRUE, vars = "sep3")
 
   dat <- dat[, is_case := any(sep3), by = stay_id]
+
+  spt <- create_splits(unique(dat[, c("stay_id", "is_case"), with = FALSE]),
+                       seed = seed)
+  atr$mcsep$splits <- spt
+  spt <- lapply(spt$dev[grepl("^split_", names(spt$dev))], `[[`, "train")
 
   ind <- augment_prof(dat, Negate(is.na), "ind")
   lof <- augment_prof(dat, data.table::nafill, "locf", by = id_vars(dat),
