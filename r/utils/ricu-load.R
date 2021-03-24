@@ -328,15 +328,11 @@ augment <- function(x, fun, suffix,
                     cols = grep("_raw$", colnames(x), value = TRUE),
                     by = NULL, win = NULL, ...) {
 
-  msg("--> augmentation step {suffix}")
-
-  if (is.numeric(win)) {
-    win <- as.difftime(win, units = "hours")
-  }
-
-  orig_rows <- data.table::copy(nrow(x))
-
   if (is.character(fun)) {
+
+    if (is.numeric(win)) {
+      win <- as.difftime(win, units = "hours")
+    }
 
     assert_that(is.null(by))
 
@@ -370,31 +366,26 @@ augment <- function(x, fun, suffix,
       x <- x[, c(tmp_cols) := data.table::shift(get(col), lags), by = c(idcol)]
       x <- x[, c(targ_col) := lapply(funs, do.call, list(as.matrix(.SD))),
              .SDcols = c(col, tmp_cols)]
-      x <- x[, c(col, tmp_cols) := NULL]
+      x <- x[, c(tmp_cols) := NULL]
     }
 
   } else {
+
+    assert_that(is.null(win))
 
     names <- sub("_raw$", paste0("_", suffix), cols)
 
     if (is.null(win) && is.null(by)) {
 
-      x <- x[, lapply(.SD, fun, ...), .SDcols = c(cols)]
+      x <- x[, c(names) := lapply(.SD, fun, ...), .SDcols = c(cols)]
 
     } else if (is.null(win)) {
 
-      x <- x[, lapply(.SD, fun, ...), .SDcols = c(cols), by = c(by)]
+      x <- x[, c(names) := lapply(.SD, fun, ...), .SDcols = c(cols),
+             by = c(by)]
 
-    } else {
-
-      x <- slide(x, lapply(.SD, fun, ...), win, .SDcols = c(cols))
     }
-
-    x <- rename_cols(x, names, cols, by_ref = TRUE)
-    x <- rm_cols(x, setdiff(colnames(x), names), by_ref = TRUE)
   }
-
-  assert(identical(orig_rows, nrow(x)))
 
   x
 }
@@ -442,10 +433,97 @@ create_splits <- function(x, test_size = 0.1, val_size = 0.1, boost_size = 0.8,
   list(total = ids, labels = as.integer(cas), dev = dev, test = tst)
 }
 
+derived_feats <- function(dat, funs = c(derived_sirs, derived_mews,
+                                        derived_qsof, derived_sofa,
+                                        derived_sdet, derived_sshk,
+                                        derived_misc)) {
+
+  for (fun in funs) {
+    dat <- fun(dat)
+  }
+
+  dat
+}
+
+derived_sirs <- function(dat) {
+  dat <- dat[, sirs_der := list(
+    ((temp_locf > 38) | (temp_locf < 36)) +
+    (hr_locf > 90) +
+    ((resp_locf > 20) | (pco2_locf < 32)) +
+    ((wbc_locf < 4) | (wbc_locf > 12))
+  )]
+}
+
+derived_mews <- function(dat) {
+  dat <- dat[, mews_der := list(
+    (sbp_locf <= 70) * 3 +
+    ((70 < sbp_locf) & (sbp_locf <= 80)) * 2 +
+    ((80 < sbp_locf) & (sbp_locf <= 100)) +
+    (sbp_locf >= 200) * 2 +
+    ((40 < hr_locf) & (hr_locf <= 50)) +
+    ((100 < hr_locf) & (hr_locf <= 110)) +
+    ((110 < hr_locf) & (hr_locf < 130)) * 2 +
+    (hr_locf >= 130) * 3 +
+    (resp_locf < 9) * 2 +
+    ((15 < resp_locf) & (resp_locf <= 20)) +
+    ((20 < resp_locf) & (resp_locf < 30)) * 2 +
+    (resp_locf >= 30) * 3 +
+    (temp_locf < 35) * 2 +
+    (temp_locf >= 38.5) * 2
+  )]
+}
+
+derived_qsof <- function(dat) {
+  dat <- dat[, qsofa_der := list((resp_locf >= 22) + (sbp_locf <= 100))]
+}
+
+derived_sofa <- function(dat) {
+  dat <- dat[, c("scoag_der", "sliver_der", "scardio_der", "srenal_der") :=
+    list(
+      ((100 <= plt_locf) & (plt_locf < 150)) +
+      ((50 <= plt_locf) & (plt_locf < 100)) * 2 +
+      ((20 <= plt_locf) & (plt_locf < 50)) * 3 +
+      (plt_locf < 20) * 4,
+      ((1.2 <= bili_locf) & (bili_locf <= 1.9)) +
+      ((1.9 < bili_locf) & (bili_locf <= 5.9)) * 2 +
+      ((5.9 < bili_locf) & (bili_locf <= 11.9)) * 3 +
+      (bili_locf > 11.9) * 4,
+      (map_locf < 70) * 1,
+      ((1.2 <= crea_locf) & (crea_locf <= 1.9)) +
+      ((1.9 < crea_locf) & (crea_locf <= 3.4)) * 2 +
+      ((3.4 < crea_locf) & (crea_locf <= 4.9)) * 3 +
+      (crea_locf > 4.9) * 4
+    )
+  ]
+  dat <- dat[, sofa_der := scoag_der + sliver_der + scardio_der + srenal_der]
+}
+
+derived_sdet <- function(dat) {
+  dat <- augment(dat, "min", "det_der", cols = "sofa", win = hours(24L))
+  dat <- dat[, c("sodet_der", "sofa_min24det_der") := list(
+    ((sofa - sofa_min24det_der) >= 2) * 1, NULL
+  )]
+}
+
+derived_sshk <- function(dat) {
+  dat <- dat[, sepshk_der := list((map_locf < 65) + (lact_locf > 2))]
+}
+
+derived_misc <- function(dat) {
+  dat <- dat[, c("shkind_der", "buncr_der", "pafi_der") := list(
+    hr_locf / sbp_locf,
+    bun_locf / crea_locf,
+    po2_locf / fio2_locf,
+  )]
+}
+
 export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
                         seed = 11L, ...) {
 
-  augment_prof <- function(...) prof(augment(...))
+  augment_prof <- function(name, ...) {
+    msg("--> augmentation step {name}")
+    prof(augment(...))
+  }
 
   assert(is.string(src), dir.exists(dest_dir))
 
@@ -475,28 +553,27 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   atr$mcsep$splits <- spt
   spt <- lapply(spt$dev[grepl("^split_", names(spt$dev))], `[[`, "train")
 
-  ind <- augment_prof(dat, Negate(is.na), "ind")
-  lof <- augment_prof(dat, data.table::nafill, "locf", by = id_vars(dat),
-                      type = "locf")
+  dat <- augment_prof("ind", dat, Negate(is.na), "ind")
+  dat <- augment_prof("locf", dat, data.table::nafill, "locf",
+                      by = id_vars(dat), type = "locf")
 
-  lbk <- if (!legacy) {
+  if (!legacy) {
 
-    funs <- c("min", "max", "mean", "var")
-    wins <- c(4L, 8L, 16L)
+    msg("--> derived feature calculation")
+    dat <- prof(derived_feats(dat))
 
-    do.call("c",
-      Map(augment_prof, list(dat), fun = list(funs), suffix = "lbk",
-          win = hours(wins))
-    )
+    for (win in hours(c(4L, 8L, 16L))) {
+      dat <- augment_prof(paste("lbk", win), dat,
+                          c("min", "max", "mean", "var"), "lbk", win = win)
+    }
   }
 
   dat <- dat[, c(index_var(dat)) := as.double(
     get(index_var(dat)), units = "hours"
   )]
 
-  res <- c(dat, ind, lof, lbk)
-  res <- data.table::setDT(res)
+  dat <- as.data.frame(dat)
   fil <- file.path(dest_dir, paste(src, packageVersion("ricu"), sep = "_"))
 
-  create_parquet(res, fil, atr, chunk_size = 1e3)
+  create_parquet(dat, fil, atr, chunk_size = 1e3)
 }
