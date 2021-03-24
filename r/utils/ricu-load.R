@@ -326,6 +326,7 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
 
 augment <- function(x, fun, suffix,
                     cols = grep("_raw$", colnames(x), value = TRUE),
+                    names = sub("_raw$", paste0("_", suffix), cols),
                     by = NULL, win = NULL, ...) {
 
   if (is.character(fun)) {
@@ -372,8 +373,6 @@ augment <- function(x, fun, suffix,
   } else {
 
     assert_that(is.null(win))
-
-    names <- sub("_raw$", paste0("_", suffix), cols)
 
     if (is.null(win) && is.null(by)) {
 
@@ -645,6 +644,10 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   dat <- augment_prof("ind", dat, Negate(is.na), "ind")
   dat <- augment_prof("locf", dat, data.table::nafill, "locf",
                       by = id_vars(dat), type = "locf")
+  col <- grep("_ind$", colnames(dat), value = TRUE)
+  dat <- augment_prof("cnt", dat, cumsum, cols = col,
+                      names = sub("_ind$", "_cnt", col),
+                      by = id_vars(dat))
 
   if (!legacy) {
 
