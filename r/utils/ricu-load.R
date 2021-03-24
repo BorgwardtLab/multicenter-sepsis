@@ -128,8 +128,8 @@ load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
   coh <- load_concepts("age", source, id_type = "icustay")
   pid <- coh[age >= min_age, ]
 
-  msg("--> removing {nrow(coh) - nrow(pid)} from {nrw} ids due to min age of",
-      " {min_age}\n")
+  msg("--> removing {nrow(coh) - nrow(pid)} from {nrow(coh)} ids due to",
+      " min age of {min_age}\n")
 
   sof <- load_concepts("sofa", source, patient_ids = pid)
   sep <- sepsis3_crit(source, pid, dat = sof)
