@@ -81,9 +81,8 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     linear = train_lin, rf = function(...) train_rf(..., seed = seed),
     lgbm = train_lgbm
   )
-  mod <- prof(fun(x, y, !identical(target, "reg"), pids$fold, n_cores(), ...))
-
-  qs::qsave(mod, paste0(job, ".qs"))
+  mod <- prof(fun(x, y, !identical(target, "reg"), pids$fold, n_cores(),
+                  job, ...))
 
   for (src in test_src) {
 
@@ -159,7 +158,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   invisible(NULL)
 }
 
-train_rf <- function(x, y, is_class, folds, n_cores, ...) {
+train_rf <- function(x, y, is_class, folds, n_cores, job_name, ...) {
 
   folds <- as.integer(folds != 1)
 
@@ -187,38 +186,29 @@ train_rf <- function(x, y, is_class, folds, n_cores, ...) {
 
   msg("choosing min node size: {opt_mns}")
 
-  ranger::ranger(
+  mod <- ranger::ranger(
     y = y, x = x, probability = is_class, min.node.size = opt_mns,
     importance = "impurity", num.threads = n_cores, ...
   )
+
+  qs::qsave(mod, paste0(job_name, ".qs"))
+
+  mod
 }
 
-train_lin <- function(x, y, is_class, folds, n_cores, ...) {
-  biglasso::cv.biglasso(
+train_lin <- function(x, y, is_class, folds, n_cores, job_name, ...) {
+
+  mod <- biglasso::cv.biglasso(
     x, y, family = ifelse(is_class, "binomial", "gaussian"),
     ncores = n_cores, cv.ind = folds, nlambda = 50, verbose = TRUE, ...
   )
+
+  qs::qsave(mod, paste0(job_name, ".qs"))
+
+  mod
 }
 
-pred_rf <- function(mod, x) {
-
-  res <- predict(mod, x, type = "response")
-  cls <- identical(res$treetype, "Probability estimation")
-
-  res <- res$predictions
-
-  if (cls) {
-    res <- res[, 2L]
-  }
-
-  res
-}
-
-pred_lin <- function(mod, x) {
-  predict(mod, x, type = "response")[, 1L]
-}
-
-train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
+train_lgbm <- function(x, y, is_class, folds, n_cores, job_name, ...) {
 
   folds <- lapply(seq_along(unique(folds)), `==`, folds)
   folds <- lapply(folds, which)
@@ -264,11 +254,33 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, ...) {
   msg("choosing: num leaves: {opt_params[1]}, num trees: {opt_params[2]}, ",
       "learning rate: {opt_params[3]}")
 
-  lightgbm::lgb.train(
+  mod <- lightgbm::lgb.train(
     params = params, data = dtrain, num_leaves = opt_params[1],
     nrounds = opt_params[2], learning_rate = opt_params[3],
     boosting = "gbdt", verbose = -1L, num_threads = n_cores
   )
+
+  lightgbm::saveRDS.lgb.Booster(mod, paste0(job_name, ".lgb"))
+
+  mod
+}
+
+pred_rf <- function(mod, x) {
+
+  res <- predict(mod, x, type = "response")
+  cls <- identical(res$treetype, "Probability estimation")
+
+  res <- res$predictions
+
+  if (cls) {
+    res <- res[, 2L]
+  }
+
+  res
+}
+
+pred_lin <- function(mod, x) {
+  predict(mod, x, type = "response")[, 1L]
 }
 
 pred_lgbm <- function(mod, x) predict(mod, x)
