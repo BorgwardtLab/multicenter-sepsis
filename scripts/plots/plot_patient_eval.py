@@ -40,7 +40,8 @@ def plot_curves(df, ax):
             label='utility', color='black', ax=ax1)
 
     ax2 = ax1.twinx()
-    ax2.set_ylabel(f'Earliness: {earliness_stat} #hours before onset', fontsize=16, color='red')
+    ax2.set_ylabel(f'Earliness: {earliness_stat} #hours\nbefore onset',
+                   fontsize=8, color='red')
     ax2 = sns.lineplot(x='thres', y=earliness, data = df,
             label='earliness', color='red', ax=ax2)
 
@@ -67,11 +68,13 @@ def plot_info(df, ax, recall_threshold=0.90):
     index = df['pat_recall'][greater].argmin()
     info = df.loc[index]
 
+    earliness = f'earliness_{args.earliness_stat}'
+
     textbox = '\n'.join((
         f'Patient-based Recall:    {info["pat_recall"]:5.2f}',
         f'Patient-based Precision: {info["pat_precision"]:5.2f}',
         f'Threshold:               {info["thres"]:5.4f}',
-        f'Earliness Median:        {info["earliness_median"]:5.2f}',
+        f'Earliness {args.earliness_stat}:           {info[earliness]:5.2f}',
     ))
 
     ax.set_xticks([])
@@ -121,6 +124,5 @@ if __name__ == '__main__':
     plot_info(df, axes[2])
 
     out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
-    plt.savefig( os.path.join(args.output_path, out_file))
     plt.tight_layout()
-    plt.show()
+    plt.savefig( os.path.join(args.output_path, out_file))
