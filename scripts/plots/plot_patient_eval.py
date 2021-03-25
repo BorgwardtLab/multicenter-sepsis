@@ -1,6 +1,20 @@
-"""Plot patient-based evaluation."""
+"""Plot patient-based evaluation.
+
+This script plots the patient-based evaluation information. It requires
+access to evaluation files and prediction files.
+
+Example call:
+
+    python -m scripts.plots.plot_patient_eval \
+        --input_path evaluations.json         \
+        --predictions_path predictions.json   \
+        --output_path /tmp/
+
+This will create a plot in `tmp`.
+"""
 
 import argparse
+import itertools
 import json
 import os
 
@@ -8,7 +22,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import pandas as pd
-import numpy as np 
+import numpy as np
 
 
 def plot_curves(df, ax):
@@ -18,13 +32,12 @@ def plot_curves(df, ax):
     ax1.set_title('Patient-based Evaluation', fontsize=19)
     ax1.set_xlabel('Decision threshold', fontsize=16)
     ax1.set_ylabel('Score', fontsize=16, color='green')
-    #ax1 = sns.lineplot(x='thres', data = df[['thres', 'pat_recall','pat_precision']])
     ax1 = sns.lineplot(x='thres', y='pat_precision', data = df,
             label='precision', color='darkgreen', ax=ax1)
     ax1 = sns.lineplot(x='thres', y='pat_recall', data = df,
             label='recall', color='lightgreen', ax=ax1) #tab:green
     ax1 = sns.lineplot(x='thres', y='physionet2019_utility', data = df,
-            label='utility', color='black', ax=ax1) 
+            label='utility', color='black', ax=ax1)
 
     ax2 = ax1.twinx()
     ax2.set_ylabel(f'Earliness: {earliness_stat} #hours before onset', fontsize=16, color='red')
@@ -40,10 +53,10 @@ def plot_curves(df, ax):
     ax1.get_legend().remove()
 
 
-def plot_scores(df, ax, **kwargs):
+def plot_scores(scores, ax, **kwargs):
     """Plot prediction scores."""
-    ax.set_title('Prediction scores')
-    ax = sns.histplot(df['thres'], ax=ax, **kwargs)
+    ax.set_title('Prediction scores', fontsize=19)
+    ax = sns.histplot(scores, ax=ax, **kwargs)
 
 
 def plot_info(df, ax, recall_threshold=0.90):
@@ -84,6 +97,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--input_path', default='results/evaluation/patient_eval_lgbm_aumc_aumc.json')
+    parser.add_argument('--predictions_path', required=True)
     parser.add_argument('--output_path', default='results/evaluation/plots')
     parser.add_argument('--earliness-stat', default='mean')
 
@@ -93,15 +107,20 @@ if __name__ == '__main__':
         d = json.load(f)
     df = pd.DataFrame(d)
 
+    with open(args.predictions_path, 'r') as f:
+        d = json.load(f)
+        scores = list(itertools.chain.from_iterable(d['scores']))
+
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
     fig, axes = plt.subplots(nrows=3, figsize=(10, 6), squeeze=True)
 
     plot_curves(df, axes[0])
-    plot_scores(df, axes[1])
+    plot_scores(scores, axes[1])
     plot_info(df, axes[2])
 
     out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
     plt.savefig( os.path.join(args.output_path, out_file))
+    plt.tight_layout()
     plt.show()
