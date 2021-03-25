@@ -31,11 +31,13 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   target    <- match.arg(target)
   predictor <- match.arg(predictor)
 
-  msg("training `", predictor, "` model on `", train_src, "` with `", target,
+  msg("training `", predictor, "` model on `", train_src,
+      "` ({sub("_", " ", split)}) with `", target,
       "` response and using `", feat_set, "` feature set")
 
-  job <- file.path(res_dir, paste(predictor, target, feat_set, train_src,
-                                  sep = "-"))
+  job <- file.path(res_dir,
+    paste(predictor, target, feat_set, train_src, split, sep = "-")
+  )
 
   pids <- coh_split(train_src, "train", split)
 
