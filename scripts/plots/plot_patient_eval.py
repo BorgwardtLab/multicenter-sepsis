@@ -53,11 +53,19 @@ def plot_curves(df, ax):
     ax2.legend(lines + lines2, labels + labels2, loc='upper left', bbox_to_anchor=(0.05,0.85))
     ax1.get_legend().remove()
 
+    return ax.get_xlim()
 
-def plot_scores(scores, ax, **kwargs):
+
+def plot_scores(df, scores, ax, **kwargs):
     """Plot prediction scores."""
     ax.set_title('Prediction scores', fontsize=19)
     ax = sns.histplot(scores, ax=ax, **kwargs)
+    ax.set_xticks(np.arange(df['thres'].min(), df['thres'].max(), step=0.05))
+
+    # TODO: hacky, but it works for now and ensures that the axes are
+    # aligned. Note that `sharex` does not work because the last plot
+    # only contains text.
+    ax.set_xlim((xmin, xmax))
 
 
 def plot_info(df, ax, recall_threshold=0.90):
@@ -119,10 +127,11 @@ if __name__ == '__main__':
 
     fig, axes = plt.subplots(nrows=3, figsize=(10, 6), squeeze=True)
 
-    plot_curves(df, axes[0])
-    plot_scores(scores, axes[1])
+    xmin, xmax = plot_curves(df, axes[0])
+    plot_scores(df, scores, axes[1])
     plot_info(df, axes[2])
 
     out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
     plt.tight_layout()
     plt.savefig( os.path.join(args.output_path, out_file))
+    plt.show()
