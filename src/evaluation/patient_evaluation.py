@@ -18,7 +18,6 @@ from src.evaluation.sklearn_utils import make_consecutive
 from src.evaluation.physionet2019_score import physionet2019_utility
 
 
-
 def fpr(y_true, y_pred):
     """Calculate false positive rate (FPR)."""
     tn, fp, _, _ = confusion_matrix(y_true, y_pred).ravel()
@@ -153,6 +152,7 @@ def first_alarm_eval(y_true, y_pred, times):
 
     return r
 
+
 def utility_score_wrapper(lam=1, **kwargs):
     """ returns a wrapped util score function which can 
         process list of lists of labels, predictions and times.
@@ -173,7 +173,8 @@ def utility_score_wrapper(lam=1, **kwargs):
             preds.append(pred.values)
         score = physionet2019_utility(labels, preds, lam, **kwargs)
         return {'physionet2019_utility': score} 
-    return wrapped_func 
+    return wrapped_func
+
 
 def evaluate_threshold(data, thres, measures):
     """Evaluate threshold-based and patient-based measures.
@@ -213,17 +214,11 @@ def evaluate_threshold(data, thres, measures):
 def format_check(x, y):
     """Sanity check that two nested lists x,y have identical format."""
     for x_, y_ in zip(x, y):
-        #if len(x_) != len(y_):
-        #    from IPython import embed; embed()
         assert len(x_) == len(y_)
 
 
 def main(args):
     """Run evaluation based on user parameters."""
-    # TODO: missing capability to deal with unshifted labels; this
-    # script will currently just use the labels that are available
-    # in the input file.
-   
     # Load input json 
     with open(args.input_file, 'r') as f:
         d = json.load(f)
@@ -236,16 +231,13 @@ def main(args):
     lambda_path = os.path.join(args.lambda_path, 
         lam_file )
 
-    #lambda_path = os.path.join(args.lambda_path, 
-    #     'lambda_{}_rep_{}.json' ) 
-    # Compute aggregate lambda over all train reps:
     lambdas = []
     eval_dataset = d['dataset_eval']
     cost = args.cost
-    if isinstance(eval_dataset, list): # the R jsons had lists of str
+    if isinstance(eval_dataset, list):  # the R jsons had lists of str
         eval_dataset = eval_dataset[0]
-    
-    #handle (and sort) R formatted json:
+
+    # handle (and sort) R formatted json:
     if isinstance(d['ids'][0], str):
         # times are sorted wrong:
         times = d['times']
@@ -253,31 +245,34 @@ def main(args):
         perm = np.argsort(ids)
         times = np.array(times)
         # properly sorted times (consistent with scores, labels)
-        times_p = list(times[perm]) 
+        times_p = list(times[perm])
         d['times'] = times_p
         # also reformat labels to ints:
         labels = d['labels']
         labels = [[int(x) for x in pat] for pat in labels]
-        d['labels'] = labels 
- 
-    for rep in np.arange(1): #5
+        d['labels'] = labels
+
+    for rep in np.arange(1): # 5
         if cost > 0:
             curr_path = lambda_path.format(eval_dataset, rep, cost)
-        else: 
+        else:
             curr_path = lambda_path.format(eval_dataset, rep)
         with open(curr_path, 'r') as f:
             lam = json.load(f)['lam']
             lambdas.append(lam)
     lam = np.mean(lambdas)
-    print(f'Using aggregated lambda: {lam} from the {eval_dataset} dataset and cost {cost}')  
-   
-    # Determine min and max threshold 
+
+    print(f'Using aggregated lambda: {lam} from the {eval_dataset} dataset '
+          f'and cost {cost}')
+
+    # Determine min and max threshold
     if args.task == 'regression':
         score_list = [s for pat in d['scores'] for s in pat]
-        score_max = np.percentile(score_list, 99.5) #max(score_list)
-        score_min = np.percentile(score_list, 0.5) #min(score_list)
+        score_max = np.percentile(score_list, 99.5)  # max(score_list)
+        score_min = np.percentile(score_list, 0.5)   # min(score_list)
     else:
-        score_max = 1; score_min = 0
+        score_max = 1
+        score_min = 0
 
     measures = {
         'tp_recall': flatten_wrapper(
@@ -286,8 +281,7 @@ def main(args):
         'tp_precision': flatten_wrapper(
             functools.partial(precision_score, zero_division=0)
         ),
-        #TODO: if we only have shifted labels we may need to pass the argument here
-        'pat_physionet2019_score' : utility_score_wrapper(lam=lam),
+        'pat_physionet2019_score': utility_score_wrapper(lam=lam),
         'pat_eval': first_alarm_eval
     }
 
@@ -298,10 +292,11 @@ def main(args):
 
     # evaluate thresholds in parallel:
     result_list = Parallel(n_jobs=args.n_jobs, verbose=1)(
-        delayed(evaluate_threshold)(d, thres, measures) for thres in thresholds) 
- 
+        delayed(evaluate_threshold)(d, thres, measures)
+        for thres in thresholds
+    )
+
     for thres, current in zip(thresholds, result_list):
-        #current = evaluate_threshold(d, thres, measures)
         results['thres'].append(thres)
 
         for k, v in current.items():
@@ -339,22 +334,25 @@ if __name__ in "__main__":
         help='If set, overwrites output files'
     )
     parser.add_argument(
-        '--lambda_path', 
-        help='path to lambda file', 
+        '--lambda_path',
+        help='path to lambda file',
         default='config/lambdas'
     )
     parser.add_argument(
-        '--task', 
-        help='prediction task [regression, classification]', 
+        '--task',
+        help='prediction task [regression, classification]',
         default='regression'
     )
     parser.add_argument(
-        '--n_jobs', 
-        help='number of jobs for parallelizing over thresholds', 
-        default=10, type=int
+        '--n_jobs',
+        default=10,
+        type=int,
+        help='number of jobs for parallelizing over thresholds',
     )
     parser.add_argument(
-        '--cost', default=0, type=int,
+        '--cost',
+        default=0,
+        type=int,
         help='lambda cost to use (default 0, inactive)'
     )
 
