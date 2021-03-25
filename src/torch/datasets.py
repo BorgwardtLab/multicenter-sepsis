@@ -248,6 +248,18 @@ class SplittedDataset(ParquetLoadedDataset):
             out = self.transform(out)
         return out
 
+    @property
+    def class_imbalance_factor(self):
+        if hasattr(self, 'data'):
+            prev = self.data[VM_DEFAULT('label')].sum()/len(self.data)
+            cif = (1 - prev) / prev
+            print(f'Using imbalance factor: {cif}') 
+            return cif 
+        else:
+            print("""class imbalance factor requires dataset to be loaded 
+                (ParquetLoadedDataset base class), ignoring class imbalance
+                and using 1 as imbalance factor""") 
+            return 1
 
 class Physionet2019(SplittedDataset):
     """Physionet 2019 dataset."""

@@ -58,9 +58,9 @@ class BaseModel(pl.LightningModule):
         self.loss = torch.nn.BCEWithLogitsLoss(
             reduction='none',
             pos_weight=torch.Tensor(
-                [self.hparams.pos_weight ])
+                [self.hparams.pos_weight * d.class_imbalance_factor])
         )
-
+            
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
         data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
