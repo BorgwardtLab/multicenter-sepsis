@@ -255,9 +255,17 @@ if __name__ == "__main__":
     parser.add_argument('--rep', 
                         help='split repetition', type=int, 
                         default=0)
+    parser.add_argument('--dump_name', 
+                        help='which feature dump to use',
+                        default='features')
+    parser.add_argument('--cache_path', 
+                        help="""if provided transformed df is cached as parquet to this base_dir 
+                        in a folder {dump_name}_cache/{split}_{rep}""", 
+                        default=None)
     args = parser.parse_args()
-    dataset_name = args.dataset 
-    path = f'datasets/{dataset_name}/data/parquet/features' 
+    dataset_name = args.dataset
+    dump_name = args.dump_name 
+    path = f'datasets/{dataset_name}/data/parquet/{dump_name}' 
     split_path = os.path.join(args.split_path, 
         f'splits_{dataset_name}.json' ) 
     split = args.split 
@@ -267,7 +275,7 @@ if __name__ == "__main__":
     lambda_path = os.path.join(args.lambda_path, 
         f'lambda_{dataset_name}_rep_{rep}.json' ) 
  
-    df = load_and_transform_data(
+    df, _ = load_and_transform_data(
         path,
         split_path,
         normalizer_path,
@@ -275,51 +283,25 @@ if __name__ == "__main__":
         args.feature_path,
         split,
         rep,
-        feature_set='large',
+        feature_set='small',
         variable_set='full',
         task='regression',
         baselines=False
     )
-    #df_s =  load_and_transform_data(
-    #    path,
-    #    split_path,
-    #    normalizer_path,
-    #    lambda_path,
-    #    args.feature_path,
-    #    split,
-    #    rep,
-    #    feature_set='small',
-    #    variable_set='full',
-    #    task='regression',
-    #    baselines=False
-    #)
-    #df_b =  load_and_transform_data(
-    #    path,
-    #    split_path,
-    #    normalizer_path,
-    #    lambda_path,
-    #    args.feature_path,
-    #    split,
-    #    rep,
-    #    feature_set='small',
-    #    variable_set='full',
-    #    task='classification',
-    #    baselines=True
-    #)
-    #df_p =  load_and_transform_data(
-    #    path,
-    #    split_path,
-    #    normalizer_path,
-    #    lambda_path,
-    #    args.feature_path,
-    #    split,
-    #    rep,
-    #    feature_set='large',
-    #    variable_set='physionet',
-    #    task='regression',
-    #    baselines=False
-    #)
-    from IPython import embed; embed()
-
+    cache_path = args.cache_path
+    if cache_path:
+        
+        cache_path = os.path.join(
+            cache_path,
+            f'{dump_name}_cache'
+        )
+        os.makedirs(cache_path, exist_ok=True)
+        cache_file = os.path.join(
+            cache_path,
+            f'{split}_{rep}.parquet'
+        ) 
+        print(f'Caching transformed data to {cache_file}') 
+        df.to_parquet(cache_file) 
+        #df2 = pd.read_parquet(cache_file)
 
 
