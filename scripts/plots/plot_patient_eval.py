@@ -40,6 +40,12 @@ def plot_curves(df, ax):
     ax1.get_legend().remove()
 
 
+def plot_scores(df, ax, **kwargs):
+    """Plot prediction scores."""
+    ax.set_title('Prediction scores')
+    ax = sns.histplot(df['thres'], ax=ax, **kwargs)
+
+
 def plot_info(df, ax, recall_threshold=0.90):
     """Plot information textbox."""
     # Get precision at the pre-defined recall threshold (typically 90%,
@@ -93,6 +99,7 @@ if __name__ == '__main__':
     fig, axes = plt.subplots(nrows=3, figsize=(10, 6), squeeze=True)
 
     plot_curves(df, axes[0])
+    plot_scores(df, axes[1])
     plot_info(df, axes[2])
 
     out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
