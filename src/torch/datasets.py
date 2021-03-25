@@ -149,6 +149,31 @@ class ParquetDataset(Dataset):
     def __len__(self):
         return len(self.ids)
 
+class ParquetLoadedDataset(Dataset):
+    """
+    In this version, we load the entire dataset into memory for speed.
+    """
+    def __init__(self, path, ids, id_column, columns=None, **kwargs):
+        super().__init__()
+        self.path = path
+        self.ids = ids
+        self.id_column = id_column
+        self.columns = columns
+        self.data = self._load_dataset()
+        self._dataset_columns = self.data.columns
+
+    def _load_dataset(self):
+        df = pd.read_parquet(self.path)
+        return df 
+
+    def __getitem__(self, index):
+        item_id = self.ids[index]
+        return self.data.loc[item_id]
+    
+    def __len__(self):
+        return len(self.ids)
+
+
 
 class SplittedDataset(ParquetDataset):
     """Dataset with predefined splits and feature groups."""
