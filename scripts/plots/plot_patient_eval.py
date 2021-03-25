@@ -40,6 +40,40 @@ def plot_curves(df, ax):
     ax1.get_legend().remove()
 
 
+def plot_info(df, ax, recall_threshold=0.90):
+    """Plot information textbox."""
+    # Get precision at the pre-defined recall threshold (typically 90%,
+    # but other values might be interesting).
+    greater = df['pat_recall'] > recall_threshold
+    index = df['pat_recall'][greater].argmin()
+    info = df.loc[index]
+
+    textbox = '\n'.join((
+        f'Patient-based Recall:    {info["pat_recall"]:5.2f}',
+        f'Patient-based Precision: {info["pat_precision"]:5.2f}',
+        f'Threshold:               {info["thres"]:5.4f}',
+        f'Earliness Median:        {info["earliness_median"]:5.2f}',
+    ))
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+
+    ax.text(
+        0.0, 0.50,
+        textbox,
+        transform=ax.transAxes,
+        fontsize=12,
+        family='monospace',
+        ha='left',
+        va='center'
+    )
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -56,15 +90,10 @@ if __name__ == '__main__':
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
-    # Get precision at 90% Recall
-    greater = df['pat_recall'] > 0.9
-    index = df['pat_recall'][greater].argmin()
-    info = df.loc[index]
-    print(info)
-
     fig, axes = plt.subplots(nrows=3, figsize=(10, 6), squeeze=True)
 
     plot_curves(df, axes[0])
+    plot_info(df, axes[2])
 
     out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
     plt.savefig( os.path.join(args.output_path, out_file))
