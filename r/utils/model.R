@@ -16,8 +16,8 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
     feat_set <- match.arg(feat_set)
     feat_reg <- switch(feat_set,
-      basic = "_(hours|locf|derived)$",
       locf = "_locf$",
+      basic = "_(hours|locf|derived)$",
       wav = "_(hours|locf|derived|wavelet_[0-9]+)$",
       sig = "_(hours|locf|derived|signature_[0-9]+)$",
       full = "_(hours|locf|derived|wavelet_[0-9]+|signature_[0-9]+)$"
@@ -31,11 +31,13 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   target    <- match.arg(target)
   predictor <- match.arg(predictor)
 
-  msg("training `", predictor, "` model on `", train_src, "` with `", target,
+  msg("training `", predictor, "` model on `", train_src,
+      "` ({sub("_", " ", split)}) with `", target,
       "` response and using `", feat_set, "` feature set")
 
-  job <- file.path(res_dir, paste(predictor, target, feat_set, train_src,
-                                  sep = "-"))
+  job <- file.path(res_dir,
+    paste(predictor, target, feat_set, train_src, split, sep = "-")
+  )
 
   pids <- coh_split(train_src, "train", split)
 
@@ -59,7 +61,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     )
   )
 
-  msg("training model")
+  msg("training model on {nrow(x)} x {ncol(x)} data")
 
   pids <- read_to_df(train_src, data_dir, cols = c("stay_id", "sep3"),
                      norm_cols = NULL, split = split, pids = pids)
@@ -260,7 +262,16 @@ train_lgbm <- function(x, y, is_class, folds, n_cores, job_name, ...) {
     boosting = "gbdt", verbose = -1L, num_threads = n_cores
   )
 
-  lightgbm::saveRDS.lgb.Booster(mod, paste0(job_name, ".lgb"))
+  set_na <- if (is.na(mod$raw)) {
+    mod$save()
+    TRUE
+  }
+
+  qs::qsave(mod, paste0(job_name, ".qs"))
+
+  if (isTRUE(set_na)) {
+    mod$raw <- NA
+  }
 
   mod
 }
