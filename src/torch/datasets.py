@@ -175,12 +175,11 @@ class ParquetLoadedDataset(Dataset):
 
 
 
-class SplittedDataset(ParquetDataset):
+class SplittedDataset(ParquetLoadedDataset):
     """Dataset with predefined splits and feature groups."""
 
     ID_COLUMN = VM_DEFAULT('id')
     TIME_COLUMN = VM_DEFAULT('time')
-    # TODO: It looks like age and sex are not present in the data anymore
     STATIC_COLUMNS = VM_DEFAULT.all_cat('static')
     LABEL_COLUMN = VM_DEFAULT('label')
     UTILITY_COLUMN = VM_DEFAULT('utility')
@@ -199,7 +198,6 @@ class SplittedDataset(ParquetDataset):
         super().__init__(
             path, ids, self.ID_COLUMN, columns=None, as_pandas=True)
 
-        # TODO: Handle label and utility columns because we need them later.
         if only_physionet_features:
             self.columns = ColumnFilterLight(
                 self._dataset_columns).physionet_set(feature_set=feature_set)
@@ -222,14 +220,21 @@ class SplittedDataset(ParquetDataset):
         return train_indices, test_indices
 
     def __getitem__(self, index):
-        df = super().__getitem__(index)
+        df = super().__getitem__(index)[self.columns]
         if self.pd_transform:
             df = self.pd_transform(df)
-        id = df[self.ID_COLUMN].values[0]
+        id = df.index.values[0]
         times = df[self.TIME_COLUMN].values
         statics = df[self.STATIC_COLUMNS].values[0]
+        drop_cols = [self.TIME_COLUMN, self.LABEL_COLUMN, self.UTILITY_COLUMN] + self.STATIC_COLUMNS
+        # ParquetLoadedDataset has id in the index
+        # therefore we need to drop id only for base
+        # classes where this is not the case:
+        if self.__class__.__base__.__base__.__name__ == 'ParquetDataset':
+            drop_cols.append(self.ID_COLUMN) 
+            
         ts = df.drop(
-            columns=[self.ID_COLUMN, self.TIME_COLUMN, self.LABEL_COLUMN, self.UTILITY_COLUMN] + self.STATIC_COLUMNS)
+            columns=drop_cols)
         out = {
             'id': id,
             'times': times,
@@ -249,7 +254,8 @@ class Physionet2019(SplittedDataset):
 
     def __init__(self, split, feature_set='small', only_physionet_features=True, fold=0, transform=None):
         super().__init__(
-            'datasets/physionet2019/data/parquet/features_small',
+            f'datasets/physionet2019/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            #'datasets/physionet2019/data/parquet/features_small',
             'config/splits/splits_physionet2019.json',
             split,
             feature_set,
@@ -277,7 +283,7 @@ class MIMICDemo(SplittedDataset):
 
     def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
-            'datasets/mimic_demo/data/parquet/features_small',
+            f'datasets/mimic_demo/data/parquet/features_small_cache/{split}_{fold}.parquet',
             'config/splits/splits_mimic_demo.json',
             split,
             feature_set,
@@ -285,27 +291,26 @@ class MIMICDemo(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        normalize = Normalize(
-            'config/normalizer/normalizer_mimic_demo_rep_{}.json'.format(fold),
-            self.columns
-        )
-        apply_lam = ApplyLambda(
-            lambda_path =  f'config/lambdas/lambda_mimic_demo_rep_{fold}.json' 
-        ) 
-        transforms = [
-            normalize,
-            apply_lam,
-            Impute(),
-        ]
-        self.pd_transform = ComposeTransformations(transforms)
-
+        #normalize = Normalize(
+        #    'config/normalizer/normalizer_mimic_demo_rep_{}.json'.format(fold),
+        #    self.columns
+        #)
+        #apply_lam = ApplyLambda(
+        #    lambda_path =  f'config/lambdas/lambda_mimic_demo_rep_{fold}.json' 
+        #) 
+        #transforms = [
+        #    normalize,
+        #    apply_lam,
+        #    Impute(),
+        #]
+        #self.pd_transform = ComposeTransformations(transforms)
 
 class MIMIC(SplittedDataset):
     """MIMIC dataset."""
 
     def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
-            'datasets/mimic/data/parquet/features_small',
+            f'datasets/mimic/data/parquet/features_small_cache/{split}_{fold}.parquet',
             'config/splits/splits_mimic.json',
             split,
             feature_set,
@@ -313,27 +318,27 @@ class MIMIC(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        normalize = Normalize(
-            'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold),
-            self.columns
-        )
-        apply_lam = ApplyLambda(
-            lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}.json' 
-        ) 
-        transforms = [
-            normalize,
-            apply_lam,
-            Impute(),
-        ]
-        self.pd_transform = ComposeTransformations(transforms)
-
+        #normalize = Normalize(
+        #    'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold),
+        #    self.columns
+        #)
+        #apply_lam = ApplyLambda(
+        #    lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}.json' 
+        #) 
+        #transforms = [
+        #    normalize,
+        #    apply_lam,
+        #    Impute(),
+        #]
+        #self.pd_transform = ComposeTransformations(transforms)
 
 class Hirid(SplittedDataset):
     """Hirid dataset."""
 
     def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
-            'datasets/hirid/data/parquet/features_small',
+            f'datasets/hirid/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            #'datasets/hirid/data/parquet/features_small',
             'config/splits/splits_hirid.json',
             split,
             feature_set,
@@ -341,19 +346,19 @@ class Hirid(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        normalize = Normalize(
-            'config/normalizer/normalizer_hirid_rep_{}.json'.format(fold),
-            self.columns
-        )
-        apply_lam = ApplyLambda(
-            lambda_path =  f'config/lambdas/lambda_hirid_rep_{fold}.json' 
-        ) 
-        transforms = [
-            normalize,
-            apply_lam,
-            Impute(),
-        ]
-        self.pd_transform = ComposeTransformations(transforms)
+        #normalize = Normalize(
+        #    'config/normalizer/normalizer_hirid_rep_{}.json'.format(fold),
+        #    self.columns
+        #)
+        #apply_lam = ApplyLambda(
+        #    lambda_path =  f'config/lambdas/lambda_hirid_rep_{fold}.json' 
+        #) 
+        #transforms = [
+        #    normalize,
+        #    apply_lam,
+        #    Impute(),
+        #]
+        #self.pd_transform = ComposeTransformations(transforms)
 
 
 class EICU(SplittedDataset):
@@ -361,7 +366,8 @@ class EICU(SplittedDataset):
 
     def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
-            'datasets/eicu/data/parquet/features_small',
+            f'datasets/eicu/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            #'datasets/eicu/data/parquet/features_small',
             'config/splits/splits_eicu.json',
             split,
             feature_set,
@@ -369,19 +375,19 @@ class EICU(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        normalize = Normalize(
-            'config/normalizer/normalizer_eicu_rep_{}.json'.format(fold),
-            self.columns
-        )
-        apply_lam = ApplyLambda(
-            lambda_path =  f'config/lambdas/lambda_eicu_rep_{fold}.json' 
-        ) 
-        transforms = [
-            normalize,
-            apply_lam,
-            Impute(),
-        ]
-        self.pd_transform = ComposeTransformations(transforms)
+        #normalize = Normalize(
+        #    'config/normalizer/normalizer_eicu_rep_{}.json'.format(fold),
+        #    self.columns
+        #)
+        #apply_lam = ApplyLambda(
+        #    lambda_path =  f'config/lambdas/lambda_eicu_rep_{fold}.json' 
+        #) 
+        #transforms = [
+        #    normalize,
+        #    apply_lam,
+        #    Impute(),
+        #]
+        #self.pd_transform = ComposeTransformations(transforms)
 
 
 class AUMC(SplittedDataset):
@@ -389,7 +395,8 @@ class AUMC(SplittedDataset):
 
     def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
         super().__init__(
-            'datasets/aumc/data/parquet/features_small',
+            f'datasets/aumc/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            #'datasets/aumc/data/parquet/features_small',
             'config/splits/splits_aumc.json',
             split,
             feature_set,
@@ -397,19 +404,19 @@ class AUMC(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        normalize = Normalize(
-            'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold),
-            self.columns
-        )
-        apply_lam = ApplyLambda(
-            lambda_path =  f'config/lambdas/lambda_aumc_rep_{fold}.json' 
-        ) 
-        transforms = [
-            normalize,
-            apply_lam,
-            Impute(),
-        ]
-        self.pd_transform = ComposeTransformations(transforms)
+        #normalize = Normalize(
+        #    'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold),
+        #    self.columns
+        #)
+        #apply_lam = ApplyLambda(
+        #    lambda_path =  f'config/lambdas/lambda_aumc_rep_{fold}.json' 
+        #) 
+        #transforms = [
+        #    normalize,
+        #    apply_lam,
+        #    Impute(),
+        #]
+        #self.pd_transform = ComposeTransformations(transforms)
 
 
 if __name__ == '__main__':
