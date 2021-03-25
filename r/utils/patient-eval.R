@@ -162,7 +162,7 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
                      feat_set = c("basic", "wav", "sig", "full"),
                      predictor = c("linear", "rf"),
                      target = c("class", "hybrid", "reg"),
-                     dir = data_path("res"), jobid = NULL, fix_order = FALSE) {
+                     dir = data_path("res"), jobid = NULL) {
 
   if (is.null(jobid)) {
 
@@ -189,13 +189,6 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
   }
 
   res <- jsonlite::read_json(fil, simplifyVector = TRUE, flatten = TRUE)
-
-  if (fix_order || as.integer(jobid) == 165674415L) {
-    perm <- order(as.integer(res$ids))
-    res$ids <- res$ids[perm]
-    res$times <- res$times[perm]
-    res$onset <- res$onset[perm]
-  }
 
   util <- if (length(res$utility)) res$utility else res$labels
 
