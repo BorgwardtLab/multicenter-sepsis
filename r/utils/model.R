@@ -32,7 +32,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   predictor <- match.arg(predictor)
 
   msg("training `", predictor, "` model on `", train_src,
-      "` ({sub("_", " ", split)}) with `", target,
+      "` ({sub('_', ' ', split)}) with `", target,
       "` response and using `", feat_set, "` feature set")
 
   job <- file.path(res_dir,

@@ -111,6 +111,7 @@ if __name__ == '__main__':
     parser.add_argument('--predictions_path', required=True)
     parser.add_argument('--output_path', default='results/evaluation/plots')
     parser.add_argument('--earliness-stat', default='mean')
+    parser.add_argument('-s', '--show', action='store_true')
 
     args = parser.parse_args()
     input_path = args.input_path
@@ -125,7 +126,7 @@ if __name__ == '__main__':
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
-    fig, axes = plt.subplots(nrows=3, figsize=(10, 6), squeeze=True)
+    fig, axes = plt.subplots(nrows=3, figsize=(6, 7), squeeze=True)
 
     xmin, xmax = plot_curves(df, axes[0])
     plot_scores(df, scores, axes[1])
@@ -134,4 +135,6 @@ if __name__ == '__main__':
     out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
     plt.tight_layout()
     plt.savefig( os.path.join(args.output_path, out_file))
-    plt.show()
+
+    if args.show:
+        plt.show()
