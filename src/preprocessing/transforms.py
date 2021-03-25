@@ -433,6 +433,23 @@ class DerivedFeatures(TransformerMixin):
         return ddf.map_partitions(derived_features)
 
 
+class DropColumns(TransformerMixin):
+    """
+    Drop column group via shared suffix.
+    """
+    def __init__(self, suffix='_locf'):
+        self.suffix = suffix  
+    def fit(self, df, labels=None):
+        return self
+    def get_drop_cols(self, cols):
+        return [x for x in cols if self.suffix in x]
+    def transform(self, df):
+        columns = self.get_drop_cols(df.columns)
+        df = df.drop(columns, axis=1)
+        return df
+
+
+
 class Normalizer(TransformerMixin):
     """Performs normalization (z-scoring) of columns."""
 

@@ -21,6 +21,7 @@ from src.preprocessing.transforms import (
     Normalizer,
     SignatureFeatures,
     WaveletFeatures,
+    DropColumns
 )
 from src.preprocessing.generate_metadata_from_dataset import write_metadata_to_dataset
 from src.variables.mapping import VariableMapping
@@ -78,7 +79,7 @@ def compute_divisions(rows_per_patient, max_rows):
     return tuple(divisions)
 
 
-def main(input_filename, split_filename, output_filename, n_workers):
+def main(input_filename, split_filename, output_filename, n_workers, feature_set):
     client = Client(
         n_workers=n_workers,
         memory_limit="50GB",
@@ -118,33 +119,77 @@ def main(input_filename, split_filename, output_filename, n_workers):
     #is_sorted = data.groupby(data.index.name, group_keys=False, sort=False).apply(check_time_sorted)
     #assert all(is_sorted.compute())
 
-    data_pipeline = Pipeline(
-        [
-            ("bool_to_float", BoolToFloat()),
-            ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
-            (
-                "lookback_features",
-                LookbackFeatures(suffices=["_raw", "_derived"]),
-            ),
-            ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
-            ("normalized_feature_transforms", ApplyOnNormalized(
-                Normalizer(norm_ids, suffix=[
-                           "_locf", "_derived"], assign_values=False),
-                [
-                    WaveletFeatures(suffix="_locf"),
-                    SignatureFeatures(suffices=["_locf", "_derived"])
-                ]
-            )),
-            (
-                "calculate_target",
-                CalculateUtilityScores(label=VM_DEFAULT("label")),
-            ),
-            (
-                "filter_invalid_times",
-                InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
-            ),
-        ]
-    )
+    # redundant implementation for better readability:
+    if feature_set == 'small':
+        data_pipeline = Pipeline(
+            [
+                ("bool_to_float", BoolToFloat()),
+                ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
+                ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
+                (
+                    "calculate_target",
+                    CalculateUtilityScores(label=VM_DEFAULT("label")),
+                ),
+                (
+                    "filter_invalid_times",
+                    InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
+                ),
+                (   
+                    "drop_locf",
+                    DropColumns(suffix="_locf"),
+                )
+            ]
+        )
+    elif feature_set == 'middle':
+        data_pipeline = Pipeline(
+            [
+                ("bool_to_float", BoolToFloat()),
+                ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
+                (
+                    "lookback_features",
+                    LookbackFeatures(suffices=["_raw", "_derived"]),
+                ),
+                ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
+                (
+                    "calculate_target",
+                    CalculateUtilityScores(label=VM_DEFAULT("label")),
+                ),
+                (
+                    "filter_invalid_times",
+                    InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
+                ),
+            ]
+        )
+    elif feature_set == 'large':
+        data_pipeline = Pipeline(
+            [
+                ("bool_to_float", BoolToFloat()),
+                ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
+                (
+                    "lookback_features",
+                    LookbackFeatures(suffices=["_raw", "_derived"]),
+                ),
+                ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
+                ("normalized_feature_transforms", ApplyOnNormalized(
+                    Normalizer(norm_ids, suffix=[
+                               "_locf", "_derived"], assign_values=False),
+                    [
+                        WaveletFeatures(suffix="_locf"),
+                        SignatureFeatures(suffices=["_locf", "_derived"])
+                    ]
+                )),
+                (
+                    "calculate_target",
+                    CalculateUtilityScores(label=VM_DEFAULT("label")),
+                ),
+                (
+                    "filter_invalid_times",
+                    InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
+                ),
+            ]
+        )
+    else:
+        raise ValueError(f'{feature_set} is not among the valid feature_set: [small, middle, large]')
     data = data_pipeline.fit_transform(data)
 
     #lost = set(all_ids).difference(data.index.unique().compute())
@@ -200,6 +245,12 @@ if __name__ == "__main__":
         type=int,
         help="Number of dask workers to start for parallel processing of data.",
     )
+    parser.add_argument(
+        "--feature_set",
+        type=str,
+        help="which feature set to extract [small, middle, large]",
+    )
+
     args = parser.parse_args()
     assert Path(args.input_data).exists()
     assert Path(args.split_file).exists()
@@ -208,5 +259,6 @@ if __name__ == "__main__":
         args.input_data,
         args.split_file,
         args.output,
-        args.n_workers
+        args.n_workers,
+        args.feature_set
     )
