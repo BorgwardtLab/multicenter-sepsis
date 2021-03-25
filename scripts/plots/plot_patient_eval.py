@@ -126,7 +126,7 @@ if __name__ == '__main__':
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
-    fig, axes = plt.subplots(nrows=3, figsize=(10, 6), squeeze=True)
+    fig, axes = plt.subplots(nrows=3, figsize=(6, 7), squeeze=True)
 
     xmin, xmax = plot_curves(df, axes[0])
     plot_scores(df, scores, axes[1])
