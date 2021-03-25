@@ -3,8 +3,8 @@
 #BSUB -W 24:00
 #BSUB -n 36
 #BSUB -R rusage[mem=5000]
-#BSUB -J model[1-90]%45
-#BSUB -o data-res/model_%J.out
+#BSUB -J cube[1-90]
+#BSUB -o data-res/cube_%J.out
 
 invisible(
   lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)
@@ -17,7 +17,7 @@ args <- check_index(
   target = c("class", "hybrid", "reg")
 )
 
-redir <- file.path(data_path("res"), paste0("model_", jobid()))
+redir <- file.path(data_path("res"), paste0("cube_", jobid()))
 extra <- list(test_src = c("mimic", "aumc"), predictor = "lgbm",
               res_dir = redir)
 
