@@ -30,7 +30,7 @@ def namespace_without_none(namespace):
 def main(hparams, model_cls):
     """Main function train model."""
     # init module
-    ##wandb.init(project='mc-sepsis', entity='sepsis', config=hparams)
+    #wandb.init(project='mc-sepsis', entity='sepsis', config=hparams)
     ##config = wandb.config
      
     model = model_cls(**vars(namespace_without_none(hparams)))
@@ -38,8 +38,13 @@ def main(hparams, model_cls):
 
     # Wandb logger:
    # Loggers and callbacks
+    job_name = f'{hparams.model}_{hparams.dataset}'
+    # check if slurm array job id is available:
+    job_id = os.getenv('SLURM_ARRAY_TASK_ID')
+    if job_id is not None:
+        job_name += f'_{job_id}' 
     wandb_logger = WandbLogger(
-        name=f"{hparams.model}_{hparams.dataset}",
+        name=job_name,
         project="mc-sepsis",
         entity="sepsis",
         log_model=True,
@@ -75,7 +80,8 @@ def main(hparams, model_cls):
         checkpoint_callback=model_checkpoint_cb,
         max_epochs=hparams.max_epochs,
         logger=wandb_logger,
-        gpus=hparams.gpus
+        gpus=hparams.gpus,
+        #profiler='advanced'
     )
     trainer.fit(model)
     #trainer.logger.save()
