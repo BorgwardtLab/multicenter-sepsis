@@ -50,7 +50,7 @@ def plot_curves(df, ax):
 
     lines, labels = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines + lines2, labels + labels2, loc='upper left', bbox_to_anchor=(0.05,0.85))
+    ax2.legend(lines + lines2, labels + labels2, loc='upper right'), #bbox_to_anchor=(0.05,0.85)) #upper left
     ax1.get_legend().remove()
 
     return ax.get_xlim()
@@ -126,7 +126,7 @@ if __name__ == '__main__':
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
-    fig, axes = plt.subplots(nrows=3, figsize=(6, 7), squeeze=True)
+    fig, axes = plt.subplots(nrows=3, figsize=(8, 10), squeeze=True) #6,7
 
     xmin, xmax = plot_curves(df, axes[0])
     plot_scores(df, scores, axes[1])
