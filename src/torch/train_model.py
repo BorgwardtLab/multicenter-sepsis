@@ -151,7 +151,7 @@ if __name__ == '__main__':
     parser.add_argument('--monitor_mode', type=str, choices=['max', 'min'],
                         default='min')
     parser.add_argument('--indicators', type=bool,
-                        default=True)
+                        default=False)
     # parser.add_argument(
     #     '--feature-set', default='all',
     #     help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'
