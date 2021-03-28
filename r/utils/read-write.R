@@ -161,29 +161,19 @@ read_parquet <- function(source, dir = data_path(), cols = NULL, pids = NULL) {
   try_id_tbl(res)
 }
 
-y_class <- function(source, start_offset = 6L, end_offset = Inf, ...) {
+y_class <- function(source, left = -6, right = Inf, ...) {
+
+  fpos_module <- function(delta, left, right) {
+    is_true(delta >= left & delta <= right)
+  }
 
   dat <- read_to_df(source, cols = c("stay_id", "stay_time", "sep3"),
                     norm_cols = NULL, ...)
-  sep <- dat[sep3 == 1L, head(.SD, n = 1L), by = "stay_id"]
 
-  win <- merge(sep,
-    dat[, list(in_time = min(stay_time), out_time = max(stay_time)),
-        by = "stay_id"],
-    by = "stay_id", all.x = TRUE
-  )
+  dat <- dat[, onset := stay_time[which(sep3 == 1)[1L]], by = "stay_id"]
+  dat <- dat[, delta := stay_time - onset]
 
-  win <- win[, c("start_time", "end_time") := list(
-    pmax(stay_time - start_offset, in_time),
-    pmin(stay_time + end_offset, out_time)
-  )]
-
-  sep <- win[, list(stay_time = seq(start_time, end_time)), by = "stay_id"]
-  sep <- sep[, sep3 := TRUE]
-  dat <- dat[, sep3 := NULL]
-  dat <- sep[dat, on = c("stay_id", "stay_time")]
-
-  is_true(dat[["sep3"]])
+  fpos_module(dat[["delta"]], left, right)
 }
 
 y_reg <- function(source, split = "split_0", ...) {
@@ -198,4 +188,33 @@ y_reg <- function(source, split = "split_0", ...) {
   dat <- dat[, lambda := data.table::fifelse(is_case, lmb, 1)]
 
   dat[["utility"]] * dat[["lambda"]]
+}
+
+y_reg2 <- function(source, left = -12, right = 6, mid = -6, u_fp = -0.05,
+                   split = "split_0", ...) {
+
+  fpos_module <- function(delta, left, right, mid, u_fp) {
+
+    data.table::fifelse(
+      delta < left, u_fp,
+      data.table::fifelse(
+        delta < mid, (delta - left) / (mid - left),
+        data.table::fifelse(delta == mid, 1,
+          data.table::fifelse(
+            delta <= right, 1 - (delta - mid) / (right - mid), 0
+          )
+        )
+      ), u_fp
+    )
+  }
+
+  dat <- read_to_df(source,
+    cols = c("stay_id", "stay_time", "sep3"),
+    norm_cols = NULL, ..., split = split
+  )
+
+  dat <- dat[, onset := stay_time[which(sep3 == 1)[1L]], by = "stay_id"]
+  dat <- dat[, delta := stay_time - onset]
+
+  fpos_module(dat[["delta"]], left, right, mid, u_fp)
 }

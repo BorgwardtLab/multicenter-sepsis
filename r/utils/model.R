@@ -4,7 +4,8 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
                         feat_reg, predictor = c("linear", "rf", "lgbm"),
                         target = c("class", "hybrid", "reg"),
                         split = "split_0", data_dir = data_path("mm"),
-                        res_dir = data_path("res"), seed = 11, ...) {
+                        res_dir = data_path("res"), targ_param_1 = NULL,
+                        targ_param_2 = NULL, seed = 11, ...) {
 
   set.seed(seed)
 
@@ -28,7 +29,33 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     feat_set <- "custom"
   }
 
-  target    <- match.arg(target)
+  target <- match.arg(target)
+
+  targ_has_params <- !is.null(targ_param_1) || !is.null(targ_param_2)
+  is_class <- !identical(target, "reg")
+
+  if (targ_has_params) {
+
+    targ_opts1 <- switch(target,
+      class = seq.int(-12, -2),
+      reg = seq.int(-12, 6, by = 2),
+      stop("no opts available for the selected target")
+    )
+
+    targ_opts2 <- switch(target,
+      class = seq.int(-2, 8),
+      reg = c(0, -0.001, -0.01, -0.02, -0.05, -0.1, -0.2, -0.5, -1, -2)
+    )
+
+    assert_that(is.count(targ_param_1), targ_param_1 <= length(targ_opts1),
+                is.count(targ_param_2), targ_param_2 <= length(targ_opts1))
+
+    targ_opts1 <- targ_opts1[targ_param_1]
+    targ_opts2 <- targ_opts2[targ_param_2]
+    targ_type  <- target
+    target     <- paste(target, targ_param_1, targ_param_2, sep = "_")
+  }
+
   predictor <- match.arg(predictor)
 
   msg("training `", predictor, "` model on `", train_src,
@@ -41,13 +68,25 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
   pids <- coh_split(train_src, "train", split)
 
-  y <- switch(target,
-    class = y_class(train_src, 6L, Inf, path = data_dir,
-                    split = split),
-    hybrid = y_class(train_src, 6L, 6L, path = data_dir,
-                     split = split),
-    reg = y_reg(train_src, path = data_dir, split = split)
-  )
+  y <- if (targ_has_params) {
+
+    switch(targ_type,
+      class = y_class(train_src, targ_opts1, targ_opts2, path = data_dir,
+                      split = split),
+      reg = y_reg2(train_src, mid = targ_opts1, u_fp = targ_opts2,
+                   path = data_dir, split = split)
+    )
+
+  } else {
+
+    switch(target,
+      class = y_class(train_src, 6, Inf, path = data_dir,
+                      split = split),
+      hybrid = y_class(train_src, 6, 6, path = data_dir,
+                       split = split),
+      reg = y_reg(train_src, path = data_dir, split = split)
+    )
+  }
 
   msg("reading train data")
 
@@ -83,8 +122,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     linear = train_lin, rf = function(...) train_rf(..., seed = seed),
     lgbm = train_lgbm
   )
-  mod <- prof(fun(x, y, !identical(target, "reg"), pids$fold, n_cores(),
-                  job, ...))
+  mod <- prof(fun(x, y, is_class, pids$fold, n_cores(), job, ...))
 
   for (src in test_src) {
 
@@ -114,12 +152,24 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
     } else {
 
-      y <- switch(target,
-        class = y_class(src, 6L, Inf, path = data_dir,
-                        split = split, pids = pids),
-        hybrid = y_class(src, 6L, 6L, path = data_dir,
-                         split = split, pids = pids)
-      )
+      y <- if (targ_has_params) {
+
+        switch(targ_type,
+          class = y_class(src, targ_opts1, targ_opts2, path = data_dir,
+                          split = split, pids = pids),
+          reg = y_reg2(src, mid = targ_opts1, u_fp = targ_opts2,
+                       path = data_dir, split = split, pids = pids)
+        )
+
+      } else {
+
+        switch(target,
+          class = y_class(src, 6, Inf, path = data_dir,
+                          split = split, pids = pids),
+          hybrid = y_class(src, 6, 6, path = data_dir,
+                           split = split, pids = pids)
+        )
+      }
     }
 
     pids <- read_to_df(src, data_dir, cols = c("stay_id", "stay_time", "sep3"),
