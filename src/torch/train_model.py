@@ -71,7 +71,7 @@ def main(hparams, model_cls):
         dirpath=wandb_logger.experiment.dir #checkpoint_dir
     )
     early_stopping_cb = EarlyStopping(
-        monitor=monitor_score, patience=10, mode=monitor_mode, strict=True,
+        monitor=monitor_score, patience=20, mode=monitor_mode, strict=True,
         verbose=1)
 
     # most basic trainer, uses good defaults
