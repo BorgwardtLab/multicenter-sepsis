@@ -208,8 +208,8 @@ class BaseModel(pl.LightningModule):
             shuffle=True,
             collate_fn=variable_length_collate,
             batch_size=self.hparams.batch_size,
-            num_workers=4,
-            pin_memory=True
+            num_workers=8,
+            pin_memory=False
         )
 
     def val_dataloader(self):
@@ -225,8 +225,8 @@ class BaseModel(pl.LightningModule):
             shuffle=False,
             collate_fn=variable_length_collate,
             batch_size=self.hparams.batch_size,
-            num_workers=4,
-            pin_memory=True
+            num_workers=8,
+            pin_memory=False
         )
 
     def test_dataloader(self):
@@ -239,7 +239,7 @@ class BaseModel(pl.LightningModule):
             shuffle=False,
             collate_fn=variable_length_collate,
             batch_size=self.hparams.batch_size,
-            num_workers=4
+            num_workers=8
         )
 
     @classmethod
