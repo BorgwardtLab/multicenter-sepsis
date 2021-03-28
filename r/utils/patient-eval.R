@@ -1,186 +1,282 @@
 
-patient_eval <- function(dat) {
+patient_eval <- function(dat, split_cols = NULL, earl_loc = median,
+                         prob_grid = c(0.001, seq(0.01, 0.99, 0.01), 0.999)) {
 
   integrate <- function(x, y) {
 
     assert_that(length(x) == length(y))
 
-    x_left <- x[1:(length(x)-1)]
-    x_right <- x[2:(length(x))]
+    len1 <- seq_len(length(x) - 1)
+    len2 <- seq.int(2L, length(x))
 
-    y_left <- y[1:(length(x)-1)]
-    y_right <- y[2:(length(x))]
-
-    sum((x_right - x_left) * (y_left + y_right) / 2)
-
+    sum((x[len2] - x[len1]) * (y[len1] + y[len2]) / 2)
   }
 
   convex_comb <- function(a, b, val1, val2, mid = 0.9) {
 
-    assertthat::assert_that(a >= mid, b <= mid)
+    assert_that(a >= mid, b <= mid)
 
     val2 + (val1 - val2) * (mid - b) / (a - b)
-
   }
 
-  x <- data.table::copy(dat)
+  if (!is.null(split_cols)) {
 
-  prob_grid <- c(0, 0.001, seq(0.01, 0.99, 0.01), 0.999)
-  grid <- quantile(x[, max(prediction), by = "stay_id"][["V1"]],
-                   prob = prob_grid)
+    dat <- split(dat, by = split_cols)
+    res <- lapply(dat, patient_eval, earl_loc = earl_loc)
 
-  x <- x[, is_case := any(!is.na(onset)), by = c(id_vars(x))]
-  onset <- x[!is.na(onset), head(.SD, 1L), by = c(id_vars(x)),
-             .SD = "onset"]
-  onset <- onset[, c("onset_time", "onset") := list(
-    as.difftime(onset, units = "hours"), NULL)]
+    atr <- data.table::rbindlist(lapply(res, attr, "stats"))
+    res <- data.table::rbindlist(res)
 
-  x <- merge(x, onset, by = id_vars(x), all.x = TRUE)
+    res <- data.table::setattr(res, "stats", atr)
+    res <- data.table::setattr(res, "class", c("patient_eval", class(res)))
 
-  util_opt <- sum(x[["utility"]][x[["utility"]] > 0])
-  res <- c(1, 0, 1, 1, 0, 0, 0)
+    return(res)
+  }
 
-  for (i in 1:length(grid)) {
+  meta <- unique(dat[, c("train_src", "test_src", "feat_set", "predictor",
+                         "target", "split"), with = FALSE])
+
+  assert_that(nrow(meta) == 1L)
+
+  grid <- dat[, list(max_pred = max(prediction)), by = "stay_id"]
+  grid <- quantile(grid[["max_pred"]], prob = prob_grid)
+
+  opt_util <- dat[["utility"]]
+  opt_util <- sum(opt_util[opt_util > 0])
+
+  res <- matrix(nrow = length(grid), ncol = 7L,
+    dimnames = list(NULL, c("threshold", "sens", "spec", "ppv", "earliness",
+                            "advance_2h", "utility"))
+  )
+
+  for (i in seq_along(grid)) {
 
     thresh <- grid[i]
 
-    trig <- x[prediction > thresh, head(.SD, 1L), by = c(id_vars(x))]
-    trig <- trig[, c("stay_id", "stay_time"), with = FALSE]
+    trig <- dat[prediction > thresh, head(.SD, 1L), by = "stay_id",
+                .SDcols = "stay_time"]
     trig <- rename_cols(trig, "trigger", "stay_time")
-    trig <- as_id_tbl(trig)
 
     fin <- merge(
-      unique(x[, c(id_vars(x), "is_case", "onset_time"), with = FALSE]),
+      unique(dat[, c("stay_id", "is_case", "onset"), with = FALSE]),
       trig, all.x = TRUE
     )
 
-    dcs <- as.vector(
-      table(fin$is_case, factor(!is.na(fin$trigger), levels = c(F, T)))
-    )
+    dcs <- table(fin[["is_case"]], !is.na(fin[["trigger"]]))
 
+    erl <- fin[!is.na(onset) & !is.na(trigger),
+               list(ealiness = onset - trigger)]
+    erl <- as.double(erl[["ealiness"]], units = "hours")
 
-    erl <- fin[!is.na(onset_time) & !is.na(trigger),
-               list(onset_time - trigger)][["V1"]]
-
-    tn <- dcs[1]
-    fn <- dcs[2]
-    fp <- dcs[3]
-    tp <- dcs[4]
+    tn <- dcs["FALSE", "FALSE"]
+    fn <- dcs["TRUE", "FALSE"]
+    fp <- dcs["FALSE", "TRUE"]
+    tp <- dcs["TRUE", "TRUE"]
 
     sens <- tp / (tp + fn)
     spec <- tn / (tn + fp)
-    ppv <- tp / (tp + fp)
-    util <- sum((x[["prediction"]] > thresh) * x[["utility"]])
-    util <- util / util_opt
+    ppv  <- tp / (tp + fp)
 
-    res <- rbind(res, c(prob_grid[i], sens, spec, ppv, as.numeric(median(erl)),
-                        mean(erl > hours(2L)), util))
+    util <- sum((dat[["prediction"]] > thresh) * dat[["utility"]])
+    util <- util / opt_util
+
+    res[i, ] <- c(
+      prob_grid[i], sens, spec, ppv, earl_loc(erl), mean(erl > 2), util
+    )
   }
 
-  res <- as.data.frame(res)
-  names(res) <- c("threshold", "sens", "spec", "ppv", "earliness", "advance_2h",
-                  "utility")
-  res <- res[order(res$threshold), ]
+  res <- data.table::as.data.table(res)
+  res <- cbind(res, meta)
 
   prec_90r <- earliness_90r <- advance_90r <- -Inf
-  for (i in 1:nrow(res)) {
 
-    if(res$sens[i] > 0.9 & res$sens[i+1] <= 0.9) {
+  for (i in seq_len(nrow(res))) {
 
-      prec_90r <- convex_comb(res$sens[i], res$sens[i+1], res$ppv[i], res$ppv[i+1])
-      earliness_90r <- convex_comb(res$sens[i], res$sens[i+1], res$earliness[i],
-                                   res$earliness[i+1])
-      advance_90r <- convex_comb(res$sens[i], res$sens[i+1], res$advance_2h[i],
-                                 res$advance_2h[i+1])
+    i1 <- i + 1
 
+    if (res$sens[i] > 0.9 & res$sens[i1] <= 0.9) {
+
+      prec_90r <- convex_comb(
+        res$sens[i], res$sens[i1], res$ppv[i], res$ppv[i1]
+      )
+
+      earliness_90r <- convex_comb(
+        res$sens[i], res$sens[i1], res$earliness[i], res$earliness[i1]
+      )
+
+      advance_90r <- convex_comb(
+        res$sens[i], res$sens[i1], res$advance_2h[i], res$advance_2h[i1]
+      )
     }
-
   }
 
+  prop_sep <- dat[, list(is_case = is_case[1L]), by = "stay_id"]
+  prop_sep <- mean(prop_sep[["is_case"]])
 
-  auroc <- -integrate(1 - res$spec, res$sens)
-  auprc <- -integrate(res$sens, res$ppv)
-
-  structure(
-    list(
-      dat = res,
-      prop_sep = mean(fin$is_case),
-      auroc = -integrate(1 - res$spec, res$sens),
-      auprc = -integrate(res$sens, res$ppv),
-      max_util = max(res$utility),
-      prec_90r = prec_90r,
-      earliness_90r = earliness_90r,
-      advance_90r = advance_90r
-    ),
-    class = "eval"
+  stats <- data.table::data.table(
+    prop_sep = prop_sep,
+    auroc = -integrate(1 - res$spec, res$sens),
+    auprc = -integrate(res$sens, res$ppv),
+    max_util = max(res$utility),
+    prec_90r = prec_90r,
+    earliness_90r = earliness_90r,
+    advance_90r = advance_90r
   )
+
+  res <- data.table::setattr(res, "stats", cbind(stats, meta))
+  res <- data.table::setattr(res, "class", c("patient_eval", class(res)))
+
+  res
 }
 
-patient_plot <- function(dat, run = NULL) {
+patient_plot <- function(dat, ..., mod_col = "predictor", rep_col = NULL) {
 
-  if (!inherits(dat, "eval")) {
-    dat <- patient_eval(dat)
+  interpolate <- function(x, ...) {
+    x <- x[, suppressWarnings(
+      approx(x, y, seq(0, 1, length.out = 1e3), ...)
+    ), by = c("mod", "rep")]
+    x[!is.na(y), list(y_min = min(y), y_med = median(y), y_max = max(y)),
+      by = c("mod", "x")]
   }
 
-  assert_that(inherits(dat, "eval"))
+  plot_ribbon <- function(x, has_reps) {
+    if (has_reps) {
+      ggplot(x, aes(x = x, y = y_med)) +
+        geom_ribbon(aes(ymin = y_min, ymax = y_max, group = mod), alpha = 0.25,
+                    fill = "grey25", na.rm = TRUE)
+    } else {
+      ggplot(x, aes(x = x, y = y))
+    } +
+    geom_smooth(aes(color = mod), stat = "identity", size = 0.5,
+                na.rm = TRUE) +
+      theme_bw()
+  }
 
-  roc <- ggplot(dat$dat, aes(x = 1-spec, y = sens)) +
-    geom_line(color = "blue") +
-    theme_bw() + ylim(c(0, 1)) + xlim(c(0,1)) +
-    geom_abline(slope = 1, intercept = 0, linetype = "dotdash") +
-    ggtitle(
-      paste0("ROC curve of ", run, " with AUROC ", round(dat$auroc, 4))
+  summarize <- function(x, has_reps) {
+    x <- signif(x, 3)
+    if (has_reps) {
+      paste0(median(x), " (", min(x), " - ", max(x), ")")
+    } else {
+      paste(x)
+    }
+  }
+
+  sum2 <- function(x) {
+    paste(c("AUROC", "AUPRC", "Prec. @90R", "Earl. @90R"), x, sep = ": ",
+          collapse = ", ")
+  }
+
+  if (!inherits(dat, "patient_eval")) {
+    dat <- patient_eval(dat, ...)
+  }
+
+  assert_that(inherits(dat, "patient_eval"))
+
+  meta <- attr(dat, "stats")
+
+  assert_that(length(unique(meta$test_src)) == 1L)
+
+  if (is.null(rep_col)) {
+
+    roc <- dat[, list(x = 1 - spec, y = sens, mod = get(mod_col))]
+    prc <- dat[, list(x = sens, y = ppv, mod = get(mod_col))]
+    phy <- dat[, list(x = threshold, y = utility, mod = get(mod_col))]
+    erl <- dat[, list(x = sens, y = earliness, mod = get(mod_col))]
+
+  } else {
+
+    roc <- interpolate(
+      dat[, list(x = 1 - spec, y = sens, mod = get(mod_col),
+                 rep = get(rep_col))],
+      yleft = 0, yright = 1
     )
 
-  prc <- ggplot(dat$dat, aes(x = sens, y = ppv)) + geom_line(color = "red") +
-    theme_bw() + ylim(c(0, 1)) +
-    geom_hline(yintercept = dat$prop_sep, linetype = "dotdash") +
-    ggtitle(
-      paste0("AUPRC ", round(dat$auprc, 4), "; At 90% rec. precision ",
-             round(dat$prec_90r*100, 2), "%")
-    ) +
-    geom_vline(xintercept = 0.9, linetype = "dashed", color = "red")
+    prc <- interpolate(
+      dat[sens > 0, list(x = sens, y = ppv, mod = get(mod_col),
+                         rep = get(rep_col))],
+      yleft = 1, yright = meta[["prop_sep"]][1L]
+    )
 
-  earl <- ggplot(dat$dat, aes(x = sens, y = earliness)) +
-    geom_line(color = "green") + theme_bw() +
-    ggtitle(
-      paste0("At 90% rec. med. earl. ",
-             round(dat$earliness_90r, 2), "; ",
-             round(dat$advance_90r*100, 2), "% >=2h before"
-            )
-    ) +
-    geom_vline(xintercept = 0.9, linetype = "dashed", color = "red")
+    phy <- interpolate(
+      dat[, list(x = threshold, y = utility, mod = get(mod_col),
+                 rep = get(rep_col))]
+    )
 
-  phys <- ggplot(dat$dat, aes(x = threshold, y = utility)) +
-    geom_line(color = "pink") + theme_bw() +
-    ggtitle(paste0("Utility curve with maximum ", round(dat$max_util, 4)))
+    erl <- interpolate(
+      dat[, list(x = sens, y = earliness, mod = get(mod_col),
+                 rep = get(rep_col))]
+    )
+  }
 
-  cowplot::plot_grid(roc, prc, earl, phys, ncol = 2L, labels = "auto")
+  roc <- plot_ribbon(roc, !is.null(rep_col)) +
+    ylim(c(0, 1)) + xlim(c(0, 1)) +
+    ylab("Sensitivity") + xlab("1 - Specificity") +
+    geom_abline(slope = 1, intercept = 0, colour = "grey", linetype = 3)
+
+  prc <- plot_ribbon(prc, !is.null(rep_col)) +
+    ylim(c(0, 1)) + xlim(c(0, 1)) +
+    ylab("Precision") + xlab("Recall") +
+    geom_hline(yintercept = meta[["prop_sep"]][1L], colour = "grey",
+               linetype = 3)
+
+  phy <- plot_ribbon(phy, !is.null(rep_col)) +
+    ylab("Utility") + xlab("Threshold")
+
+
+  erl <- plot_ribbon(erl, !is.null(rep_col)) +
+    xlim(c(0, 1)) +
+    ylab("Earliness") + xlab("Recall") +
+    geom_vline(xintercept = 0.9, colour = "grey", linetype = 3)
+
+  meta <- meta[, list(stats = sum2(lapply(.SD, summarize, !is.null(rep_col)))),
+    by = mod_col,
+    .SDcols = c("auroc", "auprc", "prec_90r", "earliness_90r")
+  ]
+
+  leg <- paste0(meta[[mod_col]], ": ", meta[["stats"]])
+  leg <- cowplot::get_legend(
+    roc +
+      scale_colour_discrete("Model", breaks = meta[[mod_col]], labels = leg) +
+      guides(color = guide_legend(ncol = 1L)) +
+      theme(legend.position = "bottom")
+  )
+
+  res <- cowplot::plot_grid(
+    roc + theme(legend.position = "none"),
+    prc + theme(legend.position = "none"),
+    phy + theme(legend.position = "none"),
+    erl + theme(legend.position = "none"),
+    ncol = 2L, labels = "auto"
+  )
+
+  cowplot::plot_grid(res, leg, ncol = 1, rel_heights = c(2, nrow(meta) * 0.1))
 }
 
 read_res <- function(train_src = "mimic_demo", test_src = train_src,
                      feat_set = c("basic", "wav", "sig", "full"),
                      predictor = c("linear", "rf"),
-                     target = c("class", "hybrid", "reg"),
+                     target = c("class", "hybrid", "reg"), split = "split_0",
                      dir = data_path("res"), jobid = NULL) {
+
+  rep_any <- function(x) rep(any(x), length(x))
 
   if (is.null(jobid)) {
 
     dir <- paste0("^", file.path(dir, "model_"), "[0-9]+")
     dir <- grep(dir, list.dirs(dir), value =TRUE)
-    dir <- tail(dir, n = 1L)
-
-    jobid <- sub("^model_", "", basename(dir))
 
   } else {
 
-    dir <- file.path(dir, paste0("model_", jobid))
+    dir <- list.files(dir, jobid, full.names = TRUE, include.dirs = TRUE)
+    dir <- dir[vapply(dir, is.dir, logical(1L))]
   }
+
+  dir <- tail(dir, n = 1L)
 
   assert_that(dir.exists(dir))
 
   fil <- list.files(dir,
-    paste(predictor, target, feat_set, train_src, test_src, sep = "-"),
+    paste(predictor, target, feat_set, train_src, split, test_src, sep = "-"),
     full.names = TRUE
   )
 
@@ -192,14 +288,30 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
 
   util <- if (length(res$utility)) res$utility else res$labels
 
-  res <- data.frame(
+  data.table::data.table(
     stay_id = rep(as.integer(res$ids), lengths(res$times)),
-    stay_time = do.call(c, res$times),
+    stay_time = hours(do.call(c, res$times)),
     prediction = do.call(c, res$scores),
     label = do.call(c, res$labels),
     utility = do.call(c, util),
-    onset = rep(as.integer(res$onset), lengths(res$times))
+    onset = hours(rep(as.integer(res$onset), lengths(res$times))),
+    is_case = do.call(c, lapply(res$labels, rep_any)),
+    train_src = train_src,
+    test_src = test_src,
+    feat_set = feat_set,
+    predictor = predictor,
+    target = target,
+    split = split
   )
+}
 
-  try_id_tbl(res)
+read_ress <- function(...) {
+
+  call_do <- function(args, what) do.call(what, args)
+
+  combos <- expand.grid(..., KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+  colnames(combos) <- names(list(...))
+  combos <- split(combos, seq_len(nrow(combos)))
+
+  data.table::rbindlist(lapply(combos, call_do, read_res))
 }
