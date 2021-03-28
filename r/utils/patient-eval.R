@@ -1,6 +1,7 @@
 
 patient_eval <- function(dat, split_cols = NULL, earl_loc = median,
-                         prob_grid = c(0.001, seq(0.01, 0.99, 0.01), 0.999)) {
+                         prob_grid = c(0.001, seq(0.01, 0.99, 0.01), 0.999),
+                         unique_cols = split_cols) {
 
   integrate <- function(x, y) {
 
@@ -22,7 +23,8 @@ patient_eval <- function(dat, split_cols = NULL, earl_loc = median,
   if (!is.null(split_cols)) {
 
     dat <- split(dat, by = split_cols)
-    res <- lapply(dat, patient_eval, earl_loc = earl_loc)
+    res <- lapply(dat, patient_eval, earl_loc = earl_loc,
+                  prob_grid = prob_grid, unique_cols = unique_cols)
 
     atr <- data.table::rbindlist(lapply(res, attr, "stats"))
     res <- data.table::rbindlist(res)
@@ -33,8 +35,10 @@ patient_eval <- function(dat, split_cols = NULL, earl_loc = median,
     return(res)
   }
 
-  meta <- unique(dat[, c("train_src", "test_src", "feat_set", "predictor",
-                         "target", "split"), with = FALSE])
+  meta <- unique(dat[,
+    unique(c("train_src", "test_src", "feat_set", "predictor",
+             "target", "split", unique_cols)), with = FALSE
+  ])
 
   assert_that(nrow(meta) == 1L)
 
@@ -140,15 +144,19 @@ patient_plot <- function(dat, ..., mod_col = "predictor", rep_col = NULL) {
   }
 
   plot_ribbon <- function(x, has_reps) {
+
     if (has_reps) {
-      ggplot(x, aes(x = x, y = y_med)) +
+
+      res <- ggplot(x, aes(x = x, y = y_med)) +
         geom_ribbon(aes(ymin = y_min, ymax = y_max, group = mod), alpha = 0.25,
                     fill = "grey25", na.rm = TRUE)
     } else {
-      ggplot(x, aes(x = x, y = y))
-    } +
-    geom_smooth(aes(color = mod), stat = "identity", size = 0.5,
-                na.rm = TRUE) +
+
+      res <- ggplot(x, aes(x = x, y = y))
+    }
+
+    res + geom_smooth(aes(color = mod), stat = "identity", size = 0.5,
+                      na.rm = TRUE) +
       theme_bw()
   }
 
@@ -258,8 +266,6 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
                      target = c("class", "hybrid", "reg"), split = "split_0",
                      dir = data_path("res"), jobid = NULL) {
 
-  rep_any <- function(x) rep(any(x), length(x))
-
   if (is.null(jobid)) {
 
     dir <- paste0("^", file.path(dir, "model_"), "[0-9]+")
@@ -295,7 +301,7 @@ read_res <- function(train_src = "mimic_demo", test_src = train_src,
     label = do.call(c, res$labels),
     utility = do.call(c, util),
     onset = hours(rep(as.integer(res$onset), lengths(res$times))),
-    is_case = do.call(c, lapply(res$labels, rep_any)),
+    is_case = rep(!is.na(res$onset), lengths(res$times)),
     train_src = train_src,
     test_src = test_src,
     feat_set = feat_set,
