@@ -54,10 +54,10 @@ def expand_time(instance, transform_each=lambda a: a,
                 {
                     # ts values
                     **{key: value[:i] for key, value in instance.items()
-                       if hasattr(value, '__len__')},
+                       if hasattr(value, '__len__') and key != 'statics'},
                     # non-ts values
                     **{key: value for key, value in instance.items()
-                       if not hasattr(value, '__len__')},
+                       if (not hasattr(value, '__len__')) or key == 'statics'},
                 }
             ))
     return instances_out
