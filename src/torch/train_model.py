@@ -7,6 +7,7 @@ import sys
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
+import torch
 import wandb
 
 sys.path.append(os.getcwd()) # hack for executing module as script (for wandb)
@@ -109,6 +110,7 @@ def main(hparams, model_cls):
         loaded_model,
         getattr(src.torch.datasets, hparams.dataset, 'validation'),
         'validation',
+        device='cuda' if torch.cuda.is_available() else 'cpu'
         #feature_set=hparams.feature_set
     )
     results['validation_masked'] = masked_result
