@@ -104,14 +104,14 @@ def main(hparams, model_cls):
     #            results[prefix][name.split('/')[1]] = value
 
     ##TODO: issue in expand_time in online_eval! --> skipping for now
-    ##from src.torch.eval_model import online_eval
-    ##masked_result = online_eval(
-    ##    loaded_model,
-    ##    getattr(src.torch.datasets, hparams.dataset, 'validation'),
-    ##    'validation',
-    ##    #feature_set=hparams.feature_set
-    ##)
-    ##results['validation_masked'] = masked_result
+    from src.torch.eval_model import online_eval
+    masked_result = online_eval(
+        loaded_model,
+        getattr(src.torch.datasets, hparams.dataset, 'validation'),
+        'validation',
+        #feature_set=hparams.feature_set
+    )
+    results['validation_masked'] = masked_result
 
     #with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
     #    json.dump(results, f, cls=JsonEncoder)
