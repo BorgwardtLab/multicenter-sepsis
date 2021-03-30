@@ -130,6 +130,7 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
     scores = []
     predictions = []
     ids = []
+    times = []
 
     model.eval()
     with torch.no_grad():
@@ -138,15 +139,26 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                     zip(dataloader, dataloader_um),
                     desc='Masked evaluation',
                     total=len(dataloader)):
-                data, length, label = batch['ts'], batch['lengths'], batch['labels']
-                data_um, length_um, label_um = (
-                    batch_um['ts'], batch_um['lengths'], batch_um['labels'])
+                time, data, length, label = (
+                    batch['times'],
+                    batch['ts'],
+                    batch['lengths'],
+                    batch['labels']
+                )
+                time_um, data_um, length_um, label_um = (
+                    batch_um['times'],
+                    batch_um['ts'],
+                    batch_um['lengths'],
+                    batch_um['labels']
+                )
                 last_index = length - 1
                 batch_index = np.arange(len(label))
+                # Apply model
                 output = model(data.to(device), length.to(device))
+                pred = output[(batch_index, last_index)][:, 0]
                 output_um = model(data_um.to(device), length_um.to(device))
                 labels.append(label[(batch_index, last_index)].numpy())
-                pred = output[(batch_index, last_index)][:, 0]
+                times.append(time[(batch_index, last_index)].numpy())
                 scores.append(torch.sigmoid(pred).cpu().numpy())
                 predictions.append((scores[-1] >= 0.5).astype(int))
                 ids.append(int(batch_um['id'].cpu().numpy()[0]))
@@ -154,11 +166,17 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                 ), output_um[..., 0].cpu().numpy(), atol=1e-6)
         else:
             for batch in tqdm(dataloader, desc='Masked evaluation', total=len(dataloader)):
-                data, length, label = batch['ts'], batch['lengths'], batch['labels']
+                time, data, length, label = (
+                    batch['times'],
+                    batch['ts'],
+                    batch['lengths'],
+                    batch['labels']
+                )
                 last_index = length - 1
                 batch_index = np.arange(len(label))
                 output = model(data.to(device), length.to(device))
                 labels.append(label[(batch_index, last_index)].numpy())
+                times.append(time[(batch_index, last_index)]).numpy()
                 pred = output[(batch_index, last_index)][:, 0]
                 scores.append(torch.sigmoid(pred).cpu().numpy())
                 predictions.append((scores[-1] >= 0.5).astype(int))
@@ -180,6 +198,7 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
     output['labels'] = [el.tolist() for el in labels]
     output['scores'] = [el.tolist() for el in scores]
     output['predictions'] = [el.tolist() for el in predictions]
+    output['times'] = [el.tolist() for el in times]
     output['ids'] = ids  # [el.tolist() for el in ids]
     return output
 
@@ -237,7 +256,7 @@ def main(run_folder, dataset, split, checkpoint_path, output):
 
     print({
         key: value for key, value in out.items()
-        if key not in ['labels', 'predictions', 'scores', 'ids']
+        if key not in ['labels', 'predictions', 'scores', 'ids', 'times']
     })
 
     if output is not None:
