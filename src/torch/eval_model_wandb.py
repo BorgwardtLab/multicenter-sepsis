@@ -52,7 +52,7 @@ def main(run_id, dataset, split, output):
 
     print({
         key: value for key, value in out.items()
-        if key not in ['labels', 'predictions', 'scores', 'ids']
+        if key not in ['targets', 'labels', 'predictions', 'scores', 'ids', 'times']
     })
 
     if output is not None:

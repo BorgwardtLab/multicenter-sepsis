@@ -327,7 +327,7 @@ class LabelPropagation():
             new_onset_segment[np.isnan(old_onset_segment)] = np.NaN
             new_label = np.concatenate(
                 [label[:new_onset], new_onset_segment], axis=0)
-            instance['labels'] = new_label
+            instance['targets'] = new_label
         return instance
 
 

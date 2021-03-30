@@ -127,6 +127,7 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
         )
 
     labels = []
+    targets = []   # The target are the shifted labels
     scores = []
     predictions = []
     ids = []
@@ -139,17 +140,16 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                     zip(dataloader, dataloader_um),
                     desc='Masked evaluation',
                     total=len(dataloader)):
-                time, data, length, label = (
+                time, data, length, label, target = (
                     batch['times'],
                     batch['ts'],
                     batch['lengths'],
-                    batch['labels']
+                    batch['labels'],
+                    batch['targets']
                 )
-                time_um, data_um, length_um, label_um = (
-                    batch_um['times'],
+                data_um, length_um = (
                     batch_um['ts'],
-                    batch_um['lengths'],
-                    batch_um['labels']
+                    batch_um['lengths']
                 )
                 last_index = length - 1
                 batch_index = np.arange(len(label))
@@ -158,28 +158,35 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                 pred = output[(batch_index, last_index)][:, 0]
                 output_um = model(data_um.to(device), length_um.to(device))
                 labels.append(label[(batch_index, last_index)].numpy())
+                targets.append(target[(batch_index, last_index)].numpy())
                 times.append(time[(batch_index, last_index)].numpy())
-                scores.append(torch.sigmoid(pred).cpu().numpy())
-                predictions.append((scores[-1] >= 0.5).astype(int))
+                scores.append(pred)
+                # For both the regression target and logits this should be the
+                # correct way to predict
+                predictions.append((pred >= 0.).astype(int))
                 ids.append(int(batch_um['id'].cpu().numpy()[0]))
                 assert np.allclose(pred.cpu().numpy(
                 ), output_um[..., 0].cpu().numpy(), atol=1e-6)
         else:
             for batch in tqdm(dataloader, desc='Masked evaluation', total=len(dataloader)):
-                time, data, length, label = (
+                time, data, length, label, target = (
                     batch['times'],
                     batch['ts'],
                     batch['lengths'],
-                    batch['labels']
+                    batch['labels'],
+                    batch['targets']
                 )
                 last_index = length - 1
                 batch_index = np.arange(len(label))
                 output = model(data.to(device), length.to(device))
                 labels.append(label[(batch_index, last_index)].numpy())
-                times.append(time[(batch_index, last_index)]).numpy()
-                pred = output[(batch_index, last_index)][:, 0]
-                scores.append(torch.sigmoid(pred).cpu().numpy())
-                predictions.append((scores[-1] >= 0.5).astype(int))
+                targets.append(target[(batch_index, last_index)].numpy())
+                times.append(time[(batch_index, last_index)].numpy())
+                pred = output[(batch_index, last_index)][:, 0].cpu().numpy()
+                scores.append(pred)
+                # For both the regression target and logits this should be the
+                # correct way to predict
+                predictions.append((pred >= 0.).astype(int))
                 ids.append(int(batch['id'][0].cpu().numpy()))
     scores_fns = {
         'auroc': concat(roc_auc_score),
@@ -188,7 +195,9 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
         'physionet2019_score':
             scores_to_pred(partial(
                 physionet2019_utility,
-                shift_labels=model.hparams.label_propagation
+                # We are evaluating on labels and not targets, so we don't need
+                # to undo the shift.
+                shift_labels=0
             ))
     }
 
@@ -196,6 +205,7 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
     output = {name: fn(labels, scores) for name, fn in scores_fns.items()}
     # Add predictions
     output['labels'] = [el.tolist() for el in labels]
+    output['targets'] = [el.tolist() for el in targets]
     output['scores'] = [el.tolist() for el in scores]
     output['predictions'] = [el.tolist() for el in predictions]
     output['times'] = [el.tolist() for el in times]
@@ -256,7 +266,7 @@ def main(run_folder, dataset, split, checkpoint_path, output):
 
     print({
         key: value for key, value in out.items()
-        if key not in ['labels', 'predictions', 'scores', 'ids', 'times']
+        if key not in ['targets', 'labels', 'predictions', 'scores', 'ids', 'times']
     })
 
     if output is not None:
