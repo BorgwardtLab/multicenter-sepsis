@@ -165,7 +165,7 @@ class BaseModel(pl.LightningModule):
         )
         physionet_score = physionet2019_utility(
             labels, predictions,
-            shift_labels=shift_labels, self.lam)
+            shift_labels=shift_labels, lam=self.lam)
 
         # Scores below require flattened predictions
         labels = np.concatenate(labels, axis=0)
