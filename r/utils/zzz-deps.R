@@ -1,7 +1,7 @@
 
 pkgs <- c("here", "arrow", "bigmemory", "jsonlite", "data.table", "readr",
           "optparse", "assertthat", "cli", "ricu", "memuse", "dplyr",
-          "biglasso", "ranger", "qs", "lightgbm", "cowplot")
+          "biglasso", "ranger", "qs", "lightgbm", "cowplot", "roll")
 
 if (!all(vapply(pkgs, requireNamespace, logical(1L)))) {
   stop("Packages {pkgs} are required in order to proceed.")

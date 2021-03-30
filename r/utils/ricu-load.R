@@ -1,5 +1,5 @@
 
-eicu_hosp_coh <- function(sep, coh, thresh = 0.05) {
+eicu_hosp_coh <- function(sep, coh, thresh = 0.1) {
 
   assert(is.numeric(thresh), is.scalar(thresh), thresh > 0, thresh < 1)
 
@@ -332,48 +332,12 @@ augment <- function(x, fun, suffix,
 
   if (is.character(fun)) {
 
-    if (is.numeric(win)) {
-      win <- as.difftime(win, units = "hours")
-    }
+    win <- ceiling(win / as.double(interval(x)))
+    fun <- switch(fun, min = roll::roll_min,  max = roll::roll_max,
+                      mean = roll::roll_mean, var = roll::roll_var)
 
-    assert_that(is.null(by))
-
-    inf_to_na <- function(x) replace(x, is.infinite(x), NA)
-    nan_to_na <- function(x) replace(x, is.nan(x), NA)
-
-    ival  <- interval(x)
-    idcol <- id_vars(x)
-
-    win <- as.double(win, units = units(ival))
-
-    lags <- seq_len(
-      ceiling(win / as.double(ival)) + 1L
-    ) - 1L
-
-    funs <- c(
-      min = function(x) inf_to_na(matrixStats::rowMins(x, na.rm = TRUE)),
-      max = function(x) inf_to_na(matrixStats::rowMaxs(x, na.rm = TRUE)),
-      mean = function(x) nan_to_na(rowMeans(x, na.rm = TRUE)),
-      var = function(x) matrixStats::rowVars(x, na.rm = TRUE)
-    )[fun]
-
-    assert_that(all(vapply(funs, is.function, logical(1L))))
-
-    for (col in cols) {
-
-      targ_col <- paste0(sub("_raw$", "", col), "_", fun, as.integer(win),
-                         suffix)
-
-      tmp <- x[, data.table::shift(get(col), lags), by = c(idcol)]
-      tmp <- tmp[, c(idcol) := NULL]
-      tmp <- as.matrix(tmp)
-
-      for (i in seq_along(fun)) {
-        x <- data.table::set(x, j = targ_col[i], value = funs[[i]](tmp))
-      }
-
-      rm(tmp)
-    }
+    x <- x[, c(names) := lapply(.SD, fun, win, min_obs = 1),
+           .SDcols = cols, by = c(id_vars(x))]
 
   } else {
 
@@ -597,14 +561,17 @@ train_stats <- function(x, train_ids) {
     )
 
     for (col in cols) {
-      norm[[split]]$means[col] <- mean(x[[col]][hit_rows], na.rm = TRUE)
-      norm[[split]]$stds[col]  <- sd(x[[col]][hit_rows], na.rm = TRUE)
+      tmp <- x[[col]][hit_rows]
+      norm[[split]]$means[col] <- mean(tmp, na.rm = TRUE)
+      norm[[split]]$stds[col]  <- sd(  tmp, na.rm = TRUE)
     }
 
-    lamb[[split]] <- lambda_calc(
-      x[hit_rows, c("is_case", "pos_utility", "neg_utility",
-                      "opt_utility"), with = FALSE]
-    )
+    tmp <- x[, list(is_case, pos_utility, neg_utility, opt_utility)]
+    tmp <- x[hit_rows, ]
+
+    lamb[[split]] <- lambda_calc(tmp)
+
+    rm(tmp)
   }
 
   list(normalization = norm, lambda = lamb)
@@ -616,6 +583,15 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   augment_prof <- function(name, ...) {
     msg("--> augmentation step {name}")
     prof(augment(...))
+  }
+
+  lbk_wrap <- function(win, x) {
+
+    for (fun in c("min", "max", "mean", "var")) {
+      x <- augment(x, fun, paste0(fun, as.integer(win), "lbk"), win = win)
+    }
+
+    x
   }
 
   old_opts <- options(datatable.alloccol = 2048L)
@@ -666,8 +642,8 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
     dat <- prof(derived_feats(dat))
 
     for (win in hours(c(4L, 8L, 16L))) {
-      dat <- augment_prof(paste("lbk", win), dat,
-                          c("min", "max", "mean", "var"), "lbk", win = win)
+      msg("--> augmentation step lbk{as.integer(win)}")
+      dat <- prof(lbk_wrap(win, dat))
     }
 
     msg("--> train set stats calculation")
