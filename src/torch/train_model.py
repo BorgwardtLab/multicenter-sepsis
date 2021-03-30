@@ -155,6 +155,8 @@ if __name__ == '__main__':
                         default=False)
     parser.add_argument('--task', type=str,
                         default='classification')
+    parser.add_argument('--cost', type=int, default=5,
+                        help='cost parameter for lambda')
 
     # parser.add_argument(
     #     '--feature-set', default='all',
@@ -177,6 +179,7 @@ if __name__ == '__main__':
 
     parser = model_cls.add_model_specific_args(parser)
     hparams = parser.parse_args()
+    hparams.dataset_kwargs = {'cost': hparams.cost}
     #if hparams.hyperparam_draws > 0:
     #    for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
     #        print(hyperparam_draw)

@@ -28,7 +28,8 @@ class BaseModel(pl.LightningModule):
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
-            transform=ComposeTransformations(self.transforms)
+            transform=ComposeTransformations(self.transforms),
+            **self.dataset_kwargs
         )
         return int(data[0]['ts'].shape[-1])
 
@@ -49,14 +50,17 @@ class BaseModel(pl.LightningModule):
         }
 
     def __init__(self, dataset, pos_weight, label_propagation, learning_rate,
-                 batch_size, weight_decay, task='classification', **kwargs):
+                 batch_size, weight_decay, task='classification', 
+                 dataset_kwargs={}, **kwargs):
         super().__init__()
         self.save_hyperparameters()
         self.dataset_cls = getattr(src.torch.datasets, self.hparams.dataset)
-        d = self.dataset_cls(split='train')
+        d = self.dataset_cls(split='train', **dataset_kwargs)
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
         self.loss, self.label_key, self.activation_fn = self._get_loss_label_and_act_fn_for_task(task, d)
         self.task = task
+        self.dataset_kwargs = dataset_kwargs
+        self.lam = d.lam
     
     def _get_loss_label_and_act_fn_for_task(self, task, d):
         """determine loss function, label key and final activation fn for given task"""
@@ -163,9 +167,8 @@ class BaseModel(pl.LightningModule):
                 predictions.append(pred[:first_invalid_label])
                 scores.append(score[:first_invalid_label])
 
-        #TODO: add lambda here!
         physionet_score = physionet2019_utility(
-            labels, predictions, shift_labels=self.hparams.label_propagation)
+            labels, predictions, shift_labels=self.hparams.label_propagation, lam=self.lam)
         # Scores below require flattened predictions
         labels = np.concatenate(labels, axis=0)
         is_valid = ~np.isnan(labels)
@@ -222,7 +225,8 @@ class BaseModel(pl.LightningModule):
             Subset(
                 self.dataset_cls(
                     split='train',
-                    transform=ComposeTransformations(self.transforms)
+                    transform=ComposeTransformations(self.transforms),
+                    **self.dataset_kwargs
                 ),
                 self.train_indices
             ),
@@ -239,7 +243,8 @@ class BaseModel(pl.LightningModule):
             Subset(
                 self.dataset_cls(
                     split='train',
-                    transform=ComposeTransformations(self.transforms)
+                    transform=ComposeTransformations(self.transforms),
+                    **self.dataset_kwargs
                 ),
                 self.val_indices
             ),
@@ -255,7 +260,8 @@ class BaseModel(pl.LightningModule):
         return DataLoader(
             self.dataset_cls(
                 split='validation',
-                transform=ComposeTransformations(self.transforms)
+                transform=ComposeTransformations(self.transforms),
+                **self.dataset_kwargs
             ),
             shuffle=False,
             collate_fn=variable_length_collate,
