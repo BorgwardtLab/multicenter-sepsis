@@ -7,6 +7,7 @@ import sys
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
+import torch
 import wandb
 
 sys.path.append(os.getcwd()) # hack for executing module as script (for wandb)
@@ -71,7 +72,7 @@ def main(hparams, model_cls):
         dirpath=wandb_logger.experiment.dir #checkpoint_dir
     )
     early_stopping_cb = EarlyStopping(
-        monitor=monitor_score, patience=10, mode=monitor_mode, strict=True,
+        monitor=monitor_score, patience=20, mode=monitor_mode, strict=True,
         verbose=1)
 
     # most basic trainer, uses good defaults
@@ -104,14 +105,15 @@ def main(hparams, model_cls):
     #            results[prefix][name.split('/')[1]] = value
 
     ##TODO: issue in expand_time in online_eval! --> skipping for now
-    ##from src.torch.eval_model import online_eval
-    ##masked_result = online_eval(
-    ##    loaded_model,
-    ##    getattr(src.torch.datasets, hparams.dataset, 'validation'),
-    ##    'validation',
-    ##    #feature_set=hparams.feature_set
-    ##)
-    ##results['validation_masked'] = masked_result
+    from src.torch.eval_model import online_eval
+    masked_result = online_eval(
+        loaded_model,
+        getattr(src.torch.datasets, hparams.dataset, 'validation'),
+        'validation',
+        device='cuda' if torch.cuda.is_available() else 'cpu'
+        #feature_set=hparams.feature_set
+    )
+    results['validation_masked'] = masked_result
 
     #with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
     #    json.dump(results, f, cls=JsonEncoder)

@@ -5,12 +5,12 @@ output_dir=$2 #intermediate results are written folders of this name
 base_dir=results
 eval_dir=${base_dir}/evaluation
 
-train_dataset=aumc #mimic
-eval_dataset=aumc #mimic
-method=lgbm
-task=regression
+train_dataset=aumc #aumc #mimic
+eval_dataset=aumc #aumc #mimic
+method=rf #lgbm
+task=classification #classification 
 feature_set=middle #large
-cost=5 #lambda cost
+cost=0 #lambda cost
 earliness=median
 
 # here we write out the predictions as json
@@ -43,4 +43,5 @@ python -m src.evaluation.patient_evaluation \
 python scripts/plots/plot_patient_eval.py \
     --input_path $eval_file  \
     --output_path results/evaluation/plots \
-    --earliness-stat $earliness
+    --earliness-stat $earliness \
+    --predictions_path $pred_file

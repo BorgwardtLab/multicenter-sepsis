@@ -139,9 +139,28 @@ def get_pipeline_and_grid(args):
             'est__learning_rate': [0.001, 0.01, 0.1, 0.5],
             'est__num_leaves': [30, 50, 100],
         }
-        if args.task == 'classification':
-            param_dist['est__scale_pos_weight'] = [1, 10, 20, 50, 100]
+        #if args.task == 'classification':
+        #    param_dist['est__scale_pos_weight'] = [1, 10, 20, 50, 100]
         return pipe, param_dist
+    elif method_name == 'rf':
+        from sklearn.ensemble import RandomForestClassifier as RF
+        parameters = {'n_jobs': -1}
+        parameters.update(clf_params)
+        if task == 'classification':
+            est = RF(**parameters)
+        else:
+            raise NotImplementedError('Only classification implemented for RF')
+        param_dist = {
+              "est__n_estimators": [50, 100, 300, 500, 1000],
+              "est__max_depth": [20,50, None],
+              "est__min_samples_leaf": [10,30,100,1000],
+              "est__bootstrap": [True, False],
+              "est__criterion": ["gini", "entropy"]
+        }
+        steps.append(('est', est))
+        pipe = Pipeline(steps)
+        return pipe, param_dist
+
     # TODO: add baselines (and try LogReg) also
     #elif method_name == 'lr':
     #    from sklearn.linear_model import LogisticRegression as LR
@@ -279,7 +298,7 @@ def main():
     if task == 'classification':
         # for regression task the label shift happens in target calculation
         data = handle_label_shift(args, data)
-   
+ 
     # TODO: add (update) baseline option! 
     ## for baselines: 
     #if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
@@ -291,7 +310,7 @@ def main():
     #    data['X_validation'] = data['baselines_validation']
  
     pipeline, hparam_grid = get_pipeline_and_grid(args)
-    
+     
     if task == 'classification':
         target_name = args.target_name
         if target_name == 'physionet_utility':

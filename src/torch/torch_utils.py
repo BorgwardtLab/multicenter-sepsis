@@ -162,10 +162,8 @@ def variable_length_collate(batch):
                 f'Unexpected dimensionality of instance data: {dims}')
 
         transposed_items[key] = np.stack(padded_instances, axis=0)
-    try:
-        transposed_items['statics'] = np.stack(transposed_items['statics'], axis=0)
-    except: 
-        from IPython import embed; embed()
+    
+    transposed_items['statics'] = np.stack(transposed_items['statics'], axis=0)
     transposed_items['statics'] = \
         transposed_items['statics'].astype(np.float32)
     transposed_items['times'] = transposed_items['times'].astype(np.float32)
