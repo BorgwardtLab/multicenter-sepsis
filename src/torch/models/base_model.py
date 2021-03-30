@@ -163,6 +163,7 @@ class BaseModel(pl.LightningModule):
             self.hparams.label_propagation if self.hparams.task == 'classification'
             else 0
         )
+        #TODO: here labels should be shifted! currently unshifted used:
         physionet_score = physionet2019_utility(
             labels, predictions,
             shift_labels=shift_labels, lam=self.lam)
