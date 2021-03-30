@@ -49,21 +49,36 @@ class BaseModel(pl.LightningModule):
         }
 
     def __init__(self, dataset, pos_weight, label_propagation, learning_rate,
-                 batch_size, weight_decay, **kwargs):
+                 batch_size, weight_decay, task='classification', **kwargs):
         super().__init__()
         self.save_hyperparameters()
         self.dataset_cls = getattr(src.torch.datasets, self.hparams.dataset)
         d = self.dataset_cls(split='train')
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
-        self.loss = torch.nn.BCEWithLogitsLoss(
-            reduction='none',
-            pos_weight=torch.Tensor(
-                [self.hparams.pos_weight * d.class_imbalance_factor])
-        )
-            
+        self.loss, self.label_key, self.activation_fn = self._get_loss_label_and_act_fn_for_task(task, d)
+        self.task = task
+    
+    def _get_loss_label_and_act_fn_for_task(self, task, d):
+        """determine loss function, label key and final activation fn for given task"""
+        if task == 'classification':
+            loss = torch.nn.BCEWithLogitsLoss(
+                reduction='none',
+                pos_weight=torch.Tensor(
+                    [self.hparams.pos_weight * d.class_imbalance_factor])
+            )
+            label_key = 'labels'
+            activation_fn = torch.sigmoid
+        elif task == 'regression':
+            loss = torch.nn.MSELoss(reduction='none')
+            label_key = 'targets'
+            activation_fn = lambda x: x
+        else:
+            raise ValueError(f'{task} is not a valid task among: [classification, regression]')
+        return loss, label_key, activation_fn 
+    
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
-        data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
+        data, lengths, labels = batch['ts'], batch['lengths'], batch[self.label_key]
         output = self.forward(data, lengths).squeeze(-1)
         invalid_indices = torch.isnan(labels)
         labels[invalid_indices] = 0.
@@ -106,8 +121,8 @@ class BaseModel(pl.LightningModule):
         # per_instance_loss = loss.sum(-1) / n_tp.float()
         n_tp = n_tp.sum()
         per_tp_loss = loss.sum() / n_tp.float()
+        scores = self.activation_fn(output)
 
-        scores = torch.sigmoid(output)
         return {
             f'{prefix}_loss': per_tp_loss.detach(),
             f'{prefix}_n_tp': n_tp,
@@ -132,7 +147,12 @@ class BaseModel(pl.LightningModule):
         for x in outputs:
             cur_labels = x[f'{prefix}_labels']
             cur_scores = x[f'{prefix}_scores']
-            cur_preds = (cur_scores >= 0.5).astype(float)
+            if self.task == 'classification':
+                cur_preds = (cur_scores >= 0.5).astype(float)
+            elif self.task == 'regression':
+                cur_preds = (cur_scores >= 0).astype(float)
+            else:
+                raise ValueError(f'{self.task} is not a valid task: [classification, regression]') 
             for label, pred, score in zip(cur_labels, cur_preds, cur_scores):
                 selection = ~np.isnan(label)
                 # Get index of first invalid label, this allows the labels to
@@ -143,6 +163,7 @@ class BaseModel(pl.LightningModule):
                 predictions.append(pred[:first_invalid_label])
                 scores.append(score[:first_invalid_label])
 
+        #TODO: add lambda here!
         physionet_score = physionet2019_utility(
             labels, predictions, shift_labels=self.hparams.label_propagation)
         # Scores below require flattened predictions
