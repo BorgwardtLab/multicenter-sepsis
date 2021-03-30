@@ -21,7 +21,7 @@ def extract_model_information(run_path, tmp):
             f'Run "{run_path}" does not have a stored checkpoint file.')
 
     model_checksum = compute_md5hash(checkpoint_path)
-    return {
+    return run, {
         "model": run_info['model'],
         "run_id": run_path,
         "model_path": checkpoint_path,
@@ -31,11 +31,11 @@ def extract_model_information(run_path, tmp):
     }
 
 
-def main(run_folder, dataset, split, output):
+def main(run_id, dataset, split, output):
     """Main function to evaluate a model."""
     with tempfile.TemporaryDirectory() as tmp:
         # Download checkpoint to temporary directory
-        out = extract_model_information(run_folder, tmp)
+        run, out = extract_model_information(run_id, tmp)
         out['dataset_eval'] = dataset
         out['split'] = split
 
@@ -46,11 +46,13 @@ def main(run_folder, dataset, split, output):
             dataset=dataset
         )
     model.to(device)
-    out.update(online_eval(model, dataset_cls, split, check_matching_unmasked=True))
+    eval_results = online_eval(
+        model, dataset_cls, split, check_matching_unmasked=True)
+    out.update(eval_results)
 
     print({
         key: value for key, value in out.items()
-        if key not in ['labels', 'predictions', 'scores', 'ids']
+        if key not in ['targets', 'labels', 'predictions', 'scores', 'ids', 'times']
     })
 
     if output is not None:
