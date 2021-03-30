@@ -122,6 +122,16 @@ class ColumnFilter:
              #'_mean',
              #'_median',
              #'_min',
+        elif name == 'raw':
+            used_groups  = [ 
+             '_id',
+             '_raw',
+             '_time',
+             'height',
+             'weight',
+             'age',
+             #'female',
+            ]
         else:
             raise ValueError('No valid feature set name provied [large, small]') 
         if groups:
@@ -204,7 +214,7 @@ if __name__ == "__main__":
     dataset_name = args.dataset 
     path = f'datasets/{dataset_name}/data/parquet/features'
 
-    feature_sets = ['large', 'small', 'middle']
+    feature_sets = ['large', 'small', 'middle', 'raw']
     variable_sets = ['full', 'physionet']
 
     cf = ColumnFilter(path=path)
@@ -216,7 +226,7 @@ if __name__ == "__main__":
             columns = cf.feature_set(name=feature_set, groups=False) 
             if variable_set == 'physionet':
                 # reduce columns and then adjust groups:
-                columns = cf.physionet_set(columns, feature_set=feature_set) 
+                columns = cf.physionet_set(feature_set=feature_set) 
                 groups = cf.columns_to_groups(columns)     
             output['groups'] = groups; output['columns'] = columns 
             result[variable_set][feature_set] = output 
