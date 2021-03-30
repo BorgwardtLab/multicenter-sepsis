@@ -46,7 +46,7 @@ def main(run_folder, dataset, split, output):
             dataset=dataset
         )
     model.to(device)
-    out.update(online_eval(model, dataset_cls, split))
+    out.update(online_eval(model, dataset_cls, split, check_matching_unmasked=True))
 
     print({
         key: value for key, value in out.items()
