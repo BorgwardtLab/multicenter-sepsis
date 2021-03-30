@@ -107,7 +107,7 @@ def main(input_filename, split_filename, output_filename, n_workers, feature_set
         split_row_groups=5  # This assumes that there are approx 100 rows per row group
     )
     data = data.set_index(VM_DEFAULT("id"), sorted=True, shuffle='disk') #disk
-    
+     
     #all_ids = read_total_patients(split_filename)
     #lost = set(all_ids).difference(data.index.unique().compute())
     #print(f'Lost ids after loading: {lost}')
@@ -115,7 +115,9 @@ def main(input_filename, split_filename, output_filename, n_workers, feature_set
     data = data.repartition(divisions=divisions1)
     #lost = set(all_ids).difference(data.index.unique().compute())
     #print(f'Lost ids after repartitioning: {lost}')
- 
+    
+    #data = data.groupby(data.index.name, sort=True, group_keys=False).apply(sort_time) 
+    
     #is_sorted = data.groupby(data.index.name, group_keys=False, sort=False).apply(check_time_sorted)
     #assert all(is_sorted.compute())
 
