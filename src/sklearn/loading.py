@@ -262,6 +262,10 @@ if __name__ == "__main__":
                         help="""if provided transformed df is cached as parquet to this base_dir 
                         in a folder {dump_name}_cache/{split}_{rep}""", 
                         default=None)
+    parser.add_argument('--cost', type=int, 
+                        help='cost parameter in lambda to use',
+                        default=0)
+
     args = parser.parse_args()
     dataset_name = args.dataset
     dump_name = args.dump_name 
@@ -270,10 +274,15 @@ if __name__ == "__main__":
         f'splits_{dataset_name}.json' ) 
     split = args.split 
     rep = args.rep
+    cost = args.cost
     normalizer_path = os.path.join(args.normalizer_path, 
         f'normalizer_{dataset_name}_rep_{rep}.json' )
+    if cost > 0:
+        lam_file = f'lambda_{dataset_name}_rep_{rep}_cost_{cost}.json'
+    else:
+        lam_file = f'lambda_{dataset_name}_rep_{rep}.json'
     lambda_path = os.path.join(args.lambda_path, 
-        f'lambda_{dataset_name}_rep_{rep}.json' ) 
+        lam_file )
  
     df, _ = load_and_transform_data(
         path,
@@ -298,7 +307,7 @@ if __name__ == "__main__":
         os.makedirs(cache_path, exist_ok=True)
         cache_file = os.path.join(
             cache_path,
-            f'{split}_{rep}.parquet'
+            f'{split}_{rep}_cost_{cost}.parquet'
         ) 
         print(f'Caching transformed data to {cache_file}') 
         df.to_parquet(cache_file) 
