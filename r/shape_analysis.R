@@ -4,26 +4,20 @@ invisible(
 )
 
 targs <- paste(
-  rep(c("class", "reg"), each = 100),
-  rep(seq_len(10), 20),
-  rep(rep(seq_len(10), each = 10), 2),
-  sep = "_"
-)
-
-targs <- paste(
-  rep(c("class", "reg"), each = 4),
-  rep(seq_len(2), 4),
-  rep(rep(seq_len(2), each = 2), 2),
+  rep(c("class", "reg"), each = 25),
+  rep(seq.int(1, 10, 2), 10),
+  rep(rep(seq.int(1, 10, 2), each = 5), 2),
   sep = "_"
 )
 
 shp <- read_ress("mimic", feat_set = "locf", predictor = "rf",
-                 target = targs, jobid = "shape")
+                 target = targs, split = paste0("split_", 0:5),
+                 jobid = "shape")
 shp <- shp[,
   c("target", "targ_param_1", "targ_param_2") := data.table::tstrsplit(
     target, "_", fixed = TRUE
 )]
 
-evl <- patient_eval(shp, c("target", "targ_param_1", "targ_param_2"))
+evl <- patient_eval(shp, c("target", "targ_param_1", "targ_param_2", "split"))
 
 attr(evl, "stats")
