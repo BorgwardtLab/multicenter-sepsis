@@ -95,11 +95,15 @@ def load_data_splits(args,
                 [VM_DEFAULT('id'), VM_DEFAULT('time')]
             ) 
         d[f'y_{split}'] = data[label]
-        # unshifted labels for down stream eval
+        # shifted and unshifted labels for down stream eval irrespecive of task:
         d[f'tp_labels_{split}'] = data[VM_DEFAULT('label')]
-        data = data.drop(columns=[VM_DEFAULT('label')])
-        if args.task == 'regression':
-            data = data.drop(columns=[label])
+        d[f'tp_labels_shifted_{split}'] = data[VM_DEFAULT('label')]
+        data = data.drop(columns=[ 
+            VM_DEFAULT('label'), VM_DEFAULT('utility')
+            ], errors='ignore'
+        )
+        #if args.task == 'regression':
+        #    data = data.drop(columns=[label])
         # sanity check as we must not leak any label info to the input data
         assert all( 
             [ VM_DEFAULT(x) not in data.columns 
@@ -318,9 +322,9 @@ def main():
                 target_name: get_physionet2019_scorer(args.label_propagation,
                     kwargs={'lam': lam}    
                 ),
-                #'roc_auc': SCORERS['roc_auc'],
-                #'average_precision': SCORERS['average_precision'],
-                #'balanced_accuracy': SCORERS['balanced_accuracy'],
+                'roc_auc': SCORERS['roc_auc'],
+                'average_precision': SCORERS['average_precision'],
+                'balanced_accuracy': SCORERS['balanced_accuracy'],
             }
         elif target_name in ['roc_auc', 'average_precision']:
             scores = {
@@ -332,7 +336,8 @@ def main():
  
     elif task == 'regression':
         target_name = 'neg_mse'
-        scores = { target_name: SCORERS['neg_mean_squared_error']
+        scores = { 
+                target_name: SCORERS['neg_mean_squared_error'],
         }
     
     random_search = RandomizedSearchCV(
@@ -364,9 +369,20 @@ def main():
     results = {}
     cache = {}
     call = partial(_cached_call, cache)
+    if task == 'regression': #only apply non-regression target scores here
+        # since we have no sep3 label during random_search
+        scores = { 
+                target_name: SCORERS['neg_mean_squared_error'],
+                'roc_auc': SCORERS['roc_auc'],
+                'average_precision': SCORERS['average_precision'],
+        }
     for score_name, scorer in scores.items():
-        results['val_' + score_name] = scorer._score(
-            call, best_estimator, data['X_validation'], data['y_validation'])
+        if task == 'regression' and score_name in ['roc_auc','average_precision']:
+           results['val_' + score_name] = scorer._score(
+                call, best_estimator, data['X_validation'], data['tp_labels_shifted_validation'])
+        else: 
+            results['val_' + score_name] = scorer._score(
+                call, best_estimator, data['X_validation'], data['y_validation'])
     print(results)
     results['method'] = args.method
     results['best_params'] = random_search.best_params_
