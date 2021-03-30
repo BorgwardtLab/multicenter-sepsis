@@ -104,7 +104,6 @@ def main(hparams, model_cls):
     #        if name.startswith(prefix):
     #            results[prefix][name.split('/')[1]] = value
 
-    ##TODO: issue in expand_time in online_eval! --> skipping for now
     from src.torch.eval_model import online_eval
     masked_result = online_eval(
         loaded_model,
@@ -154,6 +153,11 @@ if __name__ == '__main__':
                         default='min')
     parser.add_argument('--indicators', type=bool,
                         default=False)
+    parser.add_argument('--task', type=str,
+                        default='classification')
+    parser.add_argument('--cost', type=int, default=5,
+                        help='cost parameter for lambda')
+
     # parser.add_argument(
     #     '--feature-set', default='all',
     #     help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'
@@ -175,6 +179,7 @@ if __name__ == '__main__':
 
     parser = model_cls.add_model_specific_args(parser)
     hparams = parser.parse_args()
+    hparams.dataset_kwargs = {'cost': hparams.cost}
     #if hparams.hyperparam_draws > 0:
     #    for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
     #        print(hyperparam_draw)

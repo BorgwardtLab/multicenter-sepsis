@@ -73,6 +73,13 @@ class ApplyLambda:
         df[VM_DEFAULT('utility')] = new_target
         return df
 
+class LoadLambda:
+    """ Load lambda to regression target """
+    def __init__(self, lambda_path):
+        with open(lambda_path, 'r') as f:
+            self.lam = json.load(f)['lam']
+
+
 class Impute:
     """ Transform to impute and remove invalid values"""
     def __init__(self, fill_value=0):
@@ -264,9 +271,9 @@ class SplittedDataset(ParquetLoadedDataset):
 class Physionet2019(SplittedDataset):
     """Physionet 2019 dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=True, fold=0, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=True, fold=0, cost=5, transform=None):
         super().__init__(
-            f'datasets/physionet2019/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            f'datasets/physionet2019/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/physionet2019/data/parquet/features_small',
             'config/splits/splits_physionet2019.json',
             split,
@@ -275,27 +282,28 @@ class Physionet2019(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        normalize = Normalize(
-            'config/normalizer/normalizer_physionet2019_rep_{}.json'.format(fold),
-            self.columns
-        )
-        apply_lam = ApplyLambda(
-            lambda_path =  f'config/lambdas/lambda_physionet2019_rep_{fold}.json' 
-        ) 
-        transforms = [
-            normalize,
-            apply_lam,
-            Impute(),
-        ]
-        self.pd_transform = ComposeTransformations(transforms)
+        #normalize = Normalize(
+        #    'config/normalizer/normalizer_physionet2019_rep_{}.json'.format(fold),
+        #    self.columns
+        #)
+        
+        self.lam = LoadLambda(
+            lambda_path =  f'config/lambdas/lambda_physionet2019_rep_{fold}_cost_{cost}.json').lam 
+        
+        #transforms = [
+        #    normalize,
+        #    apply_lam,
+        #    Impute(),
+        #]
+        #self.pd_transform = ComposeTransformations(transforms)
 
 
 class MIMICDemo(SplittedDataset):
     """MIMIC demo dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
         super().__init__(
-            f'datasets/mimic_demo/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            f'datasets/mimic_demo/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             'config/splits/splits_mimic_demo.json',
             split,
             feature_set,
@@ -307,9 +315,8 @@ class MIMICDemo(SplittedDataset):
         #    'config/normalizer/normalizer_mimic_demo_rep_{}.json'.format(fold),
         #    self.columns
         #)
-        #apply_lam = ApplyLambda(
-        #    lambda_path =  f'config/lambdas/lambda_mimic_demo_rep_{fold}.json' 
-        #) 
+        self.lam = LoadLambda(
+            lambda_path =  f'config/lambdas/lambda_mimic_demo_rep_{fold}_cost_{cost}.json' ).lam 
         #transforms = [
         #    normalize,
         #    apply_lam,
@@ -320,9 +327,9 @@ class MIMICDemo(SplittedDataset):
 class MIMIC(SplittedDataset):
     """MIMIC dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
         super().__init__(
-            f'datasets/mimic/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            f'datasets/mimic/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             'config/splits/splits_mimic.json',
             split,
             feature_set,
@@ -334,9 +341,9 @@ class MIMIC(SplittedDataset):
         #    'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold),
         #    self.columns
         #)
-        #apply_lam = ApplyLambda(
-        #    lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}.json' 
-        #) 
+        self.lam = LoadLambda(
+            lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}_cost_{cost}.json').lam 
+        
         #transforms = [
         #    normalize,
         #    apply_lam,
@@ -347,9 +354,9 @@ class MIMIC(SplittedDataset):
 class Hirid(SplittedDataset):
     """Hirid dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
         super().__init__(
-            f'datasets/hirid/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            f'datasets/hirid/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/hirid/data/parquet/features_small',
             'config/splits/splits_hirid.json',
             split,
@@ -362,9 +369,9 @@ class Hirid(SplittedDataset):
         #    'config/normalizer/normalizer_hirid_rep_{}.json'.format(fold),
         #    self.columns
         #)
-        #apply_lam = ApplyLambda(
-        #    lambda_path =  f'config/lambdas/lambda_hirid_rep_{fold}.json' 
-        #) 
+        self.lam = LoadLambda(
+            lambda_path =  f'config/lambdas/lambda_hirid_rep_{fold}_cost_{cost}.json').lam 
+        
         #transforms = [
         #    normalize,
         #    apply_lam,
@@ -376,9 +383,9 @@ class Hirid(SplittedDataset):
 class EICU(SplittedDataset):
     """EICU dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
         super().__init__(
-            f'datasets/eicu/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            f'datasets/eicu/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/eicu/data/parquet/features_small',
             'config/splits/splits_eicu.json',
             split,
@@ -391,9 +398,9 @@ class EICU(SplittedDataset):
         #    'config/normalizer/normalizer_eicu_rep_{}.json'.format(fold),
         #    self.columns
         #)
-        #apply_lam = ApplyLambda(
-        #    lambda_path =  f'config/lambdas/lambda_eicu_rep_{fold}.json' 
-        #) 
+        self.lam = LoadLambda(
+            lambda_path =  f'config/lambdas/lambda_eicu_rep_{fold}_cost_{cost}.json').lam 
+
         #transforms = [
         #    normalize,
         #    apply_lam,
@@ -405,9 +412,9 @@ class EICU(SplittedDataset):
 class AUMC(SplittedDataset):
     """AUMC dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
         super().__init__(
-            f'datasets/aumc/data/parquet/features_small_cache/{split}_{fold}.parquet',
+            f'datasets/aumc/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/aumc/data/parquet/features_small',
             'config/splits/splits_aumc.json',
             split,
@@ -420,9 +427,9 @@ class AUMC(SplittedDataset):
         #    'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold),
         #    self.columns
         #)
-        #apply_lam = ApplyLambda(
-        #    lambda_path =  f'config/lambdas/lambda_aumc_rep_{fold}.json' 
-        #) 
+        self.lam = LoadLambda(
+            lambda_path =  f'config/lambdas/lambda_aumc_rep_{fold}_cost_{cost}.json').lam
+ 
         #transforms = [
         #    normalize,
         #    apply_lam,

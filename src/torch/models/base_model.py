@@ -21,14 +21,20 @@ class BaseModel(pl.LightningModule):
 
     @property
     def transforms(self):
-        return [
-            LabelPropagation(-self.hparams.label_propagation)
-        ]
+        if self.hparams.task == 'classification':
+            return [
+                LabelPropagation(-self.hparams.label_propagation)
+            ]
+        else:
+            def NOP(instance):
+                return instance
+            return [NOP]
 
     def _get_input_dim(self):
         data = self.dataset_cls(
             split='train',
-            transform=ComposeTransformations(self.transforms)
+            transform=ComposeTransformations(self.transforms),
+            **self.dataset_kwargs
         )
         return int(data[0]['ts'].shape[-1])
 
@@ -49,28 +55,37 @@ class BaseModel(pl.LightningModule):
         }
 
     def __init__(self, dataset, pos_weight, label_propagation, learning_rate,
-                 batch_size, weight_decay, **kwargs):
+                 batch_size, weight_decay, task='classification', 
+                 dataset_kwargs={}, **kwargs):
         super().__init__()
         self.save_hyperparameters()
         self.dataset_cls = getattr(src.torch.datasets, self.hparams.dataset)
-        d = self.dataset_cls(split='train')
+        d = self.dataset_cls(split='train', **dataset_kwargs)
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
-        self.loss = torch.nn.BCEWithLogitsLoss(
-            reduction='none',
-            pos_weight=torch.Tensor(
-                [self.hparams.pos_weight * d.class_imbalance_factor])
-        )
-            
+        self.task = task
+        self.dataset_kwargs = dataset_kwargs
+        self.lam = d.lam
+        if task == 'classification':
+            self.loss = torch.nn.BCEWithLogitsLoss(
+                reduction='none',
+                pos_weight=torch.Tensor(
+                    [self.hparams.pos_weight * d.class_imbalance_factor])
+            )
+        elif task == 'regression':
+            self.loss = torch.nn.MSELoss(reduction='none')
+        else:
+            raise ValueError(f'{task} is not a valid task among: [classification, regression]')
+
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
-        data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
+        data, lengths, targets = batch['ts'], batch['lengths'], batch['targets']
         output = self.forward(data, lengths).squeeze(-1)
-        invalid_indices = torch.isnan(labels)
-        labels[invalid_indices] = 0.
-        loss = self.loss(output, labels)
+        invalid_indices = torch.isnan(targets)
+        targets[invalid_indices] = 0.
+        loss = self.loss(output, targets)
         loss[invalid_indices] = 0.
         # Aggregate first over time then over instances
-        n_tp = labels.shape[-1] - invalid_indices.sum(-1, keepdim=True)
+        n_tp = targets.shape[-1] - invalid_indices.sum(-1, keepdim=True)
         # per_instance_loss = loss.sum(-1) / n_tp.float()
         n_tp = n_tp.sum()
         per_tp_loss = loss.sum() / n_tp.float()
@@ -92,27 +107,27 @@ class BaseModel(pl.LightningModule):
         self.log('train/loss', average_loss, prog_bar=True)
 
     def _shared_eval(self, batch, batch_idx, prefix):
-        data, lengths, labels = batch['ts'], batch['lengths'], batch['labels']
+        data, lengths, targets, labels = (
+            batch['ts'], batch['lengths'], batch['targets'], batch['labels'])
         output = self.forward(data, lengths).squeeze(-1)
 
         # Flatten outputs to support nll_loss
-        invalid_indices = torch.isnan(labels)
-        cloned_labels = labels.clone()
-        cloned_labels[invalid_indices] = 0.
-        loss = self.loss(output, cloned_labels.float())
+        invalid_indices = torch.isnan(targets)
+        cloned_targets = targets.clone()
+        cloned_targets[invalid_indices] = 0.
+        loss = self.loss(output, cloned_targets.float())
         loss[invalid_indices] = 0.
         # Aggregate first over time then over instances
-        n_tp = labels.shape[-1] - invalid_indices.sum(-1, keepdim=True)
+        n_tp = targets.shape[-1] - invalid_indices.sum(-1, keepdim=True)
         # per_instance_loss = loss.sum(-1) / n_tp.float()
         n_tp = n_tp.sum()
         per_tp_loss = loss.sum() / n_tp.float()
 
-        scores = torch.sigmoid(output)
         return {
             f'{prefix}_loss': per_tp_loss.detach(),
             f'{prefix}_n_tp': n_tp,
             f'{prefix}_labels': labels.cpu().detach().numpy(),
-            f'{prefix}_scores': scores.cpu().detach().numpy()
+            f'{prefix}_scores': output.cpu().detach().numpy()
         }
 
     def _shared_end(self, outputs, prefix):
@@ -132,7 +147,8 @@ class BaseModel(pl.LightningModule):
         for x in outputs:
             cur_labels = x[f'{prefix}_labels']
             cur_scores = x[f'{prefix}_scores']
-            cur_preds = (cur_scores >= 0.5).astype(float)
+            # TODO: Why should these be float?
+            cur_preds = (cur_scores >= 0).astype(float)
             for label, pred, score in zip(cur_labels, cur_preds, cur_scores):
                 selection = ~np.isnan(label)
                 # Get index of first invalid label, this allows the labels to
@@ -143,8 +159,14 @@ class BaseModel(pl.LightningModule):
                 predictions.append(pred[:first_invalid_label])
                 scores.append(score[:first_invalid_label])
 
+        shift_labels = (
+            self.hparams.label_propagation if self.hparams.task == 'classification'
+            else 0
+        )
         physionet_score = physionet2019_utility(
-            labels, predictions, shift_labels=self.hparams.label_propagation)
+            labels, predictions,
+            shift_labels=shift_labels, lam=self.lam)
+
         # Scores below require flattened predictions
         labels = np.concatenate(labels, axis=0)
         is_valid = ~np.isnan(labels)
@@ -201,7 +223,8 @@ class BaseModel(pl.LightningModule):
             Subset(
                 self.dataset_cls(
                     split='train',
-                    transform=ComposeTransformations(self.transforms)
+                    transform=ComposeTransformations(self.transforms),
+                    **self.dataset_kwargs
                 ),
                 self.train_indices
             ),
@@ -218,7 +241,8 @@ class BaseModel(pl.LightningModule):
             Subset(
                 self.dataset_cls(
                     split='train',
-                    transform=ComposeTransformations(self.transforms)
+                    transform=ComposeTransformations(self.transforms),
+                    **self.dataset_kwargs
                 ),
                 self.val_indices
             ),
@@ -234,7 +258,8 @@ class BaseModel(pl.LightningModule):
         return DataLoader(
             self.dataset_cls(
                 split='validation',
-                transform=ComposeTransformations(self.transforms)
+                transform=ComposeTransformations(self.transforms),
+                **self.dataset_kwargs
             ),
             shuffle=False,
             collate_fn=variable_length_collate,

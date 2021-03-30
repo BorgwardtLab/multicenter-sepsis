@@ -143,7 +143,9 @@ def variable_length_collate(batch):
         axis=0
     )
 
-    for key in ['times', 'ts']:
+    for key in ['times', 'ts', 'times_embedded']:
+        if key not in transposed_items.keys():
+            continue
         dims = len(transposed_items[key][0].shape)
         if dims == 1:
             padded_instances = [
@@ -162,7 +164,7 @@ def variable_length_collate(batch):
                 f'Unexpected dimensionality of instance data: {dims}')
 
         transposed_items[key] = np.stack(padded_instances, axis=0)
-    
+
     transposed_items['statics'] = np.stack(transposed_items['statics'], axis=0)
     transposed_items['statics'] = \
         transposed_items['statics'].astype(np.float32)
@@ -215,7 +217,7 @@ class PositionalEncoding():
 
     def __call__(self, instance):
         """Apply positional encoding to instances."""
-        instance = instance.copy()  # We only want a shallow copy
+        # instance = instance.copy()  # We only want a shallow copy
         positions = instance[self.positions_key]
         scaled_time = (
             positions[:, np.newaxis] *
@@ -226,7 +228,7 @@ class PositionalEncoding():
             axis=1
         )
         positional_encoding = np.reshape(signal, (-1, self.n_channels))
-        instance[self.positions_key] = positional_encoding
+        instance[self.positions_key+'_embedded'] = positional_encoding
         return instance
 
 
@@ -237,7 +239,11 @@ def to_observation_tuples(instance_dict):
     indicator vector and combine both with the time field.
     """
     instance_dict = instance_dict.copy()  # We only want a shallow copy
-    time = instance_dict['times']
+    if 'times_embedded' in instance_dict.keys():
+        time = instance_dict['times_embedded']
+    else:
+        time = instance_dict['times']
+
     if len(time.shape) != 2:
         time = time[:, np.newaxis]
 
@@ -282,7 +288,10 @@ def to_observation_tuples_without_indicators(instance_dict):
     Basically replace all NaNs in the ts field with zeros and combine it with the time field.
     """
     instance_dict = instance_dict.copy()  # We only want a shallow copy
-    time = instance_dict['times']
+    if 'times_embedded' in instance_dict.keys():
+        time = instance_dict['times_embedded']
+    else:
+        time = instance_dict['times']
     if len(time.shape) != 2:
         time = time[:, np.newaxis]
 
@@ -318,7 +327,7 @@ class LabelPropagation():
             new_onset_segment[np.isnan(old_onset_segment)] = np.NaN
             new_label = np.concatenate(
                 [label[:new_onset], new_onset_segment], axis=0)
-            instance['labels'] = new_label
+            instance['targets'] = new_label
         return instance
 
 
