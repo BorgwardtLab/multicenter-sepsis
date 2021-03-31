@@ -25,13 +25,16 @@ import pandas as pd
 import numpy as np
 
 
-def plot_curves(df, ax):
+def plot_curves(df, ax, names={}):
     """Plot curve-based evaluation."""
     # We will need to mirror this axis later on.
     ax1 = ax
-    ax1.set_title('Patient-based Evaluation', fontsize=19)
-    ax1.set_xlabel('Decision threshold', fontsize=16)
-    ax1.set_ylabel('Score', fontsize=16, color='green')
+    model = names['model']
+    train_dataset = names['train_dataset']
+    eval_dataset = names['eval_dataset']
+    ax1.set_title(f'{model}, trained on {train_dataset}, applied to {eval_dataset}', fontsize=17)
+    ax1.set_xlabel('Decision threshold', fontsize=14)
+    ax1.set_ylabel('Score', fontsize=14, color='green')
     ax1 = sns.lineplot(x='thres', y='pat_precision', data = df,
             label='precision', color='darkgreen', ax=ax1)
     ax1 = sns.lineplot(x='thres', y='pat_recall', data = df,
@@ -45,7 +48,7 @@ def plot_curves(df, ax):
     ax2 = sns.lineplot(x='thres', y=earliness, data = df,
             label='earliness', color='red', ax=ax2)
 
-    plt.xticks(np.arange(df['thres'].min(), df['thres'].max(), step=0.05))
+    plt.xticks(np.linspace(df['thres'].min(), df['thres'].max(), num=10))
     ax1.set_yticks(np.arange(0,1, step=0.1))
 
     lines, labels = ax1.get_legend_handles_labels()
@@ -58,9 +61,9 @@ def plot_curves(df, ax):
 
 def plot_scores(df, scores, ax, **kwargs):
     """Plot prediction scores."""
-    ax.set_title('Prediction scores', fontsize=19)
+    ax.set_title('Prediction scores', fontsize=17)
     ax = sns.histplot(scores, ax=ax, **kwargs)
-    ax.set_xticks(np.arange(df['thres'].min(), df['thres'].max(), step=0.05))
+    ax.set_xticks(np.linspace(df['thres'].min(), df['thres'].max(), num=10))
 
     # TODO: hacky, but it works for now and ensures that the axes are
     # aligned. Note that `sharex` does not work because the last plot
@@ -122,13 +125,18 @@ if __name__ == '__main__':
     with open(args.predictions_path, 'r') as f:
         d = json.load(f)
         scores = list(itertools.chain.from_iterable(d['scores']))
+        names = {}
+        names['model'] = d['model']
+        names['train_dataset'] = d['dataset_train']
+        names['eval_dataset'] = d['dataset_eval'] 
 
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
     fig, axes = plt.subplots(nrows=3, figsize=(8, 10), squeeze=True) #6,7
 
-    xmin, xmax = plot_curves(df, axes[0])
+    # for setting title:
+    xmin, xmax = plot_curves(df, axes[0], names)
     plot_scores(df, scores, axes[1])
     plot_info(df, axes[2])
 
