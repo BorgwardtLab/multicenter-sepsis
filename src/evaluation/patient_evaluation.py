@@ -352,11 +352,6 @@ if __name__ in "__main__":
         default='config/lambdas'
     )
     parser.add_argument(
-        '--task',
-        help='prediction task [regression, classification]',
-        default='regression'
-    )
-    parser.add_argument(
         '--n_jobs',
         default=10,
         type=int,
