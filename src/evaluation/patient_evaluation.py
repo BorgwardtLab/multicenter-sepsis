@@ -17,6 +17,22 @@ from sklearn.metrics import confusion_matrix
 from src.evaluation.sklearn_utils import make_consecutive
 from src.evaluation.physionet2019_score import physionet2019_utility
 
+def format_dataset(name):
+    """ ensure that we consistently use lower case dataset names"""
+    data_mapping = {
+        'MIMICDemo': 'mimic_demo',
+        'MIMIC': 'mimic',
+        'Hirid': 'hirid',
+        'EICU': 'eicu',
+        'AUMC': 'aumc'
+    }
+    if name in data_mapping.keys():
+        mapped = data_mapping[name]
+    elif name in data_mapping.values():
+        mapped = name
+    else:
+        raise ValueError(f'{name} not among valid dataset names: {data_mapping}')
+    return mapped
 
 def fpr(y_true, y_pred):
     """Calculate false positive rate (FPR)."""
@@ -236,6 +252,7 @@ def main(args):
     cost = args.cost
     if isinstance(eval_dataset, list):  # the R jsons had lists of str
         eval_dataset = eval_dataset[0]
+    eval_dataset = format_dataset(eval_dataset)
 
     # handle (and sort) R formatted json:
     if isinstance(d['ids'][0], str):
@@ -266,13 +283,9 @@ def main(args):
           f'and cost {cost}')
 
     # Determine min and max threshold
-    if args.task == 'regression':
-        score_list = [s for pat in d['scores'] for s in pat]
-        score_max = np.percentile(score_list, 99.5)  # max(score_list)
-        score_min = np.percentile(score_list, 0.5)   # min(score_list)
-    else:
-        score_max = 1
-        score_min = 0
+    score_list = [s for pat in d['scores'] for s in pat]
+    score_max = np.percentile(score_list, 99.5)  # max(score_list)
+    score_min = np.percentile(score_list, 0.5)   # min(score_list)
 
     measures = {
         'tp_recall': flatten_wrapper(
