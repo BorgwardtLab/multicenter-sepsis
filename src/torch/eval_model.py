@@ -155,18 +155,17 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                 batch_index = np.arange(len(label))
                 # Apply model
                 output = model(data.to(device), length.to(device))
-                pred = output[(batch_index, last_index)][:, 0]
+                pred = output[(batch_index, last_index)][:, 0].cpu().numpy()
                 output_um = model(data_um.to(device), length_um.to(device))
-                labels.append(label[(batch_index, last_index)].numpy())
-                targets.append(target[(batch_index, last_index)].numpy())
-                times.append(time[(batch_index, last_index)].numpy())
+                labels.append(label[(batch_index, last_index)].cpu().numpy())
+                targets.append(target[(batch_index, last_index)].cpu().numpy())
+                times.append(time[(batch_index, last_index)].cpu().numpy())
                 scores.append(pred)
                 # For both the regression target and logits this should be the
                 # correct way to predict
                 predictions.append((pred >= 0.).astype(int))
                 ids.append(int(batch_um['id'].cpu().numpy()[0]))
-                assert np.allclose(pred.cpu().numpy(
-                ), output_um[..., 0].cpu().numpy(), atol=1e-6)
+                assert np.allclose(pred, output_um[..., 0].cpu().numpy(), atol=1e-6)
         else:
             for batch in tqdm(dataloader, desc='Masked evaluation', total=len(dataloader)):
                 time, data, length, label, target = (
@@ -179,9 +178,9 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                 last_index = length - 1
                 batch_index = np.arange(len(label))
                 output = model(data.to(device), length.to(device))
-                labels.append(label[(batch_index, last_index)].numpy())
-                targets.append(target[(batch_index, last_index)].numpy())
-                times.append(time[(batch_index, last_index)].numpy())
+                labels.append(label[(batch_index, last_index)].cpu().numpy())
+                targets.append(target[(batch_index, last_index)].cpu().numpy())
+                times.append(time[(batch_index, last_index)].cpu().numpy())
                 pred = output[(batch_index, last_index)][:, 0].cpu().numpy()
                 scores.append(pred)
                 # For both the regression target and logits this should be the
