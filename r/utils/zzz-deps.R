@@ -14,3 +14,7 @@ library(ggplot2)
 
 arrow::set_cpu_count(n_cores())
 data.table::setDTthreads(n_cores())
+
+if (is_lsf()) {
+  RcppParallel::setThreadOptions(numThreads = n_cores())
+}
