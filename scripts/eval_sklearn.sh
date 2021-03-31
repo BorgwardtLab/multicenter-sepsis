@@ -41,7 +41,6 @@ for train_dataset in ${train_datasets[@]}; do
             --output-file $eval_file \
             --n_jobs=100 \
             --force \
-            --task $task \
             --cost $cost
 
         # Plot patient-based eval metrics:
