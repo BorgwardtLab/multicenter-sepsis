@@ -120,6 +120,7 @@ def main(hparams, model_cls):
         if name in ['labels', 'predictions']:
             continue
         wandb_logger.experiment.summary[name] = value
+    wandb_logger.experiment.summary.update()
 
     ##print('MASKED TEST RESULTS')
     ##print({
