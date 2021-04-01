@@ -44,12 +44,19 @@ def main(hparams, model_cls):
     job_id = os.getenv('SLURM_ARRAY_TASK_ID')
     if job_id is not None:
         job_name += f'_{job_id}' 
+
+    username = os.environ['USER']
+    assert username is not None, RuntimeError('Require valid username')
+    save_dir = f'/local0/scratch/{username}/'
+    os.makedirs(save_dir, exist_ok=True)
+
     wandb_logger = WandbLogger(
         name=job_name,
         project="mc-sepsis",
         entity="sepsis",
         log_model=True,
-        tags=[hparams.model, hparams.dataset]
+        tags=[hparams.model, hparams.dataset, hparams.task],
+        save_dir=save_dir
     ) 
     #logger = TbWithBestValueLogger(
     #    hparams.log_path,
@@ -112,7 +119,16 @@ def main(hparams, model_cls):
         device='cuda' if torch.cuda.is_available() else 'cpu'
         #feature_set=hparams.feature_set
     )
-    results['validation_masked'] = masked_result
+    masked_result = { 'masked_validation_'+key: value for key, value in masked_result.items()
+        if key not in ['labels', 'predictions', 'ids', 'times', 'scores', 'targets']
+    }
+    for key, value in masked_result.items():
+        wandb_logger.experiment.log({key: value})
+    #masked_result = { key: value for key, value in masked_result.items()
+    #    if key not in ['labels', 'predictions', 'ids', 'times', 'scores', 'targets']
+    #}
+
+    results.update(masked_result)
 
     #with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
     #    json.dump(results, f, cls=JsonEncoder)
@@ -120,7 +136,7 @@ def main(hparams, model_cls):
         if name in ['labels', 'predictions']:
             continue
         wandb_logger.experiment.summary[name] = value
-    wandb_logger.experiment.summary.update()
+    #wandb_logger.experiment.summary.update(masked_result)
 
     ##print('MASKED TEST RESULTS')
     ##print({
