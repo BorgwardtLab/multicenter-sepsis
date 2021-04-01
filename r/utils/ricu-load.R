@@ -1,5 +1,5 @@
 
-eicu_hosp_coh <- function(sep, coh, thresh = 0.05) {
+eicu_hosp_coh <- function(sep, coh, thresh) {
 
   assert(is.numeric(thresh), is.scalar(thresh), thresh > 0, thresh < 1)
 
@@ -118,7 +118,7 @@ sepsis3_crit <- function(source, pids = NULL, keep_components = FALSE,
 }
 
 load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
-                      min_age = 14, eicu_hosp_thresh = 0.05) {
+                      min_age = 14, eicu_hosp_thresh = 0.1) {
 
   feats <- read_var_json(var_cfg)[["concept"]]
   feats <- setdiff(feats[!is.na(feats)], "sofa")
@@ -332,48 +332,12 @@ augment <- function(x, fun, suffix,
 
   if (is.character(fun)) {
 
-    if (is.numeric(win)) {
-      win <- as.difftime(win, units = "hours")
-    }
+    win <- ceiling(win / as.double(interval(x)))
+    fun <- switch(fun, min = roll::roll_min,  max = roll::roll_max,
+                      mean = roll::roll_mean, var = roll::roll_var)
 
-    assert_that(is.null(by))
-
-    inf_to_na <- function(x) replace(x, is.infinite(x), NA)
-    nan_to_na <- function(x) replace(x, is.nan(x), NA)
-
-    ival  <- interval(x)
-    idcol <- id_vars(x)
-
-    win <- as.double(win, units = units(ival))
-
-    lags <- seq_len(
-      ceiling(win / as.double(ival)) + 1L
-    ) - 1L
-
-    funs <- c(
-      min = function(x) inf_to_na(matrixStats::rowMins(x, na.rm = TRUE)),
-      max = function(x) inf_to_na(matrixStats::rowMaxs(x, na.rm = TRUE)),
-      mean = function(x) nan_to_na(rowMeans(x, na.rm = TRUE)),
-      var = function(x) matrixStats::rowVars(x, na.rm = TRUE)
-    )[fun]
-
-    assert_that(all(vapply(funs, is.function, logical(1L))))
-
-    for (col in cols) {
-
-      targ_col <- paste0(sub("_raw$", "", col), "_", fun, as.integer(win),
-                         suffix)
-
-      tmp <- x[, data.table::shift(get(col), lags), by = c(idcol)]
-      tmp <- tmp[, c(idcol) := NULL]
-      tmp <- as.matrix(tmp)
-
-      for (i in seq_along(fun)) {
-        x <- data.table::set(x, j = targ_col[i], value = funs[[i]](tmp))
-      }
-
-      rm(tmp)
-    }
+    x <- x[, c(names) := lapply(.SD, fun, win, min_obs = 1),
+           .SDcols = cols, by = c(id_vars(x))]
 
   } else {
 
@@ -503,9 +467,10 @@ derived_sofa <- function(dat) {
 }
 
 derived_sdet <- function(dat) {
-  dat <- augment(dat, "min", "det_der", cols = "sofa", win = hours(24L))
-  dat <- dat[, c("sodet_der", "sofa_min24det_der") := list(
-    ((sofa - sofa_min24det_der) >= 2) * 1, NULL
+  dat <- augment(dat, "min", cols = "sofa", names = "sofa_min24",
+                 win = hours(24L))
+  dat <- dat[, c("sodet_der", "sofa_min24") := list(
+    ((sofa - sofa_min24) >= 2) * 1, NULL
   )]
 }
 
@@ -561,23 +526,40 @@ score_calc <- function(dat) {
   dat
 }
 
-lambda_calc <- function(x) {
+lambda_calc <- function(x, train_ind) {
 
-  case <- which(x[["is_case"]])
-  ctrl <- which(!x[["is_case"]])
+  col <- c("pos_utility", "neg_utility", "opt_utility")
+  res <- setNames(vector("numeric", length = 3L), col)
 
-  denom <-     sum(x[["pos_utility"]][case]) -
-           2 * sum(x[["neg_utility"]][case]) +
-               sum(x[["opt_utility"]][case])
+  sel <- x[["is_case"]] & train_ind
 
-  numer <- 2 * sum(x[["neg_utility"]][ctrl]) -
-               sum(x[["pos_utility"]][ctrl]) -
-               sum(x[["opt_utility"]][ctrl])
+  for (i in col) {
+    res[i] <- sum(x[[i]] * sel)
+  }
+
+  denom <-     res["pos_utility"] -
+           2 * res["neg_utility"] +
+               res["opt_utility"]
+
+  sel <- !x[["is_case"]] & train_ind
+
+  for (i in col) {
+    res[i] <- sum(x[[i]] * sel)
+  }
+
+  numer <- 2 * res["neg_utility"] -
+               res["pos_utility"] -
+               res["opt_utility"]
 
   numer / denom
 }
 
 train_stats <- function(x, train_ids) {
+
+  mean_sd <- function(x, ind) {
+    tmp <- x[ind]
+    list(mean = mean(tmp, na.rm = TRUE), sd = sd(tmp, na.rm = TRUE))
+  }
 
   pos_tim <- index_col(x) > 0
 
@@ -586,8 +568,7 @@ train_stats <- function(x, train_ids) {
 
   for (split in names(train_ids)) {
 
-    is_train <- id_col(x) %in% train_ids[[split]]
-    hit_rows <- which(pos_tim & is_train)
+    hit_rows <- pos_tim & (id_col(x) %in% train_ids[[split]])
 
     cols <- data_vars(x)
 
@@ -597,14 +578,14 @@ train_stats <- function(x, train_ids) {
     )
 
     for (col in cols) {
-      norm[[split]]$means[col] <- mean(x[[col]][hit_rows], na.rm = TRUE)
-      norm[[split]]$stds[col]  <- sd(x[[col]][hit_rows], na.rm = TRUE)
+      res <- mean_sd(x[[col]], hit_rows)
+      norm[[split]]$means[col] <- res[["mean"]]
+      norm[[split]]$stds[col]  <- res[["sd"]]
     }
 
-    lamb[[split]] <- lambda_calc(
-      x[hit_rows, c("is_case", "pos_utility", "neg_utility",
-                      "opt_utility"), with = FALSE]
-    )
+    lamb[[split]] <- lambda_calc(x, hit_rows)
+
+    gc()
   }
 
   list(normalization = norm, lambda = lamb)
@@ -616,6 +597,16 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   augment_prof <- function(name, ...) {
     msg("--> augmentation step {name}")
     prof(augment(...))
+  }
+
+  lbk_wrap <- function(win, x) {
+
+    for (fun in c("min", "max", "mean", "var")) {
+      x <- augment(x, fun, paste0(fun, as.integer(win), "lbk"), win = win)
+      gc()
+    }
+
+    x
   }
 
   old_opts <- options(datatable.alloccol = 2048L)
@@ -666,8 +657,8 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
     dat <- prof(derived_feats(dat))
 
     for (win in hours(c(4L, 8L, 16L))) {
-      dat <- augment_prof(paste("lbk", win), dat,
-                          c("min", "max", "mean", "var"), "lbk", win = win)
+      msg("--> augmentation step lbk{as.integer(win)}")
+      dat <- prof(lbk_wrap(win, dat))
     }
 
     msg("--> train set stats calculation")
