@@ -165,7 +165,7 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                 # correct way to predict
                 predictions.append((pred >= 0.).astype(int))
                 ids.append(int(batch_um['id'].cpu().numpy()[0]))
-                assert np.allclose(pred, output_um[..., 0].cpu().numpy(), atol=1e-6)
+                assert np.allclose(pred, output_um[..., 0].cpu().numpy(), atol=1e-4)
         else:
             for batch in tqdm(dataloader, desc='Masked evaluation', total=len(dataloader)):
                 time, data, length, label, target = (
