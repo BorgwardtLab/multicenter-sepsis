@@ -32,7 +32,8 @@ def plot_curves(df, ax, names={}):
     model = names['model']
     train_dataset = names['train_dataset']
     eval_dataset = names['eval_dataset']
-    ax1.set_title(f'{model}, trained on {train_dataset}, applied to {eval_dataset}', fontsize=17)
+    task = names['task']
+    ax1.set_title(f'{model}, trained for {task} on {train_dataset}, applied to {eval_dataset}', fontsize=17)
     ax1.set_xlabel('Decision threshold', fontsize=14)
     ax1.set_ylabel('Score', fontsize=14, color='green')
     ax1 = sns.lineplot(x='thres', y='pat_precision', data = df,
@@ -128,12 +129,13 @@ if __name__ == '__main__':
         names = {}
         names['model'] = d['model']
         names['train_dataset'] = d['dataset_train']
-        names['eval_dataset'] = d['dataset_eval'] 
+        names['eval_dataset'] = d['dataset_eval']
+        names['task'] = d['task'] 
 
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
-    fig, axes = plt.subplots(nrows=3, figsize=(8, 10), squeeze=True) #6,7
+    fig, axes = plt.subplots(nrows=3, figsize=(9, 10), squeeze=True) #6,7
 
     # for setting title:
     xmin, xmax = plot_curves(df, axes[0], names)
