@@ -74,7 +74,7 @@ def variable_len_collate_unwrap(fake_batch):
 def scores_to_pred(fn):
     """Convert scores into predictions, assumes probabilities."""
     def wrapped(labels, scores):
-        predictions = [(s >= 0.5).astype(float) for s in scores]
+        predictions = [(s >= 0.0).astype(float) for s in scores]
         return fn(labels, predictions)
     return wrapped
 
