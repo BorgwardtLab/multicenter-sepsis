@@ -23,12 +23,14 @@ class BaseModel(pl.LightningModule):
     def transforms(self):
         if self.hparams.task == 'classification':
             return [
-                LabelPropagation(-self.hparams.label_propagation)
+                LabelPropagation(-self.hparams.label_propagation, 
+                                 keys=['targets', 'labels_shifted'])
             ]
         else:
-            def NOP(instance):
-                return instance
-            return [NOP]
+            return [
+                LabelPropagation(-self.hparams.label_propagation, 
+                                 keys=['labels_shifted'])
+            ]
 
     def _get_input_dim(self):
         data = self.dataset_cls(
@@ -107,8 +109,9 @@ class BaseModel(pl.LightningModule):
         self.log('train/loss', average_loss, prog_bar=True)
 
     def _shared_eval(self, batch, batch_idx, prefix):
-        data, lengths, targets, labels = (
-            batch['ts'], batch['lengths'], batch['targets'], batch['labels'])
+        data, lengths, targets, labels, labels_shifted = (
+            batch['ts'], batch['lengths'], batch['targets'], batch['labels'], 
+            batch['labels_shifted'])
         output = self.forward(data, lengths).squeeze(-1)
 
         # Flatten outputs to support nll_loss
@@ -127,6 +130,7 @@ class BaseModel(pl.LightningModule):
             f'{prefix}_loss': per_tp_loss.detach(),
             f'{prefix}_n_tp': n_tp,
             f'{prefix}_labels': labels.cpu().detach().numpy(),
+            f'{prefix}_labels_shifted': labels_shifted.cpu().detach().numpy(),
             f'{prefix}_scores': output.cpu().detach().numpy()
         }
 
@@ -142,41 +146,46 @@ class BaseModel(pl.LightningModule):
         average_loss = total_loss / total_tp
 
         labels = []
+        labels_shifted = []
         predictions = []
         scores = []
         for x in outputs:
             cur_labels = x[f'{prefix}_labels']
+            cur_labels_shifted = x[f'{prefix}_labels_shifted']
             cur_scores = x[f'{prefix}_scores']
             # TODO: Why should these be float?
             cur_preds = (cur_scores >= 0).astype(float)
-            for label, pred, score in zip(cur_labels, cur_preds, cur_scores):
+            for label, label_shifted, pred, score in zip(cur_labels, 
+                    cur_labels_shifted, cur_preds, cur_scores):
                 selection = ~np.isnan(label)
                 # Get index of first invalid label, this allows the labels to
                 # have gaps with NaN in between.
                 first_invalid_label = (
                     len(selection) - np.argmax(selection[::-1]))
                 labels.append(label[:first_invalid_label])
+                labels_shifted.append(label_shifted[:first_invalid_label])
                 predictions.append(pred[:first_invalid_label])
                 scores.append(score[:first_invalid_label])
 
-        shift_labels = (
-            self.hparams.label_propagation if self.hparams.task == 'classification'
-            else 0
-        )
-        #TODO: here labels should be shifted! currently unshifted used:
+        #shift_labels = (
+        #    self.hparams.label_propagation if self.hparams.task == 'classification'
+        #    else 0
+        #)
+        # Since labels are not shifted, no need for accounting for shift with shift_labels
         physionet_score = physionet2019_utility(
             labels, predictions,
-            shift_labels=shift_labels, lam=self.lam)
+            shift_labels=0, lam=self.lam)
 
         # Scores below require flattened predictions
-        labels = np.concatenate(labels, axis=0)
-        is_valid = ~np.isnan(labels)
-        labels = labels[is_valid]
+        # we use shifted labels here:
+        labels_shifted = np.concatenate(labels_shifted, axis=0)
+        is_valid = ~np.isnan(labels_shifted)
+        labels_shifted = labels_shifted[is_valid]
         predictions = np.concatenate(predictions, axis=0)[is_valid]
         scores = np.concatenate(scores, axis=0)[is_valid]
-        average_precision = average_precision_score(labels, scores)
-        auroc = roc_auc_score(labels, scores)
-        balanced_accuracy = balanced_accuracy_score(labels, predictions)
+        average_precision = average_precision_score(labels_shifted, scores)
+        auroc = roc_auc_score(labels_shifted, scores)
+        balanced_accuracy = balanced_accuracy_score(labels_shifted, predictions)
         self.log(f'{prefix}/physionet2019_score', physionet_score)
         self.log(f'{prefix}/average_precision', average_precision)
         self.log(f'{prefix}/auroc', auroc)

@@ -133,6 +133,15 @@ def variable_length_collate(batch):
         ],
         axis=0
     )
+    transposed_items['labels_shifted'] = np.stack(
+        [
+            np.pad(instance, ((0, max_len - len(instance)),),
+                   mode='constant', constant_values=np.NaN)
+            for instance in transposed_items['labels_shifted']
+        ],
+        axis=0
+    )
+
     # transform `targets` similarly as labels:
     transposed_items['targets'] = np.stack(
         [
@@ -172,6 +181,7 @@ def variable_length_collate(batch):
     transposed_items['ts'] = transposed_items['ts'].astype(np.float32)
     transposed_items['lengths'] = transposed_items['lengths'].astype(np.long)
     transposed_items['labels'] = transposed_items['labels'].astype(np.float32)
+    transposed_items['labels_shifted'] = transposed_items['labels_shifted'].astype(np.float32)
     transposed_items['targets'] = transposed_items['targets'].astype(np.float32)
 
     return {
@@ -307,8 +317,13 @@ def to_observation_tuples_without_indicators(instance_dict):
 
 
 class LabelPropagation():
-    def __init__(self, hours_shift):
+    def __init__(self, hours_shift, keys):
+        """ apply LabelPropagation
+            - keys: list of keys that contain
+              the shifted label
+        """
         self.hours_shift = hours_shift
+        self.keys = keys
 
     def __call__(self, instance):
         label = instance['labels']
@@ -327,7 +342,11 @@ class LabelPropagation():
             new_onset_segment[np.isnan(old_onset_segment)] = np.NaN
             new_label = np.concatenate(
                 [label[:new_onset], new_onset_segment], axis=0)
-            instance['targets'] = new_label
+        else:
+            new_label = label # we need to ensure that control case
+            # is also handled properly! otherwise could have regr. target only controls
+        for key in self.keys:
+            instance[key] = new_label
         return instance
 
 
