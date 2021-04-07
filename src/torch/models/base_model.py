@@ -14,6 +14,7 @@ import src.torch.datasets
 from src.evaluation import physionet2019_utility
 from src.torch.torch_utils import (
     variable_length_collate, ComposeTransformations, LabelPropagation)
+from src.torch.cli_utils import str2bool
 
 
 class BaseModel(pl.LightningModule):
@@ -39,6 +40,15 @@ class BaseModel(pl.LightningModule):
             **self.dataset_kwargs
         )
         return int(data[0]['ts'].shape[-1])
+
+    def _get_input_dims(self):
+        """Get dim of statics and time series."""
+        data = self.dataset_cls(
+            split='train',
+            transform=ComposeTransformations(self.transforms),
+            **self.dataset_kwargs
+        )[0]
+        return int(data['statics'].shape[0]), int(data['ts'].shape[-1])
 
     @property
     def metrics_initial(self):
@@ -80,8 +90,9 @@ class BaseModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         """Run a single training step."""
-        data, lengths, targets = batch['ts'], batch['lengths'], batch['targets']
-        output = self.forward(data, lengths).squeeze(-1)
+        statics, data, lengths, targets = batch['statics'], batch['ts'], batch['lengths'], batch['targets']
+        statics = None if self.hparams.ignore_statics else statics
+        output = self.forward(data, lengths, statics=statics).squeeze(-1)
         invalid_indices = torch.isnan(targets)
         targets[invalid_indices] = 0.
         loss = self.loss(output, targets)
@@ -109,10 +120,15 @@ class BaseModel(pl.LightningModule):
         self.log('train/loss', average_loss, prog_bar=True)
 
     def _shared_eval(self, batch, batch_idx, prefix):
-        data, lengths, targets, labels, labels_shifted = (
-            batch['ts'], batch['lengths'], batch['targets'], batch['labels'], 
+        statics, data, lengths, targets, labels, labels_shifted = (
+            batch['statics'],
+            batch['ts'],
+            batch['lengths'],
+            batch['targets'],
+            batch['labels'],
             batch['labels_shifted'])
-        output = self.forward(data, lengths).squeeze(-1)
+        statics = None if self.hparams.ignore_statics else statics
+        output = self.forward(data, lengths, statics=statics).squeeze(-1)
 
         # Flatten outputs to support nll_loss
         invalid_indices = torch.isnan(targets)
@@ -297,4 +313,5 @@ class BaseModel(pl.LightningModule):
         parser.add_argument('--weight_decay', default=0., type=float)
         parser.add_argument('--label_propagation', default=6, type=int)
         parser.add_argument('--pos_weight', type=float, default=1.)
+        parser.add_argument('--ignore_statics', default=True, type=str2bool)
         return parser
