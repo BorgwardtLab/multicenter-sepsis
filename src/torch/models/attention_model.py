@@ -189,7 +189,6 @@ class AttentionModel(BaseModel):
         x = self.layers[0](x)
         if statics is not None:
             # prepend statics embedding
-            print(statics)
             embed_statics = self.statics_embedding(statics).unsqueeze(1)
             x = torch.cat([embed_statics, x], dim=1)
 

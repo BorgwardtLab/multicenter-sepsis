@@ -313,5 +313,5 @@ class BaseModel(pl.LightningModule):
         parser.add_argument('--weight_decay', default=0., type=float)
         parser.add_argument('--label_propagation', default=6, type=int)
         parser.add_argument('--pos_weight', type=float, default=1.)
-        parser.add_argument('--ignore_statics', default=True, type=str2bool)
+        parser.add_argument('--ignore_statics', default=False, type=str2bool)
         return parser
