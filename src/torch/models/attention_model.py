@@ -156,6 +156,7 @@ class AttentionModel(BaseModel):
             indicators: flag if missingness indicators should be applied
         """
         super().__init__(**kwargs)
+        ff_dim = 4*d_model # hard-coded default
         self.to_observation_tuples = to_observation_tuples if indicators else to_observation_tuples_without_indicators 
         self.save_hyperparameters()
         d_statics, d_in = self._get_input_dims()
@@ -231,10 +232,6 @@ class AttentionModel(BaseModel):
         parser.add_argument(
             '--n_heads', type=int, default=8,
             # tunable=True, options=[4, 8, 16, 32]
-        )
-        parser.add_argument(
-            '--ff_dim', type=int, default=32,
-            # tunable=True, options=[256, 512, 1028]
         )
         parser.add_argument(
             '--norm', type=str, default='rezero', choices=['layer', 'rezero'])
