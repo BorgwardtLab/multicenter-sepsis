@@ -24,12 +24,14 @@ class BaseModel(pl.LightningModule):
     def transforms(self):
         if self.hparams.task == 'classification':
             return [
-                LabelPropagation(-self.hparams.label_propagation, 
+                LabelPropagation(shift_left=-self.hparams.label_propagation,
+                                 shift_right=self.hparams.label_propagation_right, 
                                  keys=['targets', 'labels_shifted'])
             ]
         else:
             return [
-                LabelPropagation(-self.hparams.label_propagation, 
+                LabelPropagation(shift_left=-self.hparams.label_propagation,
+                                 shift_right=self.hparams.label_propagation_right, 
                                  keys=['labels_shifted'])
             ]
 
@@ -312,6 +314,7 @@ class BaseModel(pl.LightningModule):
         )
         parser.add_argument('--weight_decay', default=0., type=float)
         parser.add_argument('--label_propagation', default=6, type=int)
+        parser.add_argument('--label_propagation_right', default=24, type=int)
         parser.add_argument('--pos_weight', type=float, default=1.)
         parser.add_argument('--ignore_statics', default=False, type=str2bool)
         return parser
