@@ -127,7 +127,7 @@ def get_pipeline_and_grid(args):
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
         import lightgbm as lgb
-        parameters = {'n_jobs': -1}
+        parameters = {'n_jobs': 30}
         parameters.update(clf_params)
         if task == 'classification':
             est = lgb.LGBMClassifier(**parameters)
@@ -148,7 +148,7 @@ def get_pipeline_and_grid(args):
         return pipe, param_dist
     elif method_name == 'rf':
         from sklearn.ensemble import RandomForestClassifier as RF
-        parameters = {'n_jobs': -1}
+        parameters = {'n_jobs': 30}
         parameters.update(clf_params)
         if task == 'classification':
             est = RF(**parameters)
@@ -213,9 +213,14 @@ def main():
         help='Dataset Name: [physionet2019, ..]'
     )
     parser.add_argument(
-        '--label-propagation', default=6, type=int,
+        '--label_propagation', default=6, type=int,
         help="""(Active for classification task) By how many hours to 
             shift label into the past. Default: 6"""
+    )
+    parser.add_argument(
+        '--label_propagation_right', default=24, type=int,
+        help="""(Active for classification task) By how many hours to 
+            shift label into the future, afterwards 0 again. Default: 24"""
     )
     parser.add_argument(
         '--overwrite', action='store_true', default=False,
@@ -244,7 +249,7 @@ def main():
             physionet challenge variables"""
     )
     parser.add_argument(
-        '--feature_set', default='large',
+        '--feature_set', default='middle',
         help="""which feature set should be used: [large, small], 
             large including feature engineering for classic models"""
     )

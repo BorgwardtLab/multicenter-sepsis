@@ -17,7 +17,7 @@ VM_CONFIG_PATH = str(
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
-def apply_label_shift(labels, shift):
+def apply_label_shift(labels, shift_left, shift_right):
     """Apply label shift to labels."""
     labels = labels.copy()
     patients = labels.index.get_level_values(VM_DEFAULT('id')).unique()
@@ -29,7 +29,7 @@ def apply_label_shift(labels, shift):
     for patient in patients:
         #labels[patient] = shift_onset_label(patient, labels[patient], shift)
         # the above (nice) solution lead to pandas bug in newer version.. 
-        shifted_labels = shift_onset_label(patient, labels[patient], shift)
+        shifted_labels = shift_onset_label(patient, labels[patient], shift_left, shift_right)
         df = shifted_labels.to_frame()
         df = df.rename(columns={0: VM_DEFAULT('label')}) 
         df[VM_DEFAULT('id')] = patient
@@ -40,7 +40,7 @@ def apply_label_shift(labels, shift):
 
 def handle_label_shift(args, d):
     """Handle label shift given argparse args and data dict d"""
-    if args.label_propagation != 0:
+    if (args.label_propagation != 0) or (args.label_propagation_right != 24):
         ## Label shift is normally assumed to be in the direction of the future.
         ## For label propagation we should thus take the negative of the
         ## provided label propagation parameter
@@ -64,7 +64,7 @@ def handle_label_shift(args, d):
         for key in keys:
             if key in d.keys():
                 print(f'Shifting {key} ..')
-                d[key] = apply_label_shift(d[key], -args.label_propagation)
+                d[key] = apply_label_shift(d[key], -args.label_propagation, args.label_propagation_right)
         elapsed = time() - start
         print(f'Label shift took {elapsed:.2f} seconds')
         #and cache data to quickly reuse from now:
