@@ -227,8 +227,9 @@ def evaluate_threshold(data, thres, measures):
     # Check whether label propagation is available in the data or not.
     # If it is available we perform it for all time-based measures.
     shift = 0
-    if 'label_propagation' in data:
-        shift = data['label_propagation']
+    if 'label_propagation' in data['model_params']:
+        shift = data['model_params']['label_propagation']
+        print(f'Using `label_propagation = {shift}` to shift labels')
 
     shifted_labels = [
         # Slightly convoluted: we want to ensure that the labels are
@@ -237,7 +238,7 @@ def evaluate_threshold(data, thres, measures):
         shift_onset_label(
             patient_id,
             pd.Series(y_true, dtype=int),
-            shift
+            -shift
         ).values
         for patient_id, y_true in zip(data['ids'], labels)
     ]
