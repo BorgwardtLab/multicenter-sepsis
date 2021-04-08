@@ -138,10 +138,11 @@ def get_pipeline_and_grid(args):
         steps.append(('est', est))
         pipe = Pipeline(steps)
         param_dist = {
-            'est__n_estimators': [50, 100, 300, 500, 1000],
+            'est__n_estimators': [100, 300, 500, 1000, 2000],
             'est__boosting_type': ['gbdt', 'dart'],
             'est__learning_rate': [0.001, 0.01, 0.1, 0.5],
             'est__num_leaves': [30, 50, 100],
+            'est__reg_alpha': [0,0.1,0.5,1,3,5], 
         }
         #if args.task == 'classification':
         #    param_dist['est__scale_pos_weight'] = [1, 10, 20, 50, 100]
@@ -166,32 +167,43 @@ def get_pipeline_and_grid(args):
         return pipe, param_dist
 
     # TODO: add baselines (and try LogReg) also
-    #elif method_name == 'lr':
-    #    from sklearn.linear_model import LogisticRegression as LR
-    #    parameters = {'n_jobs': 1} #10 for non-eicu #-1 led to OOM
-    #    parameters.update(clf_params)
-    #    est = LR(**parameters)
-    #    steps.append(('est', est))
-    #    pipe = Pipeline(steps)
-    #    # hyper-parameter grid:
-    #    param_dist = {
-    #        'est__penalty': ['l2','none'],
-    #        'est__C': np.logspace(-2,2,50),
-    #        'est__solver': ['sag', 'saga'], 
-    #    }
-    #    return pipe, param_dist
-    #elif method_name in ['sofa', 'qsofa', 'sirs', 'mews', 'news']:
-    #    from src.sklearn.baseline import BaselineModel
-    #    import scipy.stats as stats
-    #    parameters = {'column': method_name}
-    #    parameters.update(clf_params)
-    #    est = BaselineModel(**parameters)
-    #    steps.append(('est', est))
-    #    pipe = Pipeline(steps)
-    #    param_dist = { 
-    #        'est__theta':  stats.uniform(0, 1)
-    #    }
-    #    return pipe, param_dist 
+    elif method_name == 'lr': #logistic/linear regression
+        
+        if task == 'classification':
+            from sklearn.linear_model import LogisticRegression as LogReg
+            parameters = {'n_jobs': 10} #10 for non-eicu #-1 led to OOM
+            parameters.update(clf_params)
+            est = LogReg(**parameters)
+            # hyper-parameter grid:
+            param_dist = {
+                'est__penalty': ['l1'],
+                'est__C': np.logspace(-3,2,50),
+                'est__solver': ['liblinear', 'saga'], 
+            }
+        elif task == 'regression':
+            from sklearn.linear_model import Lasso 
+            parameters = {}
+            parameters.update(clf_params)
+            est = Lasso(**parameters)
+            # hyper-parameter grid:
+            param_dist = {
+                'est__alpha': np.logspace(-3,2,50),
+            }
+        steps.append(('est', est))
+        pipe = Pipeline(steps)
+        return pipe, param_dist
+    elif method_name in ['sofa', 'qsofa', 'sirs', 'mews', 'news']:
+        from src.sklearn.baseline import BaselineModel
+        import scipy.stats as stats
+        parameters = {'column': method_name}
+        parameters.update(clf_params)
+        est = BaselineModel(**parameters)
+        steps.append(('est', est))
+        pipe = Pipeline(steps)
+        param_dist = { 
+            'est__theta':  stats.uniform(0, 1)
+        }
+        return pipe, param_dist 
     else:
         raise ValueError('Invalid method: {}'.format(method_name))
 
@@ -291,7 +303,7 @@ def main():
         help='lambda cost to use (default 0 (inactive))'
     )
     parser.add_argument(
-        '--target_name', default='physionet_utility',
+        '--target_name', default='neg_log_loss',
         help='Only for classification: which objective to optimize in model selection [physionet_utility, roc_auc, average_precision]'
     )
 
@@ -331,9 +343,12 @@ def main():
                 'average_precision': SCORERS['average_precision'],
                 'balanced_accuracy': SCORERS['balanced_accuracy'],
             }
-        elif target_name in ['roc_auc', 'average_precision']:
+        elif target_name in ['roc_auc', 'average_precision', 'neg_log_loss']:
             scores = {
-                target_name: SCORERS[target_name]
+                'neg_log_loss': SCORERS['neg_log_loss'],
+                'roc_auc': SCORERS['roc_auc'],
+                'average_precision': SCORERS['average_precision'],
+                'balanced_accuracy': SCORERS['balanced_accuracy'],
             }
         else:
             raise ValueError(f'{target_name} not among valid targets.')
@@ -363,6 +378,7 @@ def main():
         "RandomizedSearchCV took %.2f seconds for %d candidates"
         " parameter settings." % ((elapsed), args.n_iter_search)
     )
+
     result_path = os.path.join(args.result_path, args.dataset+'_'+args.method)
     os.makedirs(result_path, exist_ok=True)
 
