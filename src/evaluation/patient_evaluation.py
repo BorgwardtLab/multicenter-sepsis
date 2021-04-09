@@ -142,8 +142,8 @@ def extract_onset_index(x):
 def first_alarm_eval(y_true, y_pred, times):
     """Extract and evaluate prediction and label of first alarm."""
     labels = get_patient_labels(y_true)
-    print(f'Cases: {labels.sum()}')
-    print(f'Prevalence: {labels.sum()/len(labels)*100:.2f}%')
+    #print(f'Cases: {labels.sum()}')
+    #print(f'Prevalence: {labels.sum()/len(labels)*100:.2f}%')
     case_mask = labels.astype(bool)
     y_pred, pred_indices = extract_first_alarm(y_pred)
     onset_indices = extract_onset_index(y_true)
