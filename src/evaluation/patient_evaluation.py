@@ -152,8 +152,9 @@ def first_alarm_eval(y_true, y_pred, times):
     onset_indices = extract_onset_index(y_true)
     alarm_times = extract_first_alarm(times, indices=pred_indices)
     onset_times = extract_first_alarm(times, indices=onset_indices)
-    delta = onset_times[case_mask] - alarm_times[case_mask]  
-
+    delta = onset_times[case_mask] - alarm_times[case_mask]
+    #determine proportion of TPs catched earlier than n hours before onset:
+    windows = np.arange(11)  
     r = {
         'pat_recall': recall_score(labels, y_pred, zero_division=0),
         'pat_precision': precision_score(labels, y_pred, zero_division=0),
@@ -168,7 +169,8 @@ def first_alarm_eval(y_true, y_pred, times):
         'earliness_min': np.nanmin(delta),
         'earliness_max': np.nanmax(delta),
     }
-
+    for window in windows:
+        r[f'proportion_{window}_hours_before_onset'] = (delta > window).sum() / delta.shape[0]
     return r
 
 
