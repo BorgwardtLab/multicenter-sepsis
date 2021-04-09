@@ -230,17 +230,17 @@ def evaluate_threshold(data, thres, measures):
     if 'label_propagation' in data['model_params']:
         shift = data['model_params']['label_propagation']
         print(f'Using `label_propagation = {shift}` to shift labels')
-
+    
     shifted_labels = [
         # Slightly convoluted: we want to ensure that the labels are
         # usable in the time-based evaluation, so we need to convert
         # from `pd.Series` to `np.array` again.
         shift_onset_label(
             patient_id,
-            pd.Series(y_true, dtype=int),
+            pd.Series(y_true, dtype=int, index=time),
             -shift
         ).values
-        for patient_id, y_true in zip(data['ids'], labels)
+        for patient_id, y_true, time in zip(data['ids'], labels, times)
     ]
 
     for name, func in tp_measures.items():
