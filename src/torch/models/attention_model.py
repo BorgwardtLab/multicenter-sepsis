@@ -160,7 +160,7 @@ class AttentionModel(BaseModel):
         self.save_hyperparameters()
         d_statics, d_in = self._get_input_dims()
         if not self.hparams.ignore_statics:
-            self.statics_embedding = nn.Linear(d_statics, d_model)
+            self.statics_embedding = nn.Linear(d_statics + d_model, d_model)
         self.layers = nn.ModuleList(
             [nn.Linear(d_in, d_model)]
             + [
@@ -182,15 +182,19 @@ class AttentionModel(BaseModel):
 
     def forward(self, x, lengths, statics=None):
         """Apply attention model to input x."""
-        offset = 0 if statics is None else 1
+        offset = 0 # if statics is None else 1
         # Invert mask as multi head attention ignores values which are true
         mask = length_to_mask(lengths, offset=offset)
         future_mask = get_subsequent_mask(x, offset=offset)
         x = self.layers[0](x)
         if statics is not None:
-            # prepend statics embedding
-            embed_statics = self.statics_embedding(statics).unsqueeze(1)
-            x = torch.cat([embed_statics, x], dim=1)
+            # append statics as additional channel dimensions
+            stacked_statics = statics.unsqueeze(1).repeat(1,x.shape[1],1)
+            x = torch.cat([x,stacked_statics], axis=-1)
+            x = self.statics_embedding(x)
+            ## prepend statics embedding
+            #embed_statics = self.statics_embedding(statics).unsqueeze(1)
+            #x = torch.cat([embed_statics, x], dim=1)
 
         x = x.permute(1, 0, 2)
         for layer in self.layers[1:]:
