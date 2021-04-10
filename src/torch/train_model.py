@@ -174,6 +174,8 @@ if __name__ == '__main__':
                         default='classification')
     parser.add_argument('--cost', type=int, default=5,
                         help='cost parameter for lambda')
+    parser.add_argument('--dummy_repetition', type=int, default=1,
+                        help='inactive argument, used for debugging (enabling grid repetitions)')
 
     # parser.add_argument(
     #     '--feature-set', default='all',
