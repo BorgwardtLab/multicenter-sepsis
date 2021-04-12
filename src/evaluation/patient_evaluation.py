@@ -23,7 +23,7 @@ from src.evaluation.physionet2019_score import physionet2019_utility
 
 
 def format_dataset(name):
-    """ ensure that we consistently use lower case dataset names"""
+    """Ensure that we consistently use lower-case dataset names."""
     data_mapping = {
         'MIMICDemo': 'mimic_demo',
         'MIMIC': 'mimic',
@@ -289,7 +289,7 @@ def main(args):
         times = d['times']
         ids = [int(i) for i in d['ids']]
         perm = np.argsort(ids)
-        times = np.array(times)
+        times = np.asarray(times)
         # properly sorted times (consistent with scores, labels)
         times_p = list(times[perm])
         d['times'] = times_p
