@@ -20,6 +20,12 @@ src <- check_index(args, list(
 dir <- check_dir(args)
 
 for (x in src) {
+
+  if (!is_data_avail(x)) {
+    msg("setting up {x}\n")
+    setup_src_data(x)
+  }
+
   msg("exporting data for {x}\n")
   export_data(x, dest_dir = dir)
   gc()
