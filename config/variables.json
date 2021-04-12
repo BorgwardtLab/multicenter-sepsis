@@ -241,14 +241,14 @@
     "concept": ["age"],
     "challenge": ["Age"],
     "type": ["integer"],
-    "name": ["age"],
+    "name": ["age_static"],
     "category": ["static"]
   },
   {
     "concept": ["sex"],
     "challenge": ["Gender"],
     "type": ["integer"],
-    "name": ["female"],
+    "name": ["female_static"],
     "category": ["static"]
   },
   {
@@ -472,14 +472,14 @@
     "concept": ["weight"],
     "challenge": {},
     "type": ["double"],
-    "name": ["weight"],
+    "name": ["weight_static"],
     "category": ["static"]
   },
   {
     "concept": ["height"],
     "challenge": {},
     "type": ["double"],
-    "name": ["height"],
+    "name": ["height_static"],
     "category": ["static"]
   },
   {
