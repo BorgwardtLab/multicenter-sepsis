@@ -21,8 +21,9 @@ from src.evaluation.sklearn_utils import shift_onset_label
 
 from src.evaluation.physionet2019_score import physionet2019_utility
 
+
 def format_dataset(name):
-    """ ensure that we consistently use lower case dataset names"""
+    """Ensure that we consistently use lower-case dataset names."""
     data_mapping = {
         'MIMICDemo': 'mimic_demo',
         'MIMIC': 'mimic',
@@ -31,12 +32,13 @@ def format_dataset(name):
         'AUMC': 'aumc'
     }
     if name in data_mapping.keys():
-        mapped = data_mapping[name]
+        return data_mapping[name]
     elif name in data_mapping.values():
-        mapped = name
-    else:
-        raise ValueError(f'{name} not among valid dataset names: {data_mapping}')
-    return mapped
+        return name
+
+    raise ValueError(f'{name} not among valid dataset names: {data_mapping}')
+    return None
+
 
 def fpr(y_true, y_pred):
     """Calculate false positive rate (FPR)."""
@@ -57,17 +59,26 @@ def apply_threshold(scores, thres, pat_level=True):
     input.
     """
     result = []
-    for pat_scores in scores:
-        if pat_level:
-            # binarize on patient level:
+
+    # binarize on patient level
+    if pat_level:
+        for pat_scores in scores:
             pred = 1 if any([score >= thres for score in pat_scores]) else 0
             result.append(pred)
-        else:
-            # binarize prediction of each timestep
-            preds = (pat_scores >= thres).astype(int)
-            result.append(preds)
+    # binarize prediction of each timestep
+    else:
+        result = [
+            (np.asarray(pat_scores) >= thres).astype(int)
+            for pat_scores in scores
+        ]
 
     return result
+
+
+def format_check(x, y):
+    """Sanity check that two nested lists x,y have identical format."""
+    for x_, y_ in zip(x, y):
+        assert len(x_) == len(y_)
 
 
 def flatten_list(x):
@@ -88,11 +99,12 @@ def flatten_wrapper(func):
 
 
 def extract_first_alarm(x, indices=None):
-    """
-    assumes x to be a list (patients) of lists (time series)
-        - if indices are provided, the data in x is extracted for these indices
-            otherwise, a binary predictions are assumed and the indices are 
-            identified and returned.
+    """Extract first alarm of (patient, time series) lists.
+
+    Assumes x to be a list (patients) of lists (time series). If indices
+    are provided, the data in x is extracted for these indices. Else,
+    binary predictions are assumed and the indices are identified and
+    returned.
     """
     result = []
     if indices:
@@ -102,7 +114,7 @@ def extract_first_alarm(x, indices=None):
                 result.append(np.nan)
             else:
                 result.append(pat[index])
-        return np.array(result)
+        return np.asarray(result)
     else:
         indices = []
         # extract indices ourselves
@@ -117,7 +129,7 @@ def extract_first_alarm(x, indices=None):
             if not label:  # if no alarm was raised
                 index = -1   # distinguish alarm in first hour from no alarm
             indices.append(index)
-        return np.array(result), indices
+        return np.asarray(result), indices
 
 
 def get_patient_labels(x):
@@ -126,9 +138,7 @@ def get_patient_labels(x):
 
 
 def extract_onset_index(x):
-    """ get index of sepsis onset,
-        -1 indicates no onset in a patient.
-    """
+    """Return index of sepsis onset or -1 if no onset exists."""
     result = []
 
     for pat in x:
@@ -145,16 +155,14 @@ def extract_onset_index(x):
 def first_alarm_eval(y_true, y_pred, times):
     """Extract and evaluate prediction and label of first alarm."""
     labels = get_patient_labels(y_true)
-    #print(f'Cases: {labels.sum()}')
-    #print(f'Prevalence: {labels.sum()/len(labels)*100:.2f}%')
     case_mask = labels.astype(bool)
     y_pred, pred_indices = extract_first_alarm(y_pred)
     onset_indices = extract_onset_index(y_true)
     alarm_times = extract_first_alarm(times, indices=pred_indices)
     onset_times = extract_first_alarm(times, indices=onset_indices)
     delta = onset_times[case_mask] - alarm_times[case_mask]
-    #determine proportion of TPs catched earlier than n hours before onset:
-    windows = np.arange(11)  
+    # determine proportion of TPs caught earlier than n hours before onset:
+    windows = np.arange(11)
     r = {
         'pat_recall': recall_score(labels, y_pred, zero_division=0),
         'pat_precision': precision_score(labels, y_pred, zero_division=0),
@@ -199,20 +207,36 @@ def utility_score_wrapper(lam=1, **kwargs):
     return wrapped_func
 
 
-def evaluate_threshold(data, thres, measures):
+def evaluate_threshold(data, labels, shifted_labels, times, thres, measures):
     """Evaluate threshold-based and patient-based measures.
 
-    - data: dictionary of experiment output data
+    Parameters
+    ----------
+    data
+        Dictionary of experiment data.
 
-    - thres: float between [0,1] for classification, and between
-      [min_score, max_score] for regression
+    labels
+        Original labels.
 
-    - measures: dict of callable evaluation measures to quantify
+    shifted_labels
+        Shifted labels. Notice that the shift can also be `0`, depending
+        on the input file that is loaded. For semantic reasons, it makes
+        more sense to refer to `shifted_labels` within the code, even in
+        these situations.
+
+    times: list of lists
+        Increment 'patient hours' for measurements.
+
+    thres: `np.float`
+        Threshold between [0,1] for classification, and between
+        [min_score, max_score] for regression tasks. Used for a
+        per-threshold evaluation of measures.
+
+    measures: dict of callable
+        Contains callable evaluation measures to perform the evaluation.
     """
     results = {}
     predictions = apply_threshold(data['scores'], thres, pat_level=False)
-    labels = data['labels']
-    times = data['times']  # list of lists of incrementing patient hours
 
     # sanity check that format fits:
     format_check(predictions, labels)
@@ -226,25 +250,6 @@ def evaluate_threshold(data, thres, measures):
     pat_keys = [key for key in measures.keys() if 'pat_' in key]
     pat_measures = {key: measures[key] for key in pat_keys}
 
-    # Check whether label propagation is available in the data or not.
-    # If it is available we perform it for all time-based measures.
-    shift = 0
-    if 'label_propagation' in data['model_params']:
-        shift = data['model_params']['label_propagation']
-        print(f'Using `label_propagation = {shift}` to shift labels')
-    
-    shifted_labels = [
-        # Slightly convoluted: we want to ensure that the labels are
-        # usable in the time-based evaluation, so we need to convert
-        # from `pd.Series` to `np.array` again.
-        shift_onset_label(
-            patient_id,
-            pd.Series(y_true, dtype=int, index=time),
-            -shift
-        ).values
-        for patient_id, y_true, time in zip(data['ids'], labels, times)
-    ]
-
     for name, func in tp_measures.items():
         # The labels that are used in this function *might* or *might
         # not* be shifted, depending on the data.
@@ -255,12 +260,6 @@ def evaluate_threshold(data, thres, measures):
         results.update(output_dict)
 
     return results
-
-
-def format_check(x, y):
-    """Sanity check that two nested lists x,y have identical format."""
-    for x_, y_ in zip(x, y):
-        assert len(x_) == len(y_)
 
 
 def main(args):
@@ -290,7 +289,7 @@ def main(args):
         times = d['times']
         ids = [int(i) for i in d['ids']]
         perm = np.argsort(ids)
-        times = np.array(times)
+        times = np.asarray(times)
         # properly sorted times (consistent with scores, labels)
         times_p = list(times[perm])
         d['times'] = times_p
@@ -333,9 +332,40 @@ def main(args):
     print(f'Using {n_steps} thresholds between {score_min} and {score_max}.')
     results = collections.defaultdict(list)
 
+    # This shared information does not change between different
+    # thresholds, so it is sufficient to query it *once*.
+    labels = d['labels']
+    times = d['times']  # list of lists of incrementing patient hours
+
+    # Check whether label propagation is available in the data or not.
+    # If it is available we perform it for all time-based measures.
+    shift = 0
+    if 'label_propagation' in d['model_params']:
+        shift = d['model_params']['label_propagation']
+        print(f'Using `label_propagation = {shift}` to shift labels')
+
+    shifted_labels = [
+        # Slightly convoluted: we want to ensure that the labels are
+        # usable in the time-based evaluation, so we need to convert
+        # from `pd.Series` to `np.array` again.
+        shift_onset_label(
+            patient_id,
+            pd.Series(y_true, dtype=int, index=time),
+            -shift
+        ).values
+        for patient_id, y_true, time in zip(d['ids'], labels, times)
+    ]
+
     # evaluate thresholds in parallel:
     result_list = Parallel(n_jobs=args.n_jobs, verbose=1)(
-        delayed(evaluate_threshold)(d, thres, measures)
+        delayed(evaluate_threshold)(
+            d,
+            labels,
+            shifted_labels,
+            times,
+            thres,
+            measures
+        )
         for thres in thresholds
     )
 
@@ -346,6 +376,9 @@ def main(args):
             if not isinstance(v, np.ndarray):
                 results[k].append(v)
 
+    # Ensures that the directory hierarchy exists for us to write
+    # something to the disk.
+    pathlib.Path(args.output_file).parent.mkdir(parents=True, exist_ok=True)
     with open(args.output_file, 'w') as f:
         json.dump(results, f, indent=4)
 
