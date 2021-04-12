@@ -60,16 +60,17 @@ def apply_threshold(scores, thres, pat_level=True):
     """
     result = []
 
-    # binarize on patient level:
+    # binarize on patient level
     if pat_level:
         for pat_scores in scores:
             pred = 1 if any([score >= thres for score in pat_scores]) else 0
             result.append(pred)
     # binarize prediction of each timestep
     else:
-        for pat_scores in scores:
-            preds = (pat_scores >= thres).astype(int)
-            result.append(preds)
+        result = [
+            (np.asarray(pat_scores) >= thres).astype(int)
+            for pat_scores in scores
+        ]
 
     return result
 
