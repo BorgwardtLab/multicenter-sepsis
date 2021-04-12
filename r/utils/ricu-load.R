@@ -708,9 +708,13 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
     msg("--> datset stats calculation")
     atr$mcsep[["data_stats"]] <- prof(dataset_stats(dat, spt))
     msg("--> sep3 prevalence of {round(
-      atr$mcsep$data_stats$total$prevalence * 100, 2)}%")
+         atr$mcsep$data_stats$total$prevalence * 100, 2)}% at {
+         atr$mcsep$data_stats$total$n_patients} patients")
 
     spt <- get_split(spt, "train")
+
+    msg("--> physionet score calculation")
+    dat <- prof(score_calc(dat))
 
     msg("--> lambda calculation")
     atr$mcsep[["lambda"]] <- prof(train_lambdas(dat, spt))
@@ -725,9 +729,6 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
                       by = id_vars(dat))
 
   if (!legacy) {
-
-    msg("--> physionet score calculation")
-    dat <- prof(score_calc(dat))
 
     msg("--> derived feature calculation")
     dat <- prof(derived_feats(dat))
