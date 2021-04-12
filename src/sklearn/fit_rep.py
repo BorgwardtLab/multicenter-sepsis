@@ -1,4 +1,4 @@
-"""Train sklearn pipeline on dataset."""
+"""Refit sklearn pipeline (with previously searched hyperparameters) on repetition fold of dataset"""
 import argparse
 from functools import partial
 import json
@@ -113,100 +113,6 @@ def load_data_splits(args,
         d[f'X_{split}'] = data 
     return d, lam
 
-def get_pipeline_and_grid(args):
-    """Get sklearn pipeline and parameter grid."""
-    # first determine which feature set to use for current model:
-    # unpack arguments:
-    method_name = args.method
-    clf_params = args.clf_params 
-    task = args.task
- 
-    steps = [] #pipeline steps
-     
-    # Convert input format from argparse into a dict
-    clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
-    if method_name == 'lgbm':
-        import lightgbm as lgb
-        parameters = {'n_jobs': 30}
-        parameters.update(clf_params)
-        if task == 'classification':
-            est = lgb.LGBMClassifier(**parameters)
-        elif task == 'regression':
-            est = lgb.LGBMRegressor(**parameters)
-        else:
-            raise ValueError(f'task {task} must be classification or regression') 
-        steps.append(('est', est))
-        pipe = Pipeline(steps)
-        param_dist = {
-            'est__n_estimators': [100, 300, 500, 1000, 2000],
-            'est__boosting_type': ['gbdt', 'dart'],
-            'est__learning_rate': [0.001, 0.01, 0.1, 0.5],
-            'est__num_leaves': [30, 50, 100],
-            'est__reg_alpha': [0,0.1,0.5,1,3,5], 
-        }
-        #if args.task == 'classification':
-        #    param_dist['est__scale_pos_weight'] = [1, 10, 20, 50, 100]
-        return pipe, param_dist
-    elif method_name == 'rf':
-        from sklearn.ensemble import RandomForestClassifier as RF
-        parameters = {'n_jobs': 30}
-        parameters.update(clf_params)
-        if task == 'classification':
-            est = RF(**parameters)
-        else:
-            raise NotImplementedError('Only classification implemented for RF')
-        param_dist = {
-              "est__n_estimators": [50, 100, 300, 500, 1000],
-              "est__max_depth": [20,50, None],
-              "est__min_samples_leaf": [10,30,100,1000],
-              "est__bootstrap": [True, False],
-              "est__criterion": ["gini", "entropy"]
-        }
-        steps.append(('est', est))
-        pipe = Pipeline(steps)
-        return pipe, param_dist
-
-    # TODO: add baselines (and try LogReg) also
-    elif method_name == 'lr': #logistic/linear regression
-        
-        if task == 'classification':
-            from sklearn.linear_model import LogisticRegression as LogReg
-            parameters = {'n_jobs': 10} #10 for non-eicu #-1 led to OOM
-            parameters.update(clf_params)
-            est = LogReg(**parameters)
-            # hyper-parameter grid:
-            param_dist = {
-                'est__penalty': ['l1'],
-                'est__C': np.logspace(-3,2,50),
-                'est__solver': ['liblinear', 'saga'], 
-            }
-        elif task == 'regression':
-            from sklearn.linear_model import Lasso 
-            parameters = {}
-            parameters.update(clf_params)
-            est = Lasso(**parameters)
-            # hyper-parameter grid:
-            param_dist = {
-                'est__alpha': np.logspace(-3,2,50),
-            }
-        steps.append(('est', est))
-        pipe = Pipeline(steps)
-        return pipe, param_dist
-    elif method_name in ['sofa', 'qsofa', 'sirs', 'mews', 'news']:
-        from src.sklearn.baseline import BaselineModel
-        import scipy.stats as stats
-        parameters = {'column': method_name}
-        parameters.update(clf_params)
-        est = BaselineModel(**parameters)
-        steps.append(('est', est))
-        pipe = Pipeline(steps)
-        param_dist = { 
-            'est__theta':  stats.uniform(0, 1)
-        }
-        return pipe, param_dist 
-    else:
-        raise ValueError('Invalid method: {}'.format(method_name))
-
 
 def main():
     """Parse arguments and launch fitting of model."""
@@ -235,20 +141,12 @@ def main():
             shift label into the future, afterwards 0 again. Default: 24"""
     )
     parser.add_argument(
-        '--overwrite', action='store_true', default=False,
-        help='(Active for classification) To overwrite existing cached shifted labels'
-    )
-    parser.add_argument(
         '--method', default='lgbm', type=str,
         help='Method to use for classification [lgbm, lr]'
     )
     parser.add_argument(
         '--clf_params', nargs='+', default=[],
         help='Parameters passed to the classifier constructor'
-    )
-    parser.add_argument(
-        '--n_iter_search', type=int, default=20,
-        help='Number of iterations in randomized hyperparameter search'
     )
     parser.add_argument(
         '--cv_n_jobs', type=int, default=10,
@@ -329,102 +227,24 @@ def main():
     #    data['baselines_validation'].index = data['X_validation'].index
     #    data['X_train'] = data['baselines_train']
     #    data['X_validation'] = data['baselines_validation']
- 
-    pipeline, hparam_grid = get_pipeline_and_grid(args)
-     
-    if task == 'classification':
-        target_name = args.target_name
-        if target_name == 'physionet_utility':
-            scores = {
-                target_name: get_physionet2019_scorer(args.label_propagation,
-                    kwargs={'lam': lam}    
-                ),
-                'roc_auc': SCORERS['roc_auc'],
-                'average_precision': SCORERS['average_precision'],
-                'balanced_accuracy': SCORERS['balanced_accuracy'],
-            }
-        elif target_name in ['roc_auc', 'average_precision', 'neg_log_loss']:
-            scores = {
-                'neg_log_loss': SCORERS['neg_log_loss'],
-                'roc_auc': SCORERS['roc_auc'],
-                'average_precision': SCORERS['average_precision'],
-                'balanced_accuracy': SCORERS['balanced_accuracy'],
-            }
-        else:
-            raise ValueError(f'{target_name} not among valid targets.')
-        print(f'Optimizing for {target_name}')
- 
-    elif task == 'regression':
-        target_name = 'neg_mse'
-        scores = { 
-                target_name: SCORERS['neg_mean_squared_error'],
-        }
-    
-    random_search = RandomizedSearchCV(
-        pipeline,
-        param_distributions=hparam_grid,
-        scoring=scores,
-        refit=target_name, #'average_precision'
-        n_iter=args.n_iter_search,
-        cv=StratifiedPatientKFold(n_splits=5),
-        #iid=False,
-        n_jobs=args.cv_n_jobs
-    )
-    # actually run the randomized search
-    start = time()
-    random_search.fit(data['X_train'], data['y_train'])
-    elapsed = time() - start
-    print(
-        "RandomizedSearchCV took %.2f seconds for %d candidates"
-        " parameter settings." % ((elapsed), args.n_iter_search)
-    )
 
+    # TODO: Load pretrained best estimator model:
     result_path = os.path.join(args.result_path, args.dataset+'_'+args.method)
-    os.makedirs(result_path, exist_ok=True)
+    checkpoint_path = os.path.join(result_path, 'best_estimator.pkl')
+    pipe = joblib.load(checkpoint_path)
+    # sanity check that no model has warm_start=True as this would mess with refitting
+    params = pipe['est'].get_params()
+    if 'warm_start' in params.keys():
+        assert not params['warm_start']
 
-    cv_results = pd.DataFrame(random_search.cv_results_)
-    cv_results.to_csv(os.path.join(result_path, 'cv_results.csv'))
-
-    # Quantify performance on validation split
-    best_estimator = random_search.best_estimator_
-    results = {}
-    cache = {}
-    call = partial(_cached_call, cache)
-    if task == 'regression': #only apply non-regression target scores here
-        # since we have no sep3 label during random_search
-        scores = { 
-                target_name: SCORERS['neg_mean_squared_error'],
-                'roc_auc': SCORERS['roc_auc'],
-                'average_precision': SCORERS['average_precision'],
-        }
-    for score_name, scorer in scores.items():
-        if task == 'regression' and score_name in ['roc_auc','average_precision']:
-           results['val_' + score_name] = scorer._score(
-                call, best_estimator, data['X_validation'], data['tp_labels_shifted_validation'])
-        else: 
-            results['val_' + score_name] = scorer._score(
-                call, best_estimator, data['X_validation'], data['y_validation'])
-    print(results)
-    results['method'] = args.method
-    results['best_params'] = random_search.best_params_
-    results['n_iter_search'] = args.n_iter_search
-    results['runtime'] = elapsed
-    for method in ['predict', 'predict_proba', 'decision_function']:
-        try:
-            results['val_' + method] = call(
-                best_estimator, method, data['X_validation']).tolist()
-        except AttributeError:
-            # Not all estimators support all methods
-            continue
-
-    with open(os.path.join(result_path, 'results.json'), 'w') as f:
-        json.dump(results, f)
+    # Fit on current repetition split:
+    pipe.fit(data['X_train'], data['y_train'])
+    # Dump estimator:
     joblib.dump(
-        best_estimator,
-        os.path.join(result_path, 'best_estimator.pkl'),
+        pipe,
+        os.path.join(result_path, f'model_repetition_{args.rep}.pkl'),
         compress=1
     )
-
 
 if __name__ in "__main__":
     main()

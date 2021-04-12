@@ -27,7 +27,9 @@ def extract_model_information(run_path, tmp):
         "model_path": checkpoint_path,
         "model_checksum": model_checksum,
         "model_params": run_info,
-        "dataset_train": run_info['dataset']
+        "dataset_train": run_info['dataset'],
+        "task": run_info['task'],
+        "label_propagation": run_info['label_propagation']
     }
 
 

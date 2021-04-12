@@ -23,7 +23,9 @@ class RecurrentModel(BaseModel):
         self.indicators = indicators
         self.save_hyperparameters()
         model_cls = getattr(torch.nn, model_name)
-        d_in = self._get_input_dim()
+        d_statics, d_in = self._get_input_dims()
+        if not self.hparams.ignore_statics:
+            self.initial_state = nn.Linear(d_statics, d_model * n_layers)
 
         self.model = model_cls(
             hidden_size=d_model,
@@ -42,7 +44,7 @@ class RecurrentModel(BaseModel):
             )
         return parent_transforms
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths, statics=None):
         """Apply GRU model to input x.
             - x: is a three dimensional tensor (batch, stream, channel)
             - lengths: is a one dimensional tensor (batch,) giving the true
@@ -51,7 +53,14 @@ class RecurrentModel(BaseModel):
         # Convert padded sequence to packed sequence for increased efficiency
         x = nn.utils.rnn.pack_padded_sequence(
             x, lengths, batch_first=True, enforce_sorted=False)
-        x, hidden_states = self.model(x)
+        hidden_init = None
+        if statics is not None:
+            hidden_init = self.initial_state(statics)
+            hidden_init = hidden_init.view(
+                -1, self.hparams.n_layers, self.hparams.d_model)
+            hidden_init = hidden_init.permute(1, 0, 2)
+
+        x, hidden_states = self.model(x, hidden_init)
         x = torch.nn.utils.rnn.PackedSequence(
             self.linear(x.data),
             x.batch_sizes,

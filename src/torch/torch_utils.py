@@ -5,9 +5,10 @@ import numpy as np
 import torch
 from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning.loggers import TensorBoardLogger
+import pandas as pd
 
 from src.evaluation.sklearn_utils import (nanany, NotOnsetLabelError)
-
+from src.evaluation import shift_onset_label
 
 class TbWithBestValueLogger(TensorBoardLogger):
     """Tensorboard logger which also tracks the best value of metrics."""
@@ -133,6 +134,15 @@ def variable_length_collate(batch):
         ],
         axis=0
     )
+    transposed_items['labels_shifted'] = np.stack(
+        [
+            np.pad(instance, ((0, max_len - len(instance)),),
+                   mode='constant', constant_values=np.NaN)
+            for instance in transposed_items['labels_shifted']
+        ],
+        axis=0
+    )
+
     # transform `targets` similarly as labels:
     transposed_items['targets'] = np.stack(
         [
@@ -172,6 +182,7 @@ def variable_length_collate(batch):
     transposed_items['ts'] = transposed_items['ts'].astype(np.float32)
     transposed_items['lengths'] = transposed_items['lengths'].astype(np.long)
     transposed_items['labels'] = transposed_items['labels'].astype(np.float32)
+    transposed_items['labels_shifted'] = transposed_items['labels_shifted'].astype(np.float32)
     transposed_items['targets'] = transposed_items['targets'].astype(np.float32)
 
     return {
@@ -307,27 +318,25 @@ def to_observation_tuples_without_indicators(instance_dict):
 
 
 class LabelPropagation():
-    def __init__(self, hours_shift):
-        self.hours_shift = hours_shift
+    def __init__(self, shift_left, keys, shift_right=24):
+        """ apply LabelPropagation
+            - keys: list of keys that contain
+              the shifted label
+        """
+        self.shift_left = shift_left
+        self.shift_right = shift_right
+        self.keys = keys
 
     def __call__(self, instance):
         label = instance['labels']
-        is_case = nanany(label)
-        if is_case:
-            onset = np.nanargmax(label)
-            # Check if label is a onset
-            if not np.all(label[onset:]):
-                raise NotOnsetLabelError(instance['id'])
-
-            new_onset = onset + self.hours_shift
-            new_onset = min(max(0, new_onset), len(label))
-            old_onset_segment = label[new_onset:]
-            new_onset_segment = np.ones(len(label) - new_onset)
-            # NaNs should stay NaNs
-            new_onset_segment[np.isnan(old_onset_segment)] = np.NaN
-            new_label = np.concatenate(
-                [label[:new_onset], new_onset_segment], axis=0)
-            instance['targets'] = new_label
+        label = pd.Series(label, index=instance['times'])
+        new_label = shift_onset_label(
+            instance['id'], 
+            label, 
+            self.shift_left,
+            self.shift_right)
+        for key in self.keys:
+            instance[key] = new_label.values
         return instance
 
 

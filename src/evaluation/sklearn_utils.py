@@ -92,21 +92,24 @@ def make_consecutive(labels, predictions):
     return labels, predictions
 
 
-def shift_onset_label(patient_id, label, shift):
+def shift_onset_label(patient_id, label, shift_left, shift_right=24): #24
     """Shift the label onset.
 
     Args:
         patient_id: The patient_id for more informative errors
-        labels: pd.Series of the labels
-        shift: The number of hours to shift the label. Positive values
-               correspond to shifting into the future.
-
+        labels: pd.Series of the labels with time in the index
+        shift_left: The number of hours to shift the label. Negative values
+            correspond to shifting into the past. Currently, negative values are 
+            expected.
+        shift_right: The number of hours after onset, when the label switches
+            back to 0. By default inactive with 24h
     Returns:
         pd.Series with labels shifted.
 
     """
     # We need to exclude NaNs as they are considered positive. This would lead
     # to treating controls as cases.
+    assert shift_left <= 0
     is_case = nanany(label)
     if is_case:
         onset = np.nanargmax(label.values)
@@ -114,14 +117,28 @@ def shift_onset_label(patient_id, label, shift):
         if not np.all(label.iloc[onset:]):
             raise NotOnsetLabelError(patient_id)
 
-        new_onset = onset + shift
-        new_onset = min(max(0, new_onset), len(label))
-        old_onset_segment = label.values[new_onset:]
-        new_onset_segment = np.ones(len(label) - new_onset)
+        onset_time = label.index[onset] 
+        new_onset = onset_time + shift_left # time where label starts with 1
+        stop_time = onset_time + shift_right # time where labels switches back to 0
+        new_onset = min(max(label.index.min(), new_onset), label.index.max())
+        old_onset_segment = label[new_onset:].values
+    
+        ones_before_onset = len(label[new_onset:onset_time]) - 1 #returns 0 if new_onset=onset_time
+        ones_after_onset = len(label[onset_time:stop_time]) - 1
+        assert ones_before_onset >= 0; assert ones_after_onset >= 0
+
+        new_onset_segment = np.ones(1 + ones_before_onset + ones_after_onset) 
+        # onset is a separate point to account for with `1` 
+        diff = len(old_onset_segment) - len(new_onset_segment)
+        assert diff >= 0
+        new_onset_segment = np.concatenate(
+            [ new_onset_segment, np.zeros(diff) ], axis=0
+        ) 
+        # new_onset_segment = np.ones(len(label) - new_onset)
         # NaNs should stay NaNs
         new_onset_segment[np.isnan(old_onset_segment)] = np.NaN
         new_label = np.concatenate(
-            [label.values[:new_onset], new_onset_segment], axis=0)
+            [label[:new_onset-1].values, new_onset_segment], axis=0)
         return pd.Series(new_label, index=label.index)
     else:
         return label

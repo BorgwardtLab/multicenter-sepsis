@@ -6,15 +6,19 @@ import functools
 import itertools
 import json
 import os
-import pandas as pd
 import pathlib
+
+import pandas as pd
 import numpy as np
+
 from joblib import Parallel, delayed
 from sklearn.metrics import recall_score
 from sklearn.metrics import precision_score
 from sklearn.metrics import confusion_matrix
 
 from src.evaluation.sklearn_utils import make_consecutive
+from src.evaluation.sklearn_utils import shift_onset_label
+
 from src.evaluation.physionet2019_score import physionet2019_utility
 
 def format_dataset(name):
@@ -78,7 +82,6 @@ def flatten_wrapper(func):
         y_pred = flatten_list(y_pred)
 
         assert y_true.shape == y_pred.shape
-
         return func(y_true, y_pred)
 
     return wrapped
@@ -142,15 +145,16 @@ def extract_onset_index(x):
 def first_alarm_eval(y_true, y_pred, times):
     """Extract and evaluate prediction and label of first alarm."""
     labels = get_patient_labels(y_true)
-    print(f'Cases: {labels.sum()}')
-    print(f'Prevalence: {labels.sum()/len(labels)*100:.2f}%')
+    #print(f'Cases: {labels.sum()}')
+    #print(f'Prevalence: {labels.sum()/len(labels)*100:.2f}%')
     case_mask = labels.astype(bool)
     y_pred, pred_indices = extract_first_alarm(y_pred)
     onset_indices = extract_onset_index(y_true)
     alarm_times = extract_first_alarm(times, indices=pred_indices)
     onset_times = extract_first_alarm(times, indices=onset_indices)
-    delta = onset_times[case_mask] - alarm_times[case_mask]  
-
+    delta = onset_times[case_mask] - alarm_times[case_mask]
+    #determine proportion of TPs catched earlier than n hours before onset:
+    windows = np.arange(11)  
     r = {
         'pat_recall': recall_score(labels, y_pred, zero_division=0),
         'pat_precision': precision_score(labels, y_pred, zero_division=0),
@@ -165,7 +169,8 @@ def first_alarm_eval(y_true, y_pred, times):
         'earliness_min': np.nanmin(delta),
         'earliness_max': np.nanmax(delta),
     }
-
+    for window in windows:
+        r[f'proportion_{window}_hours_before_onset'] = (delta > window).sum() / delta.shape[0]
     return r
 
 
@@ -187,8 +192,10 @@ def utility_score_wrapper(lam=1, **kwargs):
                 df['label'], df['pred'])
             labels.append(label.values)
             preds.append(pred.values)
+
         score = physionet2019_utility(labels, preds, lam, **kwargs)
-        return {'physionet2019_utility': score} 
+        return {'physionet2019_utility': score}
+
     return wrapped_func
 
 
@@ -196,8 +203,10 @@ def evaluate_threshold(data, thres, measures):
     """Evaluate threshold-based and patient-based measures.
 
     - data: dictionary of experiment output data
-    - thres: float between [0,1] for classification, and between [min_score, max_score] 
-        for regression
+
+    - thres: float between [0,1] for classification, and between
+      [min_score, max_score] for regression
+
     - measures: dict of callable evaluation measures to quantify
     """
     results = {}
@@ -217,8 +226,29 @@ def evaluate_threshold(data, thres, measures):
     pat_keys = [key for key in measures.keys() if 'pat_' in key]
     pat_measures = {key: measures[key] for key in pat_keys}
 
+    # Check whether label propagation is available in the data or not.
+    # If it is available we perform it for all time-based measures.
+    shift = 0
+    if 'label_propagation' in data['model_params']:
+        shift = data['model_params']['label_propagation']
+        print(f'Using `label_propagation = {shift}` to shift labels')
+    
+    shifted_labels = [
+        # Slightly convoluted: we want to ensure that the labels are
+        # usable in the time-based evaluation, so we need to convert
+        # from `pd.Series` to `np.array` again.
+        shift_onset_label(
+            patient_id,
+            pd.Series(y_true, dtype=int, index=time),
+            -shift
+        ).values
+        for patient_id, y_true, time in zip(data['ids'], labels, times)
+    ]
+
     for name, func in tp_measures.items():
-        results[name] = func(labels, predictions)
+        # The labels that are used in this function *might* or *might
+        # not* be shifted, depending on the data.
+        results[name] = func(shifted_labels, predictions)
 
     for name, func in pat_measures.items():
         output_dict = func(labels, predictions, times)
@@ -235,7 +265,6 @@ def format_check(x, y):
 
 def main(args):
     """Run evaluation based on user parameters."""
-    # Load input json 
     with open(args.input_file, 'r') as f:
         d = json.load(f)
 
@@ -244,12 +273,13 @@ def main(args):
         lam_file = 'lambda_{}_rep_{}_cost_{}.json'
     else:
         lam_file = 'lambda_{}_rep_{}.json'
-    lambda_path = os.path.join(args.lambda_path, 
-        lam_file )
+
+    lambda_path = os.path.join(args.lambda_path, lam_file)
 
     lambdas = []
     eval_dataset = d['dataset_eval']
     cost = args.cost
+
     if isinstance(eval_dataset, list):  # the R jsons had lists of str
         eval_dataset = eval_dataset[0]
     eval_dataset = format_dataset(eval_dataset)
@@ -269,7 +299,7 @@ def main(args):
         labels = [[int(x) for x in pat] for pat in labels]
         d['labels'] = labels
 
-    for rep in np.arange(1): # 5
+    for rep in np.arange(1):  # 5
         if cost > 0:
             curr_path = lambda_path.format(eval_dataset, rep, cost)
         else:

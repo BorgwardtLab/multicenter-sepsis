@@ -53,8 +53,8 @@ def main():
         help='Relative path to experimental results including trained models'
     )
     parser.add_argument(
-        '--output_path', default='results/evaluation',
-        help='Relative path to evaluation results'
+        '--output_path', default=None,
+        help='path to evaluation result file'
     )
     parser.add_argument(
         '--train_dataset', default='mimic',
@@ -211,9 +211,9 @@ def main():
     results['times'] = times
     results['label_propagation'] = args.label_propagation #was only applied here for classification 
     
-    output_path = args.output_path
-    os.makedirs(output_path, exist_ok=True) 
-    outfile = os.path.join(output_path, f'{method}_{train_dataset}_{eval_dataset}.json')
+    outfile = args.output_path
+    #os.makedirs(output_path, exist_ok=True) 
+    #outfile = os.path.join(output_path, f'{method}_{train_dataset}_{eval_dataset}.json')
 
     #clf obj don't go into json format, remove them:
     for key in ['steps', 'est']:

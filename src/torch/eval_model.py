@@ -74,7 +74,7 @@ def variable_len_collate_unwrap(fake_batch):
 def scores_to_pred(fn):
     """Convert scores into predictions, assumes probabilities."""
     def wrapped(labels, scores):
-        predictions = [(s >= 0.5).astype(float) for s in scores]
+        predictions = [(s >= 0.0).astype(float) for s in scores]
         return fn(labels, predictions)
     return wrapped
 
@@ -127,7 +127,8 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
         )
 
     labels = []
-    targets = []   # The target are the shifted labels
+    labels_shifted = [] #here are shifted labels - irrespective of task
+    targets = []   # The target are the shifted labels or regr. target
     scores = []
     predictions = []
     ids = []
@@ -140,12 +141,13 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                     zip(dataloader, dataloader_um),
                     desc='Masked evaluation',
                     total=len(dataloader)):
-                time, data, length, label, target = (
+                time, data, length, label, target, label_shifted = (
                     batch['times'],
                     batch['ts'],
                     batch['lengths'],
                     batch['labels'],
-                    batch['targets']
+                    batch['targets'],
+                    batch['labels_shifted']
                 )
                 data_um, length_um = (
                     batch_um['ts'],
@@ -158,6 +160,7 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                 pred = output[(batch_index, last_index)][:, 0].cpu().numpy()
                 output_um = model(data_um.to(device), length_um.to(device))
                 labels.append(label[(batch_index, last_index)].cpu().numpy())
+                labels_shifted.append(label_shifted[(batch_index, last_index)].cpu().numpy())
                 targets.append(target[(batch_index, last_index)].cpu().numpy())
                 times.append(time[(batch_index, last_index)].cpu().numpy())
                 scores.append(pred)
@@ -165,20 +168,22 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                 # correct way to predict
                 predictions.append((pred >= 0.).astype(int))
                 ids.append(int(batch_um['id'].cpu().numpy()[0]))
-                assert np.allclose(pred, output_um[..., 0].cpu().numpy(), atol=1e-6)
+                assert np.allclose(pred, output_um[..., 0].cpu().numpy(), atol=1e-4)
         else:
             for batch in tqdm(dataloader, desc='Masked evaluation', total=len(dataloader)):
-                time, data, length, label, target = (
+                time, data, length, label, target, label_shifted = (
                     batch['times'],
                     batch['ts'],
                     batch['lengths'],
                     batch['labels'],
-                    batch['targets']
+                    batch['targets'],
+                    batch['labels_shifted']
                 )
                 last_index = length - 1
                 batch_index = np.arange(len(label))
                 output = model(data.to(device), length.to(device))
                 labels.append(label[(batch_index, last_index)].cpu().numpy())
+                labels_shifted.append(label_shifted[(batch_index, last_index)].cpu().numpy())
                 targets.append(target[(batch_index, last_index)].cpu().numpy())
                 times.append(time[(batch_index, last_index)].cpu().numpy())
                 pred = output[(batch_index, last_index)][:, 0].cpu().numpy()
@@ -188,20 +193,26 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
                 predictions.append((pred >= 0.).astype(int))
                 ids.append(int(batch['id'][0].cpu().numpy()))
     scores_fns = {
-        'auroc': concat(roc_auc_score),
-        'average_precision': concat(average_precision_score),
-        'balanced_accuracy': concat(scores_to_pred(balanced_accuracy_score)),
         'physionet2019_score':
             scores_to_pred(partial(
                 physionet2019_utility,
                 # We are evaluating on labels and not targets, so we don't need
                 # to undo the shift.
-                shift_labels=0
+                shift_labels=0,
+                lam=model.lam
             ))
+    }
+    # score functions which we apply to shifted labels
+    shifted_scores_fns = {
+        'auroc': concat(roc_auc_score),
+        'average_precision': concat(average_precision_score),
+        'balanced_accuracy': concat(scores_to_pred(balanced_accuracy_score)),
     }
 
     # Compute scores
     output = {name: fn(labels, scores) for name, fn in scores_fns.items()}
+    output.update({name: fn(labels_shifted, scores) for name, fn in shifted_scores_fns.items()})
+
     # Add predictions
     output['labels'] = [el.tolist() for el in labels]
     output['targets'] = [el.tolist() for el in targets]

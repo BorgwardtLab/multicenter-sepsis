@@ -7,25 +7,25 @@ from src.torch.models.base_model import BaseModel
 from src.torch.torch_utils import PositionalEncoding, to_observation_tuples, to_observation_tuples_without_indicators
 
 
-def get_subsequent_mask(seq):
-    ''' For masking out the subsequent info. '''
+def get_subsequent_mask(seq, offset=0):
+    """For masking out the subsequent info."""
     sz_b, len_s, n_features = seq.size()
-    subsequent_mask = ~torch.triu(
-        torch.ones((len_s, len_s), device=seq.device, dtype=bool),
+    subsequent_mask = torch.triu(
+        torch.ones(
+            (len_s+offset, len_s+offset), device=seq.device, dtype=bool),
         diagonal=1
     )
     return subsequent_mask
 
 
-def length_to_mask(length, max_len=None, dtype=None):
-    """length: B.
-    return B x max_len.
-    If max_len is None, then max of length will be used.
-    """
+def length_to_mask(length, max_len=None, dtype=None, offset=0):
     assert len(length.shape) == 1, 'Length shape should be 1 dimensional.'
-    max_len = max_len or length.max().item()
-    mask = torch.arange(max_len, device=length.device,
-                        dtype=length.dtype).expand(len(length), max_len) < length.unsqueeze(1)
+    max_len = max_len or (length.max().item() + offset)
+    mask = (
+        torch.arange(max_len, device=length.device, dtype=length.dtype) \
+        .expand(len(length), max_len)
+        >= (length.unsqueeze(1) + offset)
+    )
     if dtype is not None:
         mask = torch.as_tensor(mask, dtype=dtype, device=length.device)
     return mask
@@ -144,21 +144,23 @@ class TransformerEncoderLayer(nn.Module):
 class AttentionModel(BaseModel):
     """Sequence to sequence model based on MultiHeadAttention."""
 
-    def __init__(self, d_model, ff_dim, n_layers, n_heads, dropout, norm, indicators=False,
+    def __init__(self, d_model, n_layers, n_heads, dropout, norm, indicators=False,
                  **kwargs):
         """AttentionModel.
 
         Args:
             d_model: Dimensionality of the model
-            ff_dim: Dimensionality of ff layers
             n_layers: Number of MultiHeadAttention layers
             n_heads: Number of attention heads
             indicators: flag if missingness indicators should be applied
         """
         super().__init__(**kwargs)
+        ff_dim = 4*d_model # dimensionality of ff layers: hard-coded default
         self.to_observation_tuples = to_observation_tuples if indicators else to_observation_tuples_without_indicators 
         self.save_hyperparameters()
-        d_in = self._get_input_dim()
+        d_statics, d_in = self._get_input_dims()
+        if not self.hparams.ignore_statics:
+            self.statics_embedding = nn.Linear(d_statics + d_model, d_model)
         self.layers = nn.ModuleList(
             [nn.Linear(d_in, d_model)]
             + [
@@ -178,19 +180,33 @@ class AttentionModel(BaseModel):
         ])
         return parent_transforms
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths, statics=None):
         """Apply attention model to input x."""
+        offset = 0 # if statics is None else 1
         # Invert mask as multi head attention ignores values which are true
-        mask = ~length_to_mask(lengths)
-        future_mask = ~get_subsequent_mask(x)
-        out = x.permute(1, 0, 2)
-        for layer in self.layers:
+        mask = length_to_mask(lengths, offset=offset)
+        future_mask = get_subsequent_mask(x, offset=offset)
+        x = self.layers[0](x)
+        if statics is not None:
+            # append statics as additional channel dimensions
+            stacked_statics = statics.unsqueeze(1).repeat(1,x.shape[1],1)
+            x = torch.cat([x,stacked_statics], axis=-1)
+            x = self.statics_embedding(x)
+            ## prepend statics embedding
+            #embed_statics = self.statics_embedding(statics).unsqueeze(1)
+            #x = torch.cat([embed_statics, x], dim=1)
+
+        x = x.permute(1, 0, 2)
+        for layer in self.layers[1:]:
             if isinstance(layer, TransformerEncoderLayer):
-                out = layer(
-                    out, src_key_padding_mask=mask, src_mask=future_mask)
+                x = layer(
+                    x, src_key_padding_mask=mask, src_mask=future_mask)
             else:
-                out = layer(out)
-        return out.permute(1, 0, 2)
+                x = layer(x)
+        x = x.permute(1, 0, 2)
+        # Remove first element if statics are present
+        x = x[:, offset:, :]
+        return x
 
     # Somehow more recent versions of pytorch lightning don't work with the
     # below code. Need to check this out some other time.
@@ -219,10 +235,6 @@ class AttentionModel(BaseModel):
         parser.add_argument(
             '--n_heads', type=int, default=8,
             # tunable=True, options=[4, 8, 16, 32]
-        )
-        parser.add_argument(
-            '--ff_dim', type=int, default=32,
-            # tunable=True, options=[256, 512, 1028]
         )
         parser.add_argument(
             '--norm', type=str, default='rezero', choices=['layer', 'rezero'])
