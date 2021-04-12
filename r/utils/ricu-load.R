@@ -672,7 +672,11 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   old_opts <- options(datatable.alloccol = 2048L)
   on.exit(options(old_opts))
 
-  assert(is.string(src), dir.exists(dest_dir))
+  if (!dir.exists(dest_dir)) {
+    dir.create(dest_dir)
+  }
+
+  assert(is.string(src))
 
   dat <- load_data(src, ...)
 
