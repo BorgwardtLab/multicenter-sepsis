@@ -348,6 +348,9 @@ def main(args):
             if not isinstance(v, np.ndarray):
                 results[k].append(v)
 
+    # Ensures that the directory hierarchy exists for us to write
+    # something to the disk.
+    pathlib.Path(args.output_file).parent.mkdir(parents=True, exist_ok=True)
     with open(args.output_file, 'w') as f:
         json.dump(results, f, indent=4)
 
