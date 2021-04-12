@@ -689,10 +689,9 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   )
 
   dat <- dat$dat
-
-  dat <- dat[, c("female") := list(is_true(female == "Female"))]
-
+  dat <- dat[, c("female_static") := list(is_true(female == "female_static"))]
   dat <- dat[, onset := sep3]
+
   dat <- replace_na(dat, type = "locf", by_ref = TRUE, vars = "sep3",
                     by = id_vars(dat))
   dat <- replace_na(dat, FALSE, by_ref = TRUE, vars = "sep3")
