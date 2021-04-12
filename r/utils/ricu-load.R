@@ -748,7 +748,7 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
 
   dat <- as.data.frame(dat)
   fil <- file.path(dest_dir,
-    paste(src, packageVersion("ricu"), preproc_version, sep = "-")
+    paste(src, gsub("\\.", "-", packageVersion("ricu")))
   )
 
   create_parquet(dat, fil, atr, chunk_size = 1e3)

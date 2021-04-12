@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
 #BSUB -W 4:00
-#BSUB -n 8
-#BSUB -R rusage[mem=8000]
+#BSUB -n 4
+#BSUB -R rusage[mem=12000]
 #BSUB -J export[1-5]
 #BSUB -o data-export/export_%J.out
 
@@ -22,11 +22,11 @@ dir <- check_dir(args)
 for (x in src) {
 
   if (!is_data_avail(x)) {
-    msg("setting up {x}\n")
+    msg("setting up `{x}`\n")
     setup_src_data(x)
   }
 
-  msg("exporting data for {x}\n")
+  msg("exporting data for `{x}`\n")
   export_data(x, dest_dir = dir)
   gc()
 }
