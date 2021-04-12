@@ -237,8 +237,6 @@ def evaluate_threshold(data, labels, shifted_labels, times, thres, measures):
     """
     results = {}
     predictions = apply_threshold(data['scores'], thres, pat_level=False)
-    labels = data['labels']
-    times = data['times']  # list of lists of incrementing patient hours
 
     # sanity check that format fits:
     format_check(predictions, labels)
@@ -335,7 +333,7 @@ def main(args):
     results = collections.defaultdict(list)
 
     # This shared information does not change between different
-    # thresholds, so its sufficient to query it *once*.
+    # thresholds, so it is sufficient to query it *once*.
     labels = d['labels']
     times = d['times']  # list of lists of incrementing patient hours
 
