@@ -118,7 +118,7 @@ sepsis3_crit <- function(source, pids = NULL, keep_components = FALSE,
 }
 
 load_ricu <- function(source, var_cfg = cfg_path("variables.json"),
-                      min_age = 14, eicu_hosp_thresh = 0.1) {
+                      min_age = 14, eicu_hosp_thresh = 0.15) {
 
   feats <- read_var_json(var_cfg)[["concept"]]
   feats <- setdiff(feats[!is.na(feats)], "sofa")
@@ -526,7 +526,31 @@ score_calc <- function(dat) {
   dat
 }
 
-lambda_calc <- function(x, train_ind) {
+pos_train <- function(x, train) {
+  lapply(train, function(x, id, pos) pos & (id %in% x), id_col(x),
+         index_col(x) > 0)
+}
+
+get_split <- function(x, name) {
+
+  is_test <- identical(name, "test")
+
+  if (is_test) {
+    x <- x[["test"]]
+  } else {
+    x <- x[["dev"]]
+  }
+
+  x <- x[grepl("^split_", names(x))]
+
+  if (is_test) {
+    return(x)
+  }
+
+  lapply(x, `[[`, name)
+}
+
+lambda_calc <- function(train_ind, x) {
 
   col <- c("pos_utility", "neg_utility", "opt_utility")
   res <- setNames(vector("numeric", length = 3L), col)
@@ -554,41 +578,77 @@ lambda_calc <- function(x, train_ind) {
   numer / denom
 }
 
-train_stats <- function(x, train_ids) {
+train_lambdas <- function(x, train_rows) {
+  lapply(pos_train(x, train_rows), lambda_calc, x)
+}
+
+col_stat_calc <- function(train_ind, x) {
 
   mean_sd <- function(x, ind) {
     tmp <- x[ind]
     list(mean = mean(tmp, na.rm = TRUE), sd = sd(tmp, na.rm = TRUE))
   }
 
-  pos_tim <- index_col(x) > 0
+  cols <- data_vars(x)
 
-  norm <- setNames(vector("list", length(train_ids)), names(train_ids))
-  lamb <- setNames(vector("list", length(train_ids)), names(train_ids))
+  res <- list(
+    means = setNames(vector("numeric", length(cols)), cols),
+    stds  = setNames(vector("numeric", length(cols)), cols)
+  )
 
-  for (split in names(train_ids)) {
-
-    hit_rows <- pos_tim & (id_col(x) %in% train_ids[[split]])
-
-    cols <- data_vars(x)
-
-    norm[[split]] <- list(
-      means = setNames(vector("numeric", length(cols)), cols),
-      stds  = setNames(vector("numeric", length(cols)), cols)
-    )
-
-    for (col in cols) {
-      res <- mean_sd(x[[col]], hit_rows)
-      norm[[split]]$means[col] <- res[["mean"]]
-      norm[[split]]$stds[col]  <- res[["sd"]]
-    }
-
-    lamb[[split]] <- lambda_calc(x, hit_rows)
-
-    gc()
+  for (col in cols) {
+    tmp <- mean_sd(x[[col]], train_ind)
+    res$means[col] <- tmp[["mean"]]
+    res$stds[col]  <- tmp[["sd"]]
   }
 
-  list(normalization = norm, lambda = lamb)
+  res
+}
+
+train_col_stats <- function(x, train_rows) {
+  lapply(pos_train(x, train_rows), col_stat_calc, x)
+}
+
+dataset_stats <- function(x, splits) {
+
+  apply_splits <- function(x, spt, name) {
+    lapply(pos_train(x, get_split(spt, name)), dataset_stat_calc, x)
+  }
+
+  list(
+    total = dataset_stat_calc(NULL, x),
+    train = apply_splits(x, splits, "train"),
+    val = apply_splits(x, splits, "validation"),
+    test = apply_splits(x, splits, "test")
+  )
+}
+
+dataset_stat_calc <- function(rows, x) {
+
+  if (!is.null(rows)) {
+    x <- x[, c("stay_id", "stay_time", "is_case", "onset"), with = FALSE]
+    x <- x[rows, ]
+  }
+
+  time <- as.data.frame(
+    table(as.double(x[["stay_time"]], units = "hours"), x[["is_case"]])
+  )
+  colnames(time) <- c("stay_time", "is_case", "counts")
+
+  ons <- x[["stay_time"]][is_true(x[["onset"]])]
+
+  pat <- unique(x[, c("stay_id", "is_case"), with = FALSE])
+  npt <- length(unique(pat$stay_id))
+  ncs <- sum(pat$is_case)
+
+  list(
+    n_patients = npt,
+    n_case = ncs,
+    n_control = sum(!pat$is_case),
+    prevalence = ncs / npt,
+    onset_times = as.double(ons, units = "hours"),
+    stay_times = time
+  )
 }
 
 export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
@@ -635,10 +695,22 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
 
   dat <- dat[, is_case := any(sep3), by = stay_id]
 
-  spt <- create_splits(unique(dat[, c("stay_id", "is_case"), with = FALSE]),
-                       seed = seed)
-  atr$mcsep$splits <- spt
-  spt <- lapply(spt$dev[grepl("^split_", names(spt$dev))], `[[`, "train")
+  if (!legacy) {
+
+    spt <- create_splits(unique(dat[, c("stay_id", "is_case"), with = FALSE]),
+                         seed = seed)
+    atr$mcsep$splits <- spt
+
+    msg("--> datset stats calculation")
+    atr$mcsep[["data_stats"]] <- prof(dataset_stats(dat, spt))
+    msg("--> sep3 prevalence of {round(
+      atr$mcsep$data_stats$total$prevalence * 100, 2)}%")
+
+    spt <- get_split(spt, "train")
+
+    msg("--> lambda calculation")
+    atr$mcsep[["lambda"]] <- prof(train_lambdas(dat, spt))
+  }
 
   dat <- augment_prof("ind", dat, Negate(is.na), "ind")
   dat <- augment_prof("locf", dat, data.table::nafill, "locf",
@@ -662,8 +734,7 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
     }
 
     msg("--> train set stats calculation")
-    sta <- prof(train_stats(dat, spt))
-    atr$mcsep[names(sta)] <- sta
+    atr$mcsep[["normalization"]] <- prof(train_col_stats(dat, spt))
   }
 
   dat <- dat[, c(index_var(dat)) := as.double(
