@@ -21,6 +21,7 @@ from src.evaluation.sklearn_utils import shift_onset_label
 
 from src.evaluation.physionet2019_score import physionet2019_utility
 
+
 def format_dataset(name):
     """ ensure that we consistently use lower case dataset names"""
     data_mapping = {
@@ -31,12 +32,13 @@ def format_dataset(name):
         'AUMC': 'aumc'
     }
     if name in data_mapping.keys():
-        mapped = data_mapping[name]
+        return data_mapping[name]
     elif name in data_mapping.values():
-        mapped = name
-    else:
-        raise ValueError(f'{name} not among valid dataset names: {data_mapping}')
-    return mapped
+        return name
+
+    raise ValueError(f'{name} not among valid dataset names: {data_mapping}')
+    return None
+
 
 def fpr(y_true, y_pred):
     """Calculate false positive rate (FPR)."""
