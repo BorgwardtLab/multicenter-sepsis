@@ -95,12 +95,14 @@ class ColumnFilter:
             used_groups = self.groups.copy()
             drop_groups = ['_wavelet', '_signature']
             for group in drop_groups:
-                used_groups.remove(group)
+                if group in used_groups:
+                    used_groups.remove(group)
         elif name == 'middle2':
             used_groups = self.groups.copy()
             drop_groups = ['_wavelet']
             for group in drop_groups:
-                used_groups.remove(group)
+                if group in used_groups:
+                    used_groups.remove(group)
         elif name == 'small':
             used_groups  = [ 
              '_count',
@@ -204,17 +206,21 @@ class ColumnFilterLight(ColumnFilter):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', 
-                        help='name of dataset to use', 
-                        default='mimic_demo')
+    parser.add_argument('--input_path', 
+                        help='path to features', 
+                        default='datasets/dataset_name/data/parquet/features')
+    #parser.add_argument('--dataset', 
+    #                    help='name of dataset to use', 
+    #                    default='mimic_demo')
     parser.add_argument('--out-file', 
                         help='name of output file', 
                         default='config/features.json')
     args = parser.parse_args()
-    dataset_name = args.dataset 
-    path = f'datasets/{dataset_name}/data/parquet/features'
+    #dataset_name = args.dataset 
+    #path = f'datasets/{dataset_name}/data/parquet/features'
+    path = args.input_path
 
-    feature_sets = ['large', 'small', 'middle', 'raw']
+    feature_sets = ['small', 'middle', 'raw'] #run large prepro before creating its feature groups
     variable_sets = ['full', 'physionet']
 
     cf = ColumnFilter(path=path)
