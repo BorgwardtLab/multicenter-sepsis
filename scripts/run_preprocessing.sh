@@ -1,33 +1,34 @@
 #!/bin/bash
 
 # first generate splits from raw data
-python -m src.splits.create_splits 
+version=0.4.0
+#python -m src.splits.create_splits --version $version 
 
 # then run preprocessing pipeline per dataset
 
 export DASK_DISTRIBUTED__COMM__RETRY__COUNT=30                                                                                                                                                                  
 export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT="180s" #45s
-datasets=(aumc physionet2019 hirid eicu) #mimic_demo mimic 
-cost=10
-feature_sets=(small middle)
+datasets=(mimic_demo) #mimic aumc hirid eicu physionet2019) # aumc physionet2019 hirid eicu) #mimic_demo mimic 
+cost=5
+feature_sets=(small middle) #small
 for dataset in ${datasets[@]}; do
 
     echo ">>> Processing $dataset ..."
-    for feature_set in ${feature_sets[@]}; do
-        features=datasets/${dataset}/data/parquet/features_${feature_set} #features
-        split_file=config/splits/splits_${dataset}.json
-        rm -r $features 
-        #echo ">>> Extracting features ..." 
-        python -m src.preprocessing.extract_features datasets/downloads/${dataset}_0.3.0.parquet \
-            --split-file $split_file \
-            --output $features \
-            --n-workers=20 \
-            --feature_set=$feature_set 
-    done
+    split_file=config/splits/splits_${dataset}_v${version}.json
+    #for feature_set in ${feature_sets[@]}; do
+    #    features=datasets/${dataset}/data/parquet/features_${feature_set}_v${version}
+    #    rm -r $features 
+    #    #echo ">>> Extracting features ..." 
+    #    python -m src.preprocessing.extract_features datasets/downloads/${dataset}_${version}.parquet \
+    #        --split-file $split_file \
+    #        --output $features \
+    #        --n-workers=20 \
+    #        --feature_set=$feature_set 
+    #done
     for rep in {0..4}; do # {0..4} 
-        normalizer_file=config/normalizer/normalizer_${dataset}_rep_${rep}.json
+        normalizer_file=config/normalizer/normalizer_${dataset}_rep_${rep}_v${version}.json
         
-        lambda_file=config/lambdas/lambda_${dataset}_rep_${rep}_cost_${cost}.json
+        lambda_file=config/lambdas/lambda_${dataset}_rep_${rep}_cost_${cost}_v${version}.json
         echo ">>> Split repetition $rep:"
         echo ">>> Normalization ..." 
         python -m src.preprocessing.normalize \
@@ -51,7 +52,7 @@ for dataset in ${datasets[@]}; do
 done
 
 # also extract all feature sets and write to json:
-python -m src.variables.feature_groups
+python -m src.variables.feature_groups --input_path $features 
 
 # caching for deep models: (depends on feature groups)
 splits=(train validation test)
@@ -61,10 +62,11 @@ for dataset in ${datasets[@]}; do
                     # caching for deep models:
                     python -m src.sklearn.loading \
                         --dataset $dataset \
-                        --dump_name features_small \
+                        --dump_name features_small_v${version} \
                         --cache_path datasets/${dataset}/data/parquet \
                         --split $split \
-                        --rep $rep
+                        --rep $rep \
+                        --cost $cost
         done
     done
 done
