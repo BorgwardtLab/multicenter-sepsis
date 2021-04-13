@@ -590,17 +590,19 @@ col_stat_calc <- function(train_ind, x) {
     list(mean = mean(tmp, na.rm = TRUE), sd = sd(tmp, na.rm = TRUE))
   }
 
+  nan_to_na <- function(x) if (is.nan(x)) NA_real_ else x
+
   cols <- data_vars(x)
 
   res <- list(
-    means = setNames(vector("numeric", length(cols)), cols),
-    stds  = setNames(vector("numeric", length(cols)), cols)
+    means = setNames(vector("list", length(cols)), cols),
+    stds  = setNames(vector("list", length(cols)), cols)
   )
 
   for (col in cols) {
     tmp <- mean_sd(x[[col]], train_ind)
-    res$means[col] <- tmp[["mean"]]
-    res$stds[col]  <- tmp[["sd"]]
+    res$means[[col]] <- nan_to_na(tmp[["mean"]])
+    res$stds[[col]]  <- nan_to_na(tmp[["sd"]])
   }
 
   res
@@ -748,7 +750,7 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
 
   dat <- as.data.frame(dat)
   fil <- file.path(dest_dir,
-    paste0(src, "_", gsub("\\.", "-", packageVersion("ricu")))
+    paste0(src, "-", gsub("\\.", "-", packageVersion("ricu")))
   )
 
   jsonlite::write_json(atr$mcsep$splits,

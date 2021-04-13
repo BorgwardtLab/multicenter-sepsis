@@ -22,10 +22,18 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
   }
 
   file <- arrow::open_dataset(file.path(path, source))
-  subs <- dplyr::filter(file, stay_id %in% pids)$filtered_rows
+  scan <- file$NewScan()
 
-  scan <- file$NewScan()$Filter(subs)$Project(cols)$Finish()
-  tble <- scan$ToTable()
+  if (!is.null(pids)) {
+    subs <- dplyr::filter(file, stay_id %in% pids)$filtered_rows
+    scan$Filter(subs)
+  }
+
+  if (!is.null(cols)) {
+    scan$Project(cols)
+  }
+
+  tble <- scan$Finish()$ToTable()
 
   if (identical(match.arg(mat_type), "df")) {
 
@@ -101,7 +109,10 @@ create_parquet <- function(x, name, attr = NULL, ...) {
 
   if (!is.null(attr)) {
     x <- arrow::Table$create(x)
-    x$metadata <- c(x$metadata, lapply(attr, jsonlite::toJSON))
+    x$metadata <- c(x$metadata,
+      lapply(attr, jsonlite::toJSON, dataframe = "columns", auto_unbox = TRUE,
+             na = "null")
+    )
   }
 
   arrow::write_parquet(x, paste0(name, ".parquet"), ...)
@@ -123,7 +134,7 @@ read_parquet <- function(source, dir = data_path(), cols = NULL, pids = NULL) {
 
   file <- list.files(
     dir,
-    paste0(source, "_[0-9]\\.[0-9]\\.[0-9]\\.parquet"),
+    paste0(source, "-[0-9]-[0-9]-[0-9]\\.parquet"),
     full.names = TRUE
   )
 
@@ -159,6 +170,11 @@ read_parquet <- function(source, dir = data_path(), cols = NULL, pids = NULL) {
   }
 
   try_id_tbl(res)
+}
+
+read_meta <- function(file, node = "mcsep") {
+  readr <- arrow::ParquetFileReader$create(file)
+  readr$GetSchema()$metadata[[node]]
 }
 
 y_class <- function(source, left = -6, right = Inf, ...) {
