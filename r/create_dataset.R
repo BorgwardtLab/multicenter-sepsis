@@ -21,7 +21,7 @@ dir <- check_dir(args)
 
 for (x in src) {
 
-  if (!is_data_avail(x)) {
+  if (!identical(x, "physionet2019") && !is_data_avail(x)) {
     msg("setting up `{x}`\n")
     setup_src_data(x)
   }
