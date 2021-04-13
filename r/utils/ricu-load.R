@@ -398,7 +398,8 @@ create_splits <- function(x, test_size = 0.1, val_size = 0.1, boost_size = 0.8,
 
   tst <- c(list(total = tst_all), tst)
 
-  list(total = ids, labels = as.integer(cas), dev = dev, test = tst)
+  list(total = list(ids = ids, labels = as.integer(cas)),
+       dev = dev, test = tst)
 }
 
 derived_feats <- function(dat, funs = c(derived_sirs, derived_mews,
@@ -747,7 +748,12 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
 
   dat <- as.data.frame(dat)
   fil <- file.path(dest_dir,
-    paste(src, gsub("\\.", "-", packageVersion("ricu")))
+    paste0(src, "_", gsub("\\.", "-", packageVersion("ricu")))
+  )
+
+  jsonlite::write_json(atr$mcsep$splits,
+    file.path(cfg_path("splits"), paste0(basename(fil), ".json")),
+    pretty = TRUE
   )
 
   create_parquet(dat, fil, atr, chunk_size = 1e3)
