@@ -487,44 +487,69 @@ derived_misc <- function(dat) {
   )]
 }
 
-score_calc <- function(dat) {
+class_objective <- function(x, left = -6, right = Inf) {
+  is_true(x >= left & x <= right)
+}
 
-  pos_fun <- function(delta_t) {
+reg_objective <- function(x, left = -12, right = 6, mid = -6, u_fp = -0.05) {
+
+  data.table::fifelse(
+    x < left, u_fp,
     data.table::fifelse(
-      delta_t < -12, -0.05, data.table::fifelse(
-        delta_t <= -6, (delta_t + 12) / 6, data.table::fifelse(
-          delta_t <= 3, 1 - ((delta_t + 6) / 9), 0
+      x < mid, (x - left) / (mid - left),
+      data.table::fifelse(x == mid, 1,
+        data.table::fifelse(
+          x <= right, 1 - (x - mid) / (right - mid), 0
         )
       )
-    )
-  }
+    ), u_fp
+  )
+}
 
-  neg_fun <- function(delta_t) {
-    data.table::fifelse(
-      delta_t <= -6, 0, data.table::fifelse(
-        delta_t <= 3, -2 * (delta_t + 6) / 9, 0
+phys_pos_objective <- function(x) {
+
+  data.table::fifelse(
+    x < -12, -0.05, data.table::fifelse(
+      x <= -6, (x + 12) / 6, data.table::fifelse(
+        x <= 3, 1 - ((x + 6) / 9), 0
       )
-    )
-  }
+    ), -0.05
+  )
+}
 
-  dat <- dat[, onset_time := stay_time[which(!is.na(onset))], by = "stay_id"]
-  dat <- dat[, delta_time := as.double(stay_time - onset_time,
-                                       units = "hours")]
+phys_neg_objective <- function(x) {
 
-  dat <- dat[, c("pos_utility", "neg_utility") := 0]
-  dat <- dat[!(is_case), pos_utility := -0.05]
+  data.table::fifelse(
+    x <= -6, 0, data.table::fifelse(
+      x <= 3, -2 * (x + 6) / 9, 0
+    ), 0
+  )
+}
 
-  dat <- dat[(is_case), c("pos_utility", "neg_utility") := list(
-    pos_fun(delta_time), neg_fun(delta_time)
+phys_score_calc <- function(dat) {
+
+  dat <- dat[, c("phys_pos_utility", "phys_neg_utility") := list(
+    phys_pos_objective(onset_delta), phys_neg_objective(onset_delta)
   )]
 
-  dat <- dat[, c("cum_utility", "opt_utility") := list(
-    pos_utility - neg_utility, pmax(pos_utility, neg_utility)
+  dat <- dat[, c("phys_cum_utility", "phys_opt_utility") := list(
+    phys_pos_utility - phys_neg_utility,
+    pmax(phys_pos_utility, phys_neg_utility)
   )]
-
-  dat <- dat[, c("onset_time", "delta_time") := NULL]
 
   dat
+}
+
+objective_calc <- function(dat) {
+
+  dat <- dat[,
+    c("class_m6_p6", "class_m6_inf", "reg_m8_m1", "reg_p4_m1") := list(
+      class_objective(onset_delta, -6, 6),
+      class_objective(onset_delta, -6, Inf),
+      reg_objective(onset_delta, mid = -8, u_fp = -1),
+      reg_objective(onset_delta, mid = 4, u_fp = -1)
+    )
+  ]
 }
 
 pos_train <- function(x, train) {
@@ -553,7 +578,7 @@ get_split <- function(x, name) {
 
 lambda_calc <- function(train_ind, x) {
 
-  col <- c("pos_utility", "neg_utility", "opt_utility")
+  col <- c("phys_pos_utility", "phys_neg_utility", "phys_opt_utility")
   res <- setNames(vector("numeric", length = 3L), col)
 
   sel <- x[["is_case"]] & train_ind
@@ -562,9 +587,9 @@ lambda_calc <- function(train_ind, x) {
     res[i] <- sum(x[[i]] * sel)
   }
 
-  denom <-     res["pos_utility"] -
-           2 * res["neg_utility"] +
-               res["opt_utility"]
+  denom <-     res["phys_pos_utility"] -
+           2 * res["phys_neg_utility"] +
+               res["phys_opt_utility"]
 
   sel <- !x[["is_case"]] & train_ind
 
@@ -572,9 +597,9 @@ lambda_calc <- function(train_ind, x) {
     res[i] <- sum(x[[i]] * sel)
   }
 
-  numer <- 2 * res["neg_utility"] -
-               res["pos_utility"] -
-               res["opt_utility"]
+  numer <- 2 * res["phys_neg_utility"] -
+               res["phys_pos_utility"] -
+               res["phys_opt_utility"]
 
   numer / denom
 }
@@ -629,7 +654,7 @@ dataset_stats <- function(x, splits) {
 dataset_stat_calc <- function(rows, x) {
 
   if (!is.null(rows)) {
-    x <- x[, c("stay_id", "stay_time", "is_case", "onset"), with = FALSE]
+    x <- x[, c("stay_id", "stay_time", "is_case", "onset_ind"), with = FALSE]
     x <- x[rows, ]
   }
 
@@ -638,7 +663,7 @@ dataset_stat_calc <- function(rows, x) {
   )
   colnames(time) <- c("stay_time", "is_case", "counts")
 
-  ons <- x[["stay_time"]][is_true(x[["onset"]])]
+  ons <- x[["stay_time"]][is_true(x[["onset_ind"]])]
 
   pat <- unique(x[, c("stay_id", "is_case"), with = FALSE])
   npt <- length(unique(pat$stay_id))
@@ -693,15 +718,17 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
 
   dat <- dat$dat
   dat <- dat[, c("female_static") := list(is_true(female_static == "Female"))]
-  dat <- dat[, onset := sep3]
 
-  dat <- replace_na(dat, type = "locf", by_ref = TRUE, vars = "sep3",
-                    by = id_vars(dat))
-  dat <- replace_na(dat, FALSE, by_ref = TRUE, vars = "sep3")
-
-  dat <- dat[, is_case := any(sep3), by = stay_id]
+  dat <- dat[, onset_ind := sep3]
+  dat <- dat[, onset_delta := as.double(
+    stay_time - stay_time[which(onset_ind)[1L]], units = "hours"),
+    by = "stay_id"
+  ]
+  dat <- dat[, is_case := any(onset_ind, na.rm = TRUE), by = "stay_id"]
 
   if (!legacy) {
+
+    dat <- dat[, sep3 := NULL]
 
     spt <- create_splits(unique(dat[, c("stay_id", "is_case"), with = FALSE]),
                          seed = seed)
@@ -716,10 +743,19 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
     spt <- get_split(spt, "train")
 
     msg("--> physionet score calculation")
-    dat <- prof(score_calc(dat))
+    dat <- prof(phys_score_calc(dat))
 
     msg("--> lambda calculation")
     atr$mcsep[["lambda"]] <- prof(train_lambdas(dat, spt))
+
+    msg("--> objective calculation")
+    dat <- prof(objective_calc(dat))
+
+  } else {
+
+    dat <- replace_na(dat, type = "locf", by_ref = TRUE, vars = "sep3",
+                      by = id_vars(dat))
+    dat <- replace_na(dat, FALSE, by_ref = TRUE, vars = "sep3")
   }
 
   dat <- augment_prof("ind", dat, Negate(is.na), "ind")
