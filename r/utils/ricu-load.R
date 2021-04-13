@@ -431,9 +431,7 @@ export_data <- function(src, dest_dir = data_path("export"), legacy = FALSE,
   )]
 
   dat <- as.data.frame(dat)
-  fil <- file.path(dest_dir,
-    paste0(src, "-", gsub("\\.", "-", packageVersion("ricu")))
-  )
+  fil <- file.path(dest_dir, paste(src, packageVersion("ricu"), sep = "_"))
 
   jsonlite::write_json(atr$mcsep$splits,
     file.path(cfg_path("splits"), paste0(basename(fil), ".json")),
