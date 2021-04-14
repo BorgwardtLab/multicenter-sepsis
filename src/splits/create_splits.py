@@ -109,7 +109,7 @@ def main(args):
         d['version'] = version 
         print('Dumping split info to json...')
         os.makedirs(out_path, exist_ok=True)
-        out_file = os.path.join(out_path, f'splits_{dataset}_v{version}.json') 
+        out_file = os.path.join(out_path, f'splits_{dataset}.json') 
         with open(out_file, 'w') as f:
             json.dump(d, f, indent=4)
 

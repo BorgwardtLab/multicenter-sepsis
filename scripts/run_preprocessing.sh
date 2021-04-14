@@ -1,34 +1,34 @@
 #!/bin/bash
 
 # first generate splits from raw data
-version=0.4.0
-#python -m src.splits.create_splits --version $version 
+version="0-4-0"
+python -m src.splits.create_splits --version $version 
 
 # then run preprocessing pipeline per dataset
 
 export DASK_DISTRIBUTED__COMM__RETRY__COUNT=30                                                                                                                                                                  
 export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT="180s" #45s
-datasets=(mimic_demo) #mimic aumc hirid eicu physionet2019) # aumc physionet2019 hirid eicu) #mimic_demo mimic 
+datasets=(mimic_demo mimic aumc hirid eicu physionet2019) # aumc physionet2019 hirid eicu) #mimic_demo mimic 
 cost=5
 feature_sets=(small middle) #small
 for dataset in ${datasets[@]}; do
 
     echo ">>> Processing $dataset ..."
-    split_file=config/splits/splits_${dataset}_v${version}.json
-    #for feature_set in ${feature_sets[@]}; do
-    #    features=datasets/${dataset}/data/parquet/features_${feature_set}_v${version}
-    #    rm -r $features 
-    #    #echo ">>> Extracting features ..." 
-    #    python -m src.preprocessing.extract_features datasets/downloads/${dataset}_${version}.parquet \
-    #        --split-file $split_file \
-    #        --output $features \
-    #        --n-workers=20 \
-    #        --feature_set=$feature_set 
-    #done
+    split_file=config/splits/splits_${dataset}.json
+    for feature_set in ${feature_sets[@]}; do
+        features=datasets/${dataset}/data/parquet/features_${feature_set}
+        rm -r $features 
+        #echo ">>> Extracting features ..." 
+        python -m src.preprocessing.extract_features datasets/downloads/${dataset}-${version}.parquet \
+            --split-file $split_file \
+            --output $features \
+            --n-workers=20 \
+            --feature_set=$feature_set 
+    done
     for rep in {0..4}; do # {0..4} 
-        normalizer_file=config/normalizer/normalizer_${dataset}_rep_${rep}_v${version}.json
+        normalizer_file=config/normalizer/normalizer_${dataset}_rep_${rep}.json
         
-        lambda_file=config/lambdas/lambda_${dataset}_rep_${rep}_cost_${cost}_v${version}.json
+        lambda_file=config/lambdas/lambda_${dataset}_rep_${rep}_cost_${cost}.json
         echo ">>> Split repetition $rep:"
         echo ">>> Normalization ..." 
         python -m src.preprocessing.normalize \
@@ -62,7 +62,7 @@ for dataset in ${datasets[@]}; do
                     # caching for deep models:
                     python -m src.sklearn.loading \
                         --dataset $dataset \
-                        --dump_name features_small_v${version} \
+                        --dump_name features_small \
                         --cache_path datasets/${dataset}/data/parquet \
                         --split $split \
                         --rep $rep \
