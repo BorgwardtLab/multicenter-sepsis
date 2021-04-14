@@ -12,7 +12,8 @@ jobid <- function() {
 cfg_path <- function(...) file.path(root_dir, "config", ...)
 
 coh_split <- function(src, set = c("train", "validation", "test"),
-                      split = paste0("split_", 0:4)) {
+                      split = paste0("split_", 0:4), case_prop = NULL,
+                      seed = as.integer(sub("^split_", "", split))) {
 
   set <- match.arg(set)
   split <- match.arg(split)
@@ -22,11 +23,41 @@ coh_split <- function(src, set = c("train", "validation", "test"),
     simplifyVector = TRUE, flatten = TRUE
   )
 
+  ids <- res[["total"]][["ids"]]
+  lab <- res[["total"]][["labels"]]
+
   if (identical(set, "test")) {
-    res[[set]][[split]]
+    res <- res[[set]][[split]]
   } else {
-    res[["dev"]][[split]][[set]]
+    res <- res[["dev"]][[split]][[set]]
   }
+
+  set.seed(seed)
+
+  if (!is.null(case_prop)) {
+
+    ctrl <- split(res, lab[match(res, ids)])
+    case <- ctrl[["1"]]
+    ctrl <- ctrl[["0"]]
+
+    orig <- length(ctrl) / length(res)
+
+    fact <- (length(case) / case_prop - length(case)) / length(ctrl)
+    ctrl <- rep(sample(ctrl), ceiling(fact))[
+      seq_len(ceiling(fact * length(ctrl)))
+    ]
+
+    res <- sample(c(ctrl, case))
+    prp <- length(ctrl) / length(res)
+
+    msg("resampling controls to a proportion of {format(prp,
+         digits = 3)} (from {format(orig, digits = 3)})")
+  }
+
+  attr(res, "ids") <- ids
+  attr(res, "lables") <- lab
+
+  res
 }
 
 is_lsf <- function() !is.na(Sys.getenv("LSB_JOBID", unset = NA))
@@ -63,7 +94,7 @@ feature_sel <- function(regex, predictor = "linear",
                         var_cfg = cfg_path("variables.json")) {
 
   sta <- read_var_json(var_cfg)
-  sta <- sta[is_true(sta$category == "static"), "name"]
+  sta <- sub("_static$", "", sta[is_true(sta$category == "static"), "name"])
 
   res <- grep(regex, feats, value = TRUE)
   res <- c(res, sta)
