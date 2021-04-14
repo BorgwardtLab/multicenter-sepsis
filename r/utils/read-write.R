@@ -35,7 +35,7 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
     cols <- names(file$schema)
   }
 
-  if (dup_pids) {
+  if (dup_pids || add_id) {
     scan$Project(c("stay_id", cols))
   } else {
     scan$Project(cols)
@@ -43,7 +43,7 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
 
   tble <- scan$Finish()$ToTable()
 
-  if (dup_pids) {
+  if (dup_pids || add_id) {
 
     pats <- tble[[1L]]$as_vector()
     inds <- split(seq_along(pats), pats)
