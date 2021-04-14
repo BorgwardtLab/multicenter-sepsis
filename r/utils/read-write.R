@@ -45,18 +45,27 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
 
   if (dup_pids || add_id) {
 
-    pats <- tble[[1L]]$as_vector()
-    inds <- split(seq_along(pats), pats)
-    hits <- match(pids, names(inds))
-    newi <- rep(seq_along(hits), lengths(inds)[hits])
-    inds <- unlist(inds[hits], recursive = FALSE,
-                   use.names = FALSE)
-
-    tble <- tble[inds, ]
     tble <- tble$RenameColumns(c("unique_id", cols))
 
     if (add_id) {
       cols <- c("unique_id", cols)
+    }
+
+    pats <- tble[["unique_id"]]$as_vector()
+    inds <- split(seq_along(pats), pats)
+
+    if (dup_pids) {
+
+      hits <- match(pids, names(inds))
+      newi <- rep(seq_along(hits), lengths(inds)[hits])
+      inds <- unlist(inds[hits], recursive = FALSE,
+                     use.names = FALSE)
+
+      tble <- tble[inds, ]
+
+    } else {
+
+      newi <- rep(seq_along(inds), lengths(inds))
     }
   }
 
