@@ -184,6 +184,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     onse <- lapply(lapply(lapply(onse, `==`, 1), which), `[`, 1L)
     onse <- Map(`[`, lapply(pids, `[[`, "stay_time"), onse)
 
+    real <- lapply(lapply(pids, `[[`, "stay_id"), unique)
     pids <- lapply(pids, `[[`, "stay_time")
 
     res <- list(
@@ -197,7 +198,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
       times = unname(pids),
       ids = names(pids),
       onset = unname(onse),
-      pids = lapply(lapply(pids, `[[`, "stay_id"), unique)
+      pids = unname(real)
     )
 
     jsonlite::write_json(res, paste0(job, "-", src, ".json"))

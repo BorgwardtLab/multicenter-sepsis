@@ -78,7 +78,7 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
 
     if ("unique_id" %in% cols) {
       res <- res[, unique_id := newi]
-    } else {
+    } else if ("unique_id" %in% colnames(res)) {
       res <- res[, unique_id := NULL]
     }
 
