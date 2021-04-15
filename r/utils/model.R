@@ -64,19 +64,17 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
     switch(targ_type,
       class = y_class(train_src, targ_opts1, targ_opts2, path = data_dir,
-                      split = split, pids = pids),
+                      pids = pids),
       reg = y_reg2(train_src, mid = targ_opts1, u_fp = targ_opts2,
-                   path = data_dir, split = split, pids = pids)
+                   path = data_dir, pids = pids)
     )
 
   } else {
 
     switch(target,
-      class = y_class(train_src, 6, Inf, path = data_dir,
-                      split = split, pids = pids),
-      hybrid = y_class(train_src, 6, 6, path = data_dir,
-                       split = split, pids = pids),
-      reg = y_reg(train_src, path = data_dir, split = split, pids = pids)
+      class = y_class(train_src, 6, Inf, path = data_dir, pids = pids),
+      hybrid = y_class(train_src, 6, 6, path = data_dir, pids = pids),
+      reg = y_reg(train_src, path = data_dir, split = NULL, pids = pids)
     )
   }
 
@@ -138,7 +136,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     fun <- switch(predictor, linear = pred_lin, rf = pred_rf, lgbm = pred_lgbm)
     res <- prof(fun(mod, x))
 
-    reg <- y_reg(src, path = data_dir, split = split, pids = pids)
+    reg <- y_reg(src, path = data_dir, split = NULL, pids = pids)
 
     if (identical(target, "reg")) {
 
@@ -151,18 +149,16 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
         switch(targ_type,
           class = y_class(src, targ_opts1, targ_opts2, path = data_dir,
-                          split = split, pids = pids),
+                          pids = pids),
           reg = y_reg2(src, mid = targ_opts1, u_fp = targ_opts2,
-                       path = data_dir, split = split, pids = pids)
+                       path = data_dir, pids = pids)
         )
 
       } else {
 
         switch(target,
-          class = y_class(src, 6, Inf, path = data_dir,
-                          split = split, pids = pids),
-          hybrid = y_class(src, 6, 6, path = data_dir,
-                           split = split, pids = pids)
+          class = y_class(src, 6, Inf, path = data_dir, pids = pids),
+          hybrid = y_class(src, 6, 6, path = data_dir, pids = pids)
         )
       }
     }
