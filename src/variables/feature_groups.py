@@ -111,10 +111,11 @@ class ColumnFilter:
              '_indicator',
              '_raw',
              '_time',
-             'height',
-             'weight',
-             'age',
-             'female',
+             '_static'
+             #'height',
+             #'weight',
+             #'age',
+             #'female',
             ]
              #'_var',
              #'_wavelet',
@@ -129,9 +130,9 @@ class ColumnFilter:
              '_id',
              '_raw',
              '_time',
-             'height',
-             'weight',
-             'age',
+             'height_static',
+             'weight_static',
+             'age_static',
              #'female',
             ]
         else:
