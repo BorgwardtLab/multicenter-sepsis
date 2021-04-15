@@ -119,11 +119,20 @@ def plot_proportion_curves(df, ax):
     df_ = df[cols]
     df_.index = df['thres']
 
+    rename_cols = {}
+
+    for col in df_.columns:
+        _, hours, *_ = col.split('_')
+
+        rename_cols[col] = f'{hours} h'
+
+    df_ = df_.rename(columns=rename_cols)
+
     g = sns.lineplot(
         data=df_,
         ax=ax,
         dashes=False,
-        legend=False
+        legend=True,
     )
     g.set_title('Proportion of TPs raised before X hours')
 
