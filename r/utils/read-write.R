@@ -52,10 +52,10 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
     }
 
     pats <- tble[["unique_id"]]$as_vector()
-    inds <- split(seq_along(pats), pats)
 
     if (dup_pids) {
 
+      inds <- split(seq_along(pats), pats)
       hits <- match(pids, names(inds))
       newi <- rep(seq_along(hits), lengths(inds)[hits])
       inds <- unlist(inds[hits], recursive = FALSE,
@@ -65,7 +65,8 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
 
     } else {
 
-      newi <- rep(seq_along(inds), lengths(inds))
+      newi <- rle(pats)$lengths
+      newi <- rep(seq_along(newi), lengths(newi))
     }
   }
 
@@ -239,10 +240,18 @@ y_class <- function(source, left = -6, right = Inf, ...) {
 
 y_reg <- function(source, split = "split_0", ...) {
 
-  dat <- read_to_df(source,
-    cols = c("stay_id", "stay_time", "sep3", "utility"),
-    norm_cols = NULL, ..., split = split
-  )
+  need_cols <- "utility"
+
+  if (!is.null(split)) {
+    need_cols <- c("stay_id", "sep3", need_cols)
+  }
+
+  dat <- read_to_df(source, cols = need_cols, norm_cols = NULL, ...,
+                    split = split)
+
+  if (is.null(split)) {
+    return(dat[["utility"]])
+  }
 
   lmb <- read_lambda(source, split)
   dat <- dat[, is_case := any(sep3 == 1L), by = "stay_id"]
@@ -252,7 +261,7 @@ y_reg <- function(source, split = "split_0", ...) {
 }
 
 y_reg2 <- function(source, left = -12, right = 6, mid = -6, u_fp = -0.05,
-                   split = "split_0", ...) {
+                   ...) {
 
   fpos_module <- function(delta, left, right, mid, u_fp) {
 
@@ -269,10 +278,8 @@ y_reg2 <- function(source, left = -12, right = 6, mid = -6, u_fp = -0.05,
     )
   }
 
-  dat <- read_to_df(source,
-    cols = c("stay_id", "stay_time", "sep3"),
-    norm_cols = NULL, ..., split = split
-  )
+  dat <- read_to_df(source, cols = c("stay_id", "stay_time", "sep3"),
+                    norm_cols = NULL, ...)
 
   dat <- dat[, onset := stay_time[which(sep3 == 1)[1L]], by = "stay_id"]
   dat <- dat[, delta := stay_time - onset]
