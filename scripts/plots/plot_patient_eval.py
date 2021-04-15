@@ -108,6 +108,30 @@ def plot_info(df, ax, recall_threshold=0.90):
     )
 
 
+def plot_proportion_curves(df, ax):
+    """Plot curves of proportion of alarms."""
+    cols = [col for col in df.columns if col.startswith('proportion_')]
+
+    # Fail gracefully in case no information is available.
+    if len(cols) == 0:
+        return
+
+    df_ = df[cols]
+    df_.index = df['thres']
+
+    g = sns.lineplot(
+        data=df_,
+        ax=ax,
+        dashes=False,
+        legend=False
+    )
+    g.set_title('Proportion of TPs raised before X hours')
+
+    ax.set_xticks(np.linspace(df['thres'].min(), df['thres'].max(), num=10))
+    ax.set_ylabel('Proportion', fontsize=14)
+    ax.set_xlabel('Decision threshold', fontsize=14)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -135,12 +159,13 @@ if __name__ == '__main__':
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
-    fig, axes = plt.subplots(nrows=3, figsize=(9, 10), squeeze=True) #6,7
+    fig, axes = plt.subplots(nrows=4, figsize=(9, 10), squeeze=True) #6,7
 
     # for setting title:
     xmin, xmax = plot_curves(df, axes[0], names)
     plot_scores(df, scores, axes[1])
     plot_info(df, axes[2])
+    plot_proportion_curves(df, axes[3])
 
     out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
     plt.tight_layout()
