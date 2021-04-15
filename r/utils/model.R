@@ -1,13 +1,12 @@
 
 fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
                         feat_set = c("locf", "basic", "wav", "sig", "full"),
-                        feat_reg, predictor = c("linear", "rf", "lgbm"),
+                        feat_reg, predictor = c("rf", "linear", "lgbm"),
                         target = c("class", "hybrid", "reg"),
                         split = "split_0", data_dir = data_path("mm"),
                         res_dir = data_path("res"), targ_param_1 = NULL,
-                        targ_param_2 = NULL, seed = 11, ...) {
-
-  set.seed(seed)
+                        targ_param_2 = NULL, seed = 11, case_prop = 0.15,
+                        n_fold = 5L, ...) {
 
   if (!dir.exists(res_dir)) {
     dir.create(res_dir, showWarnings = FALSE)
@@ -36,16 +35,8 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
   if (targ_has_params) {
 
-    targ_opts1 <- switch(target,
-      class = seq.int(-12, -2),
-      reg = seq.int(-12, 6, by = 2),
-      stop("no opts available for the selected target")
-    )
-
-    targ_opts2 <- switch(target,
-      class = seq.int(-2, 8),
-      reg = c(0, -0.001, -0.01, -0.02, -0.05, -0.1, -0.2, -0.5, -1, -2)
-    )
+    targ_opts1 <- targ_param_opts(target, 1)
+    targ_opts2 <- targ_param_opts(target, 2)
 
     assert_that(is.count(targ_param_1), targ_param_1 <= length(targ_opts1),
                 is.count(targ_param_2), targ_param_2 <= length(targ_opts1))
@@ -66,25 +57,26 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     paste(predictor, target, feat_set, train_src, split, sep = "-")
   )
 
-  pids <- coh_split(train_src, "train", split)
+  pids <- coh_split(train_src, "train", split, case_prop = case_prop,
+                    seed = as.integer(sub("^split_", "", split)) + seed)
 
   y <- if (targ_has_params) {
 
     switch(targ_type,
       class = y_class(train_src, targ_opts1, targ_opts2, path = data_dir,
-                      split = split),
+                      split = split, pids = pids),
       reg = y_reg2(train_src, mid = targ_opts1, u_fp = targ_opts2,
-                   path = data_dir, split = split)
+                   path = data_dir, split = split, pids = pids)
     )
 
   } else {
 
     switch(target,
       class = y_class(train_src, 6, Inf, path = data_dir,
-                      split = split),
+                      split = split, pids = pids),
       hybrid = y_class(train_src, 6, 6, path = data_dir,
-                       split = split),
-      reg = y_reg(train_src, path = data_dir, split = split)
+                       split = split, pids = pids),
+      reg = y_reg(train_src, path = data_dir, split = split, pids = pids)
     )
   }
 
@@ -96,7 +88,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
   x <- prof(
     read_x_fun(train_src, cols = feature_sel(feat_reg, predictor),
-      path = data_dir, split = split
+      path = data_dir, split = split, pids = pids
     )
   )
 
@@ -107,7 +99,7 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
   pids <- pids[, sep3 := as.logical(sep3)]
   pids <- pids[, sep3 := any(sep3), by = "stay_id"]
 
-  n_fold <- 5L
+  set.seed(seed)
 
   case <- sample(unique(pids[ (sep3), ])[["stay_id"]])
   ctrl <- sample(unique(pids[!(sep3), ])[["stay_id"]])
@@ -117,6 +109,8 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
   pids <- pids[, fold := c(cafd, ctfd)[which(stay_id == c(case, ctrl))],
                by = "stay_id"]
+
+  msg("fold sizes are {table(pids$fold)}")
 
   fun <- switch(predictor,
     linear = train_lin, rf = function(...) train_rf(..., seed = seed),
@@ -128,7 +122,8 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
 
     rm(x)
 
-    pids <- coh_split(src, "validation", split)
+    pids <- coh_split(src, "validation", split, case_prop = case_prop,
+                      seed = as.integer(sub("^split_", "", split)) + seed)
 
     msg("reading `", src, "` validation data")
 
@@ -173,22 +168,23 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
     }
 
     pids <- read_to_df(src, data_dir, cols = c("stay_id", "stay_time", "sep3"),
-                       norm_cols = NULL, split = split, pids = pids)
-    pids <- pids[, stay_time := as.double(stay_time)]
+                       norm_cols = NULL, split = split, pids = pids,
+                       add_id = TRUE)
 
-    y <- split(y, pids[["stay_id"]])
-    res <- split(res, pids[["stay_id"]])
+    y <- split(y, pids[["unique_id"]])
+    res <- split(res, pids[["unique_id"]])
 
     if (!identical(target, "reg")) {
-      reg <- split(reg, pids[["stay_id"]])
+      reg <- split(reg, pids[["unique_id"]])
     }
 
-    pids <- split(pids, by = "stay_id", keep.by = FALSE, sorted = TRUE)
+    pids <- split(pids, by = "unique_id", keep.by = FALSE, sorted = TRUE)
     onse <- lapply(pids, `[[`, "sep3")
 
     onse <- lapply(lapply(lapply(onse, `==`, 1), which), `[`, 1L)
     onse <- Map(`[`, lapply(pids, `[[`, "stay_time"), onse)
 
+    real <- lapply(lapply(pids, `[[`, "stay_id"), unique)
     pids <- lapply(pids, `[[`, "stay_time")
 
     res <- list(
@@ -201,13 +197,39 @@ fit_predict <- function(train_src = "mimic_demo", test_src = train_src,
       scores = unname(res),
       times = unname(pids),
       ids = names(pids),
-      onset = unname(onse)
+      onset = unname(onse),
+      pids = unname(real)
     )
 
     jsonlite::write_json(res, paste0(job, "-", src, ".json"))
   }
 
   invisible(NULL)
+}
+
+targ_param_opts <- function(target, param, ind) {
+
+  chr_to_ind <- function(x, opts) {
+    if (is.numeric(x)) x else match(x, opts)
+  }
+
+  res <- array(
+    c(seq(-12, -3),
+      seq(-2, 7),
+      seq(-12, 6, by = 2),
+      c(0, -0.001, -0.01, -0.02, -0.05, -0.1, -0.2, -0.5, -1, -2)
+    ),
+    dim = c(10, 2, 2),
+    dimnames = list(ind = 1:10, param = c("a", "b"), targ = c("class", "reg"))
+  )
+
+  ind <- cbind(
+    chr_to_ind(ind, dimnames(res)[[1L]]),
+    chr_to_ind(param, dimnames(res)[[2L]]),
+    chr_to_ind(target, dimnames(res)[[3L]])
+  )
+
+  res[ind]
 }
 
 train_rf <- function(x, y, is_class, folds, n_cores, job_name, ...) {

@@ -10,10 +10,12 @@ read_to_vec <- function(...) read_train(..., mat_type = "mem")[, 1L]
 read_train <- function(source, path = data_path("mm"), cols = feature_set(),
                        norm_cols = norm_sel(cols), split = "split_0",
                        pids = coh_split(source, split = split),
-                       mat_type = c("mem", "df", "big")) {
+                       add_id = FALSE, mat_type = c("mem", "df", "big")) {
 
   normalize <- function(x, mean, std) zero_impute(zscore(x, mean, std))
   is_female <- function(x) replace(x, is.na(x), 0)
+
+  dup_pids <- anyDuplicated(pids) > 0
 
   if (length(norm_cols) > 0L) {
     sta <- read_colstats(source, split, norm_cols)
@@ -25,15 +27,47 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
   scan <- file$NewScan()
 
   if (!is.null(pids)) {
-    subs <- dplyr::filter(file, stay_id %in% pids)$filtered_rows
+    subs <- dplyr::filter(file, stay_id %in% unique(pids))$filtered_rows
     scan$Filter(subs)
   }
 
-  if (!is.null(cols)) {
+  if (is.null(cols)) {
+    cols <- names(file$schema)
+  }
+
+  if (dup_pids || add_id) {
+    scan$Project(c("stay_id", cols))
+  } else {
     scan$Project(cols)
   }
 
   tble <- scan$Finish()$ToTable()
+
+  if (dup_pids || add_id) {
+
+    tble <- tble$RenameColumns(c("unique_id", cols))
+
+    if (add_id) {
+      cols <- c("unique_id", cols)
+    }
+
+    pats <- tble[["unique_id"]]$as_vector()
+    inds <- split(seq_along(pats), pats)
+
+    if (dup_pids) {
+
+      hits <- match(pids, names(inds))
+      newi <- rep(seq_along(hits), lengths(inds)[hits])
+      inds <- unlist(inds[hits], recursive = FALSE,
+                     use.names = FALSE)
+
+      tble <- tble[inds, ]
+
+    } else {
+
+      newi <- rep(seq_along(inds), lengths(inds))
+    }
+  }
 
   if (identical(match.arg(mat_type), "df")) {
 
@@ -49,6 +83,12 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
 
     if ("female" %in% colnames(res)) {
       res <- res[, female := is_female(female)]
+    }
+
+    if ("unique_id" %in% cols) {
+      res <- res[, unique_id := newi]
+    } else if ("unique_id" %in% colnames(res)) {
+      res <- res[, unique_id := NULL]
     }
 
     return(res)
@@ -69,7 +109,12 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
 
   for (col in cols) {
 
-    tmp <- tble$GetColumnByName(col)$as_vector()
+    if (identical(col, "unique_id")) {
+      tmp <- newi
+    } else {
+      tmp <- tble$GetColumnByName(col)$as_vector()
+    }
+
     tmp <- as.double(tmp)
 
     if (identical(col, "female")) {
