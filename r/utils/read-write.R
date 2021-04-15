@@ -66,7 +66,7 @@ read_train <- function(source, path = data_path("mm"), cols = feature_set(),
     } else {
 
       newi <- rle(pats)$lengths
-      newi <- rep(seq_along(newi), lengths(newi))
+      newi <- rep(seq_along(newi), newi)
     }
   }
 
