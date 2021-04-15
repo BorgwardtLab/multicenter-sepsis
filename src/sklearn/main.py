@@ -213,7 +213,7 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        '--input_path', default='datasets/{}/data/parquet/features',
+        '--input_path', default='datasets/{}/data/parquet/features_middle',
         help='Path to input data directory (relative from dataset directory)'
     )
     parser.add_argument(
@@ -262,7 +262,7 @@ def main():
     )
     parser.add_argument(
         '--feature_set', default='middle',
-        help="""which feature set should be used: [large, small], 
+        help="""which feature set should be used: [small, middle], 
             large including feature engineering for classic models"""
     )
     parser.add_argument(
