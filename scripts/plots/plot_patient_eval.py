@@ -124,9 +124,11 @@ def plot_proportion_curves(df, ax):
     for col in df_.columns:
         _, hours, *_ = col.split('_')
 
-        rename_cols[col] = f'{hours} h'
+        if int(hours) % 2 == 0:
+            rename_cols[col] = f'{hours} h'
 
     df_ = df_.rename(columns=rename_cols)
+    df_ = df_[[c for c in df_.columns if not c.startswith('proportion_')]]
 
     g = sns.lineplot(
         data=df_,
@@ -168,7 +170,7 @@ if __name__ == '__main__':
     earliness_stat = args.earliness_stat
     earliness = f'earliness_{earliness_stat}'
 
-    fig, axes = plt.subplots(nrows=4, figsize=(9, 10), squeeze=True) #6,7
+    fig, axes = plt.subplots(nrows=4, figsize=(9, 11), squeeze=True) #6,7
 
     # for setting title:
     xmin, xmax = plot_curves(df, axes[0], names)
