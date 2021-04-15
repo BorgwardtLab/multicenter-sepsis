@@ -40,8 +40,8 @@ def plot_curves(df, ax, names={}):
             label='precision', color='darkgreen', ax=ax1)
     ax1 = sns.lineplot(x='thres', y='pat_recall', data = df,
             label='recall', color='lightgreen', ax=ax1) #tab:green
-    ax1 = sns.lineplot(x='thres', y='physionet2019_utility', data = df,
-            label='utility', color='black', ax=ax1)
+    #ax1 = sns.lineplot(x='thres', y='physionet2019_utility', data = df,
+    #        label='utility', color='black', ax=ax1)
 
     ax2 = ax1.twinx()
     ax2.set_ylabel(f'Earliness: {earliness_stat} #hours\nbefore onset',
@@ -106,6 +106,7 @@ def plot_info(df, ax, recall_threshold=0.90):
         ha='left',
         va='center'
     )
+    return info
 
 
 def plot_proportion_curves(df, ax):
@@ -175,8 +176,10 @@ if __name__ == '__main__':
     # for setting title:
     xmin, xmax = plot_curves(df, axes[0], names)
     plot_scores(df, scores, axes[1])
-    plot_info(df, axes[2])
-    plot_proportion_curves(df, axes[3])
+    plot_proportion_curves(df, axes[2])
+    info = plot_info(df, axes[3])
+    for ax in axes[:3]:
+        ax.axvline(info['thres'], color='black')
 
     out_file = os.path.split(input_path)[-1].split('.')[0] + '_' + earliness + '.png' 
     plt.tight_layout()
