@@ -8,13 +8,13 @@
 RESULTS_PATH=${1}
 
 # Main configuration for *what* all jobs will run.
-N_ITER=50
+N_ITER=20
 FEATURE_SET=middle
 COST=5
 
 # Main configuration for *how* all jobs will be run on the cluster. 
-N_CORES=32
-MEM_PER_CORE=8192
+N_CORES=2
+MEM_PER_CORE=524288
 
 # Try to be smart: if `bsub` does *not* exist on the system, we just
 # pretend that it is an empty command.
@@ -38,6 +38,6 @@ MAIN="poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --n_it
 
 for data in aumc eicu hirid eicu; do
   for method in lr lgbm; do
-    run "${MAIN} --cv_n_jobs=32 --dataset=${data} --method=${method}"
+    run "${MAIN} --cv_n_jobs=1 --dataset=${data} --method=${method}"
   done
 done
