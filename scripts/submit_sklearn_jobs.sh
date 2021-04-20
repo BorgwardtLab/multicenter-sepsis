@@ -12,23 +12,27 @@ N_ITER=20
 FEATURE_SET=middle
 COST=5
 
-# Main configuration for *how* all jobs will be run on the cluster. 
-N_CORES=2
+# Main configuration for *how* all jobs will be run on the cluster.
+# It is easiest to specify this here because we can modify it later
+# on for individual classifiers.
+N_CORES=1
 MEM_PER_CORE=524288
+RUNTIME=23:59
 
 # Try to be smart: if `bsub` does *not* exist on the system, we just
 # pretend that it is an empty command.
 if [ -x "$(command -v bsub)" ]; then
-  BSUB='bsub -N '"-n ${N_CORES}"' -W 23:59 -o "sklearn_%J.out" -R "rusage[mem='${MEM_PER_CORE}']"'
+  BSUB='bsub -N '"-n ${N_CORES}"' -o "sklearn_%J.out" -R "rusage[mem='${MEM_PER_CORE}']"'
 fi
 
 # Evaluates its first argument either by submitting a job, or by
-# executing the command without parallel processing.
+# executing the command without parallel processing. Notice that
+# `$2` needs to be provided to specify runtime requirements.
 run() {
   if [ -z "$BSUB" ]; then
     eval "$1";
   else
-    eval "${BSUB} $1";
+    eval "${BSUB} -W $2 $1";
   fi
 }
 
@@ -36,8 +40,15 @@ run() {
 # below. The space at the end of the string is important.
 MAIN="poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --n_iter_search=${N_ITER} --feature_set ${FEATURE_SET} --cost ${COST} "
 
-for data in aumc eicu hirid eicu; do
+for data in aumc eicu hirid mimic; do
   for method in lr lgbm; do
-    run "${MAIN} --cv_n_jobs=1 --dataset=${data} --method=${method}"
+
+    if [ ${method} = "lgbm" ]; then
+      TIME=119:59
+    else
+      TIME=$RUNTIME
+    fi
+
+    run "${MAIN} --cv_n_jobs=${N_CORES} --dataset=${data} --method=${method}" $TIME
   done
 done
