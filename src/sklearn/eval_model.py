@@ -45,7 +45,7 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        '--input_path', default='datasets/{}/data/parquet/features',
+        '--input_path', default='datasets/{}/data/parquet/features_middle',
         help='Path to input data, (dataset name not formatted, but left as {})'
     )
     parser.add_argument(
@@ -64,9 +64,19 @@ def main():
         '--eval_dataset', default='mimic_demo',
         help='Evaluation Dataset Name: [physionet2019, ..]'
     )
+    #parser.add_argument(
+    #    '--label-propagation', default=6, type=int,
+    #    help='By how many hours to shift label into the past. Default: 6'
+    #)
     parser.add_argument(
-        '--label-propagation', default=6, type=int,
-        help='By how many hours to shift label into the past. Default: 6'
+        '--label_propagation', default=6, type=int,
+        help="""(Active for classification task) By how many hours to 
+            shift label into the past. Default: 6"""
+    )
+    parser.add_argument(
+        '--label_propagation_right', default=24, type=int,
+        help="""(Active for classification task) By how many hours to 
+            shift label into the future, afterwards 0 again. Default: 24"""
     )
     parser.add_argument(
         '--method', default='lgbm', type=str,
@@ -219,6 +229,7 @@ def main():
     for key in ['steps', 'est']:
         results['model_params'].pop(key, None)
 
+    os.makedirs(os.path.split(outfile)[0], exist_ok=True) 
     with open(outfile, 'w') as f:
         json.dump(results, f, indent=4)
 
