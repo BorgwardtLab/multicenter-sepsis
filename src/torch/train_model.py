@@ -31,6 +31,7 @@ def namespace_without_none(namespace):
 def main(hparams, model_cls):
     """Main function train model."""
     # init module
+    wandb.init(settings=wandb.Settings(start_method="fork"))
     #wandb.init(project='mc-sepsis', entity='sepsis', config=hparams)
     ##config = wandb.config
      
