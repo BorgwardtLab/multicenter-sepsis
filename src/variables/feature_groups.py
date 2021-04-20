@@ -209,7 +209,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_path', 
                         help='path to features', 
-                        default='datasets/dataset_name/data/parquet/features')
+                        default='datasets/dataset_name/data/parquet/features_middle')
     #parser.add_argument('--dataset', 
     #                    help='name of dataset to use', 
     #                    default='mimic_demo')
@@ -220,6 +220,9 @@ if __name__ == "__main__":
     #dataset_name = args.dataset 
     #path = f'datasets/{dataset_name}/data/parquet/features'
     path = args.input_path
+    # Defensive step:
+    if 'middle' not in path:
+        raise ValueError(f'we currently assume the middle feature set, however it is not provided!')
 
     feature_sets = ['small', 'middle', 'raw'] #run large prepro before creating its feature groups
     variable_sets = ['full', 'physionet']
