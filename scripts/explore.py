@@ -2,6 +2,7 @@ import os
 import pickle
 import argparse
 import sys
+import pandas as pd
 sys.path.append(os.getcwd())
 from src.sklearn.data.utils import load_pickle
 from IPython import embed
@@ -70,7 +71,7 @@ if __name__ == "__main__":
         splits = [split]
 
     if dataset == 'all':
-        datasets = ['demo', 'physionet2019', 'mimic3', 'eicu', 'hirid', 'aumc']
+        datasets = ['physionet2019', 'mimic', 'eicu', 'hirid', 'aumc']
     else:
         datasets = [dataset]
 
@@ -80,28 +81,29 @@ if __name__ == "__main__":
         results[dataset] = {}
         
         for split in splits:
-            
-            path = os.path.join('datasets', dataset, args.path)
+            path = f'datasets/{dataset}/data/parquet/features_small_cache/{split}_0_cost_5.parquet' 
+            df = pd.read_parquet(path)
+            #path = os.path.join('datasets', dataset, args.path)
             #normalized_path = os.path.join(path, f'X_normalized_{split}.pkl')
-            features_path = os.path.join(path, f'X_features_{split}.pkl')
-            filtered_path = os.path.join(path, f'X_filtered_{split}.pkl')
+            #features_path = os.path.join(path, f'X_features_{split}.pkl')
+            #filtered_path = os.path.join(path, f'X_filtered_{split}.pkl')
 
-            X_ni_path = os.path.join(path, f'X_features_no_imp_{split}.pkl')
-            baseline_path = os.path.join(path, f'baselines_{split}.pkl')
+            #X_ni_path = os.path.join(path, f'X_features_no_imp_{split}.pkl')
+            #baseline_path = os.path.join(path, f'baselines_{split}.pkl')
          
             #df_n = load_pickle(normalized_path)
-            X = load_pickle(features_path)
-            X_ni = load_pickle(X_ni_path)
-            X_f = load_pickle(filtered_path)  
-            b = load_pickle(baseline_path)
+            #X = load_pickle(features_path)
+            #X_ni = load_pickle(X_ni_path)
+            #X_f = load_pickle(filtered_path)  
+            #b = load_pickle(baseline_path)
         
-            lengths += len(X_f) 
+            lengths += len(df) 
             #dfs = [X, Xf]
             #names = ['X_features', 'X_features_no_imp']
             #for df, name in zip(dfs, names):
             #    check_df(df, name)
          
-            results[dataset][split] = compute_stats(X) 
+            results[dataset][split] = compute_stats(df) 
             #check_times(X_f)
 
     overall_total = 0
