@@ -46,6 +46,10 @@ def load_data(args, split):
     split_path = os.path.join(args.split_path, 
         f'splits_{dataset}.json' ) 
 
+    baselines = False
+    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
+        baselines = True
+
     # Load data and apply on-the-fly transforms:
     return load_and_transform_data(
         input_path,
@@ -58,7 +62,7 @@ def load_data(args, split):
         feature_set=args.feature_set,
         variable_set=args.variable_set,
         task=args.task,
-        baselines=False
+        baselines=baselines
     )
 
 def load_data_splits(args, 
@@ -320,7 +324,7 @@ def main():
         # for regression task the label shift happens in target calculation
         data = handle_label_shift(args, data)
  
-    # TODO: add (update) baseline option! 
+    # TODO: add (update) baseline option!
     ## for baselines: 
     #if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
     #    # use baselines as prediction input data
