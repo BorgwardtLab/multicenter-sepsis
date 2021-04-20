@@ -8,9 +8,9 @@ python -m src.splits.create_splits --version $version
 
 export DASK_DISTRIBUTED__COMM__RETRY__COUNT=30                                                                                                                                                                  
 export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT="180s" #45s
-datasets=(mimic_demo mimic aumc hirid eicu physionet2019) # aumc physionet2019 hirid eicu) #mimic_demo mimic 
+datasets=(mimic_demo) # mimic aumc eicu hirid physionet2019)  #mimic_demo mimic aumc physionet2019 hirid eicu) #mimic_demo mimic 
 cost=5
-feature_sets=(small middle) #small
+feature_sets=(middle) #small
 for dataset in ${datasets[@]}; do
 
     echo ">>> Processing $dataset ..."
@@ -54,6 +54,7 @@ done
 # also extract all feature sets and write to json:
 python -m src.variables.feature_groups --input_path $features 
 
+# datasets=(mimic_demo mimic aumc eicu physionet2019 hirid)
 # caching for deep models: (depends on feature groups)
 splits=(train validation test)
 for dataset in ${datasets[@]}; do
