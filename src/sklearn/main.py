@@ -127,7 +127,7 @@ def get_pipeline_and_grid(args):
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
         import lightgbm as lgb
-        parameters = {'n_jobs': 30}
+        parameters = {'n_jobs': -1}
         parameters.update(clf_params)
         if task == 'classification':
             est = lgb.LGBMClassifier(**parameters)
@@ -359,7 +359,7 @@ def main():
         scores = { 
                 target_name: SCORERS['neg_mean_squared_error'],
         }
-    
+
     random_search = RandomizedSearchCV(
         pipeline,
         param_distributions=hparam_grid,
