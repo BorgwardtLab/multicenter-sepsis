@@ -20,8 +20,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import pandas as pd
-import numpy as np
-from src.evaluation.patient_evaluation import format_dataset
+
+from sklearn.metrics import auc
 
 
 def plot_curve(data_frames, ax, curve_type='roc'):
@@ -29,12 +29,11 @@ def plot_curve(data_frames, ax, curve_type='roc'):
     columns = ['pat_specificity', 'pat_recall']
 
     if curve_type == 'pr':
-        columns = ['pat_precision', 'pat_recall']
+        columns = ['pat_recall', 'pat_precision']
 
     data_frames = [
         df[columns + ['model']] for df in data_frames
     ]
-
 
     df = pd.concat(data_frames)
 
@@ -48,19 +47,35 @@ def plot_curve(data_frames, ax, curve_type='roc'):
         data=df,
         hue='model',
         ci=None,
-        ax=ax
+        ax=ax,
     )
 
     if curve_type == 'roc':
         g.set_title('ROC curve')
         g.set_xlabel('FPR')
         g.set_ylabel('TPR')
+        g.legend(loc='lower right')
+    elif curve_type == 'pr':
+        g.set_title('PR curve')
+        g.set_xlabel('Precision')
+        g.set_ylabel('Recall')
+        g.legend(loc='lower left')
 
-    g.set_xlim((-0.05, 1.05))
-    g.set_ylim((-0.05, 1.05))
+    g.set_xlim((-0.01, 1.05))
+    g.set_ylim((-0.01, 1.05))
     g.set_aspect(1.0)
 
-    plt.show()
+    # Calculate AUCs for each model and update the legend accordingly.
+    # Notice that this might be slightly less precise than calling the
+    # `average_precision_score` or `roc_auc_score` functions, but here
+    # we do not need the predictions, making the script easier to call
+    # from jobs.
+    aucs = [
+        auc(df_.iloc[:, 0], df_.iloc[:, 1]) for _, df_ in df.groupby('model')
+    ]
+
+    for text, area in zip(g.legend_.texts, aucs):
+        text.set_text(text.get_text() + f' (AUC: {area:.2f})')
 
 
 if __name__ == '__main__':
@@ -101,9 +116,17 @@ if __name__ == '__main__':
 
             data_frames.append(df)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(nrows=2, figsize=(4, 8))
 
-    plot_curve(data_frames, ax)
+    plot_curve(data_frames, ax[0])
+    plot_curve(data_frames, ax[1], curve_type='pr')
+
+    plt.tight_layout()
+
+    if args.show:
+        plt.show()
+
+    raise 'heck'
 
     # for setting title:
     xmin, xmax = plot_curves(df, axes[0], names,level=level)
@@ -127,5 +150,4 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig( os.path.join(args.output_path, out_file))
 
-    if args.show:
-        plt.show()
+
