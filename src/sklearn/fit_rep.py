@@ -13,6 +13,7 @@ from sklearn.metrics import SCORERS
 from sklearn.metrics._scorer import _cached_call
 from sklearn.model_selection import RandomizedSearchCV
 
+from src.main import load_data_splits
 from src.variables.mapping import VariableMapping
 from src.sklearn.data.utils import load_pickle, save_pickle
 from src.sklearn.loading import load_and_transform_data
@@ -27,92 +28,6 @@ VM_CONFIG_PATH = str(
 )
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
-
-def load_data(args, split):
-    """
-    util function to load current data split
-    """
-    dataset = args.dataset
-    rep = args.rep
-    input_path = args.input_path.format(dataset)
-    normalizer_path = os.path.join(args.normalizer_path, 
-        f'normalizer_{dataset}_rep_{rep}.json' )
-    if args.cost > 0:
-        lam_file = f'lambda_{dataset}_rep_{rep}_cost_{args.cost}.json'
-    else:
-        lam_file = f'lambda_{dataset}_rep_{rep}.json'
-    lambda_path = os.path.join(args.lambda_path, 
-        lam_file )
-    split_path = os.path.join(args.split_path, 
-        f'splits_{dataset}.json' ) 
-
-    # Load data and apply on-the-fly transforms:
-    return load_and_transform_data(
-        input_path,
-        split_path,
-        normalizer_path,
-        lambda_path,
-        args.feature_path,
-        split=split,
-        rep=rep,
-        feature_set=args.feature_set,
-        variable_set=args.variable_set,
-        task=args.task,
-        baselines=False
-    )
-
-def load_data_splits(args, 
-    splits=['train','validation','test']):
-    """
-    Util function to read all 3 data splits of current repetion
-    and return dictionary {X_train: [], y_train: [], ..}
-    setting the label to the current task
-    Parameters: 
-    args: config object with properties:
-        .task regression or classification
-        .index: multi oder single index
-        .input_path: path to input data, with dataset name generic with {}
-        .dataset: name of dataset
-        .split_path: path to split info
-        .lambda_path: path to lambdas
-        .normalizer_path: path to normalizer
-        .features_path: path to feature columns file
-        .variable_set: full, physionet
-        .feature_set: large, small
-        .rep: repetition/fold of split
-    """ 
-    d = {}
-    if args.task == 'classification':
-        label = VM_DEFAULT('label')
-    elif args.task == 'regression':
-        label = VM_DEFAULT('utility')
-    else:
-        raise ValueError(f'Task {args.task} not among valid tasks. ')
-    for split in splits:
-        data, lam = load_data(args, split)
-        if args.index == 'multi':   
-            data = data.reset_index().set_index(
-                [VM_DEFAULT('id'), VM_DEFAULT('time')]
-            ) 
-        d[f'y_{split}'] = data[label]
-        # shifted and unshifted labels for down stream eval irrespecive of task:
-        d[f'tp_labels_{split}'] = data[VM_DEFAULT('label')]
-        d[f'tp_labels_shifted_{split}'] = data[VM_DEFAULT('label')]
-        data = data.drop(columns=[ 
-            VM_DEFAULT('label'), VM_DEFAULT('utility')
-            ], errors='ignore'
-        )
-        #if args.task == 'regression':
-        #    data = data.drop(columns=[label])
-        # sanity check as we must not leak any label info to the input data
-        assert all( 
-            [ VM_DEFAULT(x) not in data.columns 
-                for x in ['label', 'utility'] 
-            ]
-        )
-        d[f'X_{split}'] = data 
-    return d, lam
-
 
 def main():
     """Parse arguments and launch fitting of model."""
