@@ -55,11 +55,16 @@ def plot_curve(data_frames, ax, curve_type='roc'):
         g.set_xlabel('FPR')
         g.set_ylabel('TPR')
         g.legend(loc='lower right')
+
+        g.plot([0, 1], [0, 1], color='k', linestyle='dashed')
+
     elif curve_type == 'pr':
         g.set_title('PR curve')
         g.set_xlabel('Precision')
         g.set_ylabel('Recall')
         g.legend(loc='lower left')
+
+        # TODO: get prevalence from somewhere and plot it?
 
     g.set_xlim((-0.01, 1.05))
     g.set_ylim((-0.01, 1.05))
@@ -88,10 +93,9 @@ if __name__ == '__main__':
         help='Input file(s). Must be created by the evaluation script.'
     )
     parser.add_argument(
-        '--output-directory',
-        default='results/evaluation/plots',
+        '--output',
         type=str,
-        help='Output directory'
+        help='Output file'
     )
 
     parser.add_argument(
@@ -109,7 +113,7 @@ if __name__ == '__main__':
         with open(filename) as f:
 
             # TODO: in the absence of any identifying information, let's
-            # use the filename to show individual curves. This is just a 
+            # use the filename to show individual curves. This is just a
             # simple proof of concept.
             df = pd.DataFrame(json.load(f))
             df['model'] = os.path.splitext(os.path.basename(filename))[0]
@@ -123,31 +127,8 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
+    if args.output:
+        plt.savefig(args.output)
+
     if args.show:
         plt.show()
-
-    raise 'heck'
-
-    # for setting title:
-    xmin, xmax = plot_curves(df, axes[0], names,level=level)
-    plot_scores(df, scores, axes[1])
-    plot_proportion_curves(df, axes[2])
-    info = plot_info(df, axes[3], level=level, recall_threshold=recall_thres)
-    # vertical cut-off:
-    for ax in axes[:3]:
-        ax.axvline(info['thres'], color='black')
-    # prevalence hline:
-    if level == 'pat':
-        prev = 'case_prevalence'
-    elif level == 'tp':
-        prev = 'tp_prevalence'
-    axes[0].axhline(
-        prev_dict[format_dataset(names['eval_dataset'])]['validation'][prev], 
-        linestyle='--', color='black'
-    )
- 
-    out_file = os.path.split(input_path)[-1].split('.')[0] + f'_{earliness}_{level}_thres_{100*recall_thres}.png' 
-    plt.tight_layout()
-    plt.savefig( os.path.join(args.output_path, out_file))
-
-
