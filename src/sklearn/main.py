@@ -46,10 +46,6 @@ def load_data(args, split):
     split_path = os.path.join(args.split_path, 
         f'splits_{dataset}.json' ) 
 
-    baselines = False
-    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
-        baselines = True
-
     # Load data and apply on-the-fly transforms:
     return load_and_transform_data(
         input_path,
@@ -62,7 +58,7 @@ def load_data(args, split):
         feature_set=args.feature_set,
         variable_set=args.variable_set,
         task=args.task,
-        baselines=baselines
+        baselines=args.baselines
     )
 
 def load_data_splits(args, 
@@ -196,7 +192,7 @@ def get_pipeline_and_grid(args):
         steps.append(('est', est))
         pipe = Pipeline(steps)
         return pipe, param_dist
-    elif method_name in ['sofa', 'qsofa', 'sirs', 'mews', 'news']:
+    elif args.baselines:
         from src.sklearn.baseline import BaselineModel
         import scipy.stats as stats
         parameters = {'column': method_name}
@@ -314,7 +310,14 @@ def main():
 
     args = parser.parse_args()
     ## Process arguments:
-    task = args.task 
+    task = args.task
+    rep = args.rep
+    # pass this argument to data loading and pipeline creator 
+    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
+        args.baselines = True
+    else: 
+        args.baselines = False
+
  
     # Load data and current lambda and apply on-the-fly transforms:
     data, lam = load_data_splits(args)
@@ -387,7 +390,8 @@ def main():
     os.makedirs(result_path, exist_ok=True)
 
     cv_results = pd.DataFrame(random_search.cv_results_)
-    cv_results.to_csv(os.path.join(result_path, 'cv_results.csv'))
+    cv_results_file = 'cv_results.csv' if not args.baselines else f'cv_results_rep_{rep}.csv'
+    cv_results.to_csv(os.path.join(result_path, cv_results_file))
 
     # Quantify performance on validation split
     best_estimator = random_search.best_estimator_
@@ -420,12 +424,13 @@ def main():
         except AttributeError:
             # Not all estimators support all methods
             continue
-
-    with open(os.path.join(result_path, 'results.json'), 'w') as f:
+    res_jsn_file = 'results.json' if not args.baselines else f'results_rep_{rep}.json'
+    with open(os.path.join(result_path, res_jsn_file), 'w') as f:
         json.dump(results, f)
+    est_file = 'best_estimator.pkl' if not args.baselines else f'model_repetition_{rep}.pkl' 
     joblib.dump(
         best_estimator,
-        os.path.join(result_path, 'best_estimator.pkl'),
+        os.path.join(result_path, est_file),
         compress=1
     )
 
