@@ -141,11 +141,13 @@ def load_and_transform_data(
 
     returns data and lambda 
     """
+    print(f'Loading {feature_set} feature set')
     # determine columns to load:
     with open(feature_path, 'r') as f:
         feat_dict = json.load(f)
     if baselines:
         cols = VM_DEFAULT.all_cat('baseline')
+        cols.extend([VM_DEFAULT(x) for x in ['id', 'time']])
     else:
         cols = feat_dict[variable_set][feature_set]['columns']
     if task == 'regression':
