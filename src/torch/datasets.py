@@ -328,6 +328,7 @@ class MIMIC(SplittedDataset):
     """MIMIC dataset."""
 
     def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+        print(f'Using data fold {fold}...')
         super().__init__(
             f'datasets/mimic/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             'config/splits/splits_mimic.json',
