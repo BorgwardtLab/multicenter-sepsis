@@ -31,7 +31,6 @@ def namespace_without_none(namespace):
 def main(hparams, model_cls):
     """Main function train model."""
     # init module
-    wandb.init(settings=wandb.Settings(start_method="fork"))
     #wandb.init(project='mc-sepsis', entity='sepsis', config=hparams)
     ##config = wandb.config
      
@@ -57,7 +56,8 @@ def main(hparams, model_cls):
         entity="sepsis",
         log_model=True,
         tags=[hparams.model, hparams.dataset, hparams.task],
-        save_dir=save_dir
+        save_dir=save_dir,
+        settings=wandb.Settings(start_method="fork")
     ) 
     #logger = TbWithBestValueLogger(
     #    hparams.log_path,
@@ -175,6 +175,8 @@ if __name__ == '__main__':
                         default='classification')
     parser.add_argument('--cost', type=int, default=5,
                         help='cost parameter for lambda')
+    parser.add_argument('--rep', type=int, default=0,
+                        help='Repetition fold of splits [0,..,4]')
     parser.add_argument('--dummy_repetition', type=int, default=1,
                         help='inactive argument, used for debugging (enabling grid repetitions)')
 
@@ -199,7 +201,10 @@ if __name__ == '__main__':
 
     parser = model_cls.add_model_specific_args(parser)
     hparams = parser.parse_args()
-    hparams.dataset_kwargs = {'cost': hparams.cost}
+    hparams.dataset_kwargs = {
+        'cost': hparams.cost,
+        'fold': hparams.rep #`rep` naming to conform with shallow models                                        
+    }
     #if hparams.hyperparam_draws > 0:
     #    for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
     #        print(hyperparam_draw)
