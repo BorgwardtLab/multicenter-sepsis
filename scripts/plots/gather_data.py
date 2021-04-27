@@ -1,0 +1,70 @@
+import glob
+from IPython import embed
+import os 
+import json
+import pandas as pd 
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from src.evaluation.patient_evaluation import format_dataset 
+
+def make_scatter(df, fname, signature, title=None):
+    fig = plt.figure()
+    sns.scatterplot(data=df, **signature)  #x="earliness_median", y="pat_precision", hue="task", style='model', size='dataset_eval')
+    if title:
+        plt.title(title)
+    legend = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    legend.get_title().set_fontsize('15') 
+    fig.tight_layout()  
+    plt.savefig(fname, dpi=300)
+ 
+def process_run(eval_file, pred_file, recall_threshold=0.90):
+    with open(eval_file, 'r') as f:
+            d_ev = json.load(f)
+    df = pd.DataFrame(d_ev)
+    with open(pred_file, 'r') as f:
+        d_p = json.load(f)
+    
+    greater = df['pat_recall'] > recall_threshold
+    index = df['pat_recall'][greater].argmin()
+    info = df.loc[index]
+    result = info.to_dict()
+    #interesting keys from pred file:
+    keys = ['model', 'dataset_train', 'dataset_eval', 'split', 'task', 'label_propagation', 'rep']
+    pred_dict = {key: d_p[key] for key in keys if key in d_p.keys() }
+
+    df = pd.DataFrame(d_ev)
+    for key in pred_dict.keys():
+        df[key] = pred_dict[key]
+    if 'task' not in d_p.keys():
+        raise ValueError('Task information is not available!')
+        ##TODO: ADD TASK IN DEEP JSONS!!
+        #if any([id in d_p['run_id'] for id in ['r68b6gm4', 's453x0n9' ]]):
+        #    task  = 'regression'
+        #else: 
+        #    task = 'classification'
+        #pred_dict['task'] = task 
+    try: result.update(pred_dict)
+    except: #task not available in deep jsons
+        print(pred_file) 
+    return df
+
+if __name__ == "__main__":
+    path = 'results/evaluation/evaluation_output'
+    eval_files = [os.path.join(p, f) for (p, _, files) in os.walk(path) for f in files]
+    pred_files = [f.replace('evaluation_output', 'prediction_output') for f in eval_files] 
+    df_list = [] 
+    for i, (eval_f, pred_f) in enumerate(zip(eval_files, pred_files)):
+        if 'classification' in eval_f:
+            curr_df = process_run(eval_f, pred_f)
+            curr_df['fname'] = eval_f
+            curr_df['job_id'] = i
+            df_list.append(curr_df)
+    df = pd.concat(df_list, ignore_index=True)
+    
+    for col in ['dataset_train', 'dataset_eval']:
+        df[col] = df[col].apply(format_dataset)
+    outpath ='results/evaluation/plots'
+    df.to_csv(os.path.join(outpath, 'result_data.csv'), index=False)
+  
+ 
