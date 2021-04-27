@@ -163,7 +163,7 @@ def load_and_transform_data(
     # determine patient ids of current split:
     si = SplitInfo(split_path)
     ids = si(split, rep)
-    
+
     # 1. Load Patient Data (selected ids and columns):
     pl = ParquetLoader(data_path, form=form)
     start = time()

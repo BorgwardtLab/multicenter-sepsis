@@ -13,7 +13,7 @@ from sklearn.metrics import SCORERS
 from sklearn.metrics._scorer import _cached_call
 from sklearn.model_selection import RandomizedSearchCV
 
-from src.main import load_data_splits
+from src.sklearn.main import load_data_splits
 from src.variables.mapping import VariableMapping
 from src.sklearn.data.utils import load_pickle, save_pickle
 from src.sklearn.loading import load_and_transform_data
@@ -34,7 +34,7 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        '--input_path', default='datasets/{}/data/parquet/features',
+        '--input_path', default='datasets/{}/data/parquet/features_middle',
         help='Path to input data directory (relative from dataset directory)'
     )
     parser.add_argument(
@@ -62,10 +62,6 @@ def main():
     parser.add_argument(
         '--clf_params', nargs='+', default=[],
         help='Parameters passed to the classifier constructor'
-    )
-    parser.add_argument(
-        '--cv_n_jobs', type=int, default=10,
-        help='n_jobs for cross-validation'
     )
     parser.add_argument(
         '--variable_set', default='full',
@@ -119,12 +115,19 @@ def main():
         '--target_name', default='neg_log_loss',
         help='Only for classification: which objective to optimize in model selection [physionet_utility, roc_auc, average_precision]'
     )
-
-
+    
     args = parser.parse_args()
     ## Process arguments:
-    task = args.task 
+    task = args.task
+    rep = args.rep 
+
+    # pass this argument to data loading and pipeline creator 
+    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
+        args.baselines = True
+    else: 
+        args.baselines = False
  
+    print(f'Loading repetiton fold {rep} ..') 
     # Load data and current lambda and apply on-the-fly transforms:
     data, lam = load_data_splits(args)
     #data = load_data_from_input_path(
@@ -133,16 +136,6 @@ def main():
         # for regression task the label shift happens in target calculation
         data = handle_label_shift(args, data)
  
-    # TODO: add (update) baseline option! 
-    ## for baselines: 
-    #if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
-    #    # use baselines as prediction input data
-    #    # hack until prepro is run again (currently live jobs depending on it)
-    #    data['baselines_train'].index = data['X_train'].index
-    #    data['baselines_validation'].index = data['X_validation'].index
-    #    data['X_train'] = data['baselines_train']
-    #    data['X_validation'] = data['baselines_validation']
-
     # TODO: Load pretrained best estimator model:
     result_path = os.path.join(args.result_path, args.dataset+'_'+args.method)
     checkpoint_path = os.path.join(result_path, 'best_estimator.pkl')
