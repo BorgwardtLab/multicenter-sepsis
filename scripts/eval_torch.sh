@@ -3,11 +3,12 @@
 run_id=$1
 base_dir=results
 eval_dir=${base_dir}/evaluation
-eval_datasets=(AUMC MIMIC EICU Hirid)
+eval_datasets=(AUMC MIMIC Hirid EICU)
 
 cost=5 #lambda cost
 earliness=median
-
+level=pat
+thres=0.8
 
 for dataset in ${eval_datasets[@]}; do
     pred_file=${eval_dir}/prediction_output/${run_id}_${dataset}.json
@@ -22,9 +23,11 @@ for dataset in ${eval_datasets[@]}; do
         --cost $cost
 
     # Plot patient-based eval metrics:
-    python scripts/plots/plot_patient_eval.py \
+    python -m scripts.plots.plot_patient_eval \
         --input_path $eval_file  \
         --output_path results/evaluation/plots \
         --earliness-stat $earliness \
-        --predictions_path $pred_file
+        --predictions_path $pred_file \
+        --level $level \
+        --recall_thres $thres
 done
