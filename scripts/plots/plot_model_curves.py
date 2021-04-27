@@ -95,8 +95,10 @@ def get_coordinates(df, recall_threshold, level, x_stat='earliness_mean'):
     return x, x_stat, y, precision_col
 
 
-def make_scatterplot(df, ax, recall_threshold=0.50, level='pat'):
-
+def make_scatterplot(df, ax, recall_threshold, level):
+    """Create model-based scatterplot from joint data frame."""
+    # Will contain a single data frame to plot. This is slightly more
+    # convenient because it permits us to use `seaborn` directly.
     plot_df = []
 
     for (model, repetition), df_ in df.groupby(['model', 'rep']):
@@ -126,65 +128,6 @@ def make_scatterplot(df, ax, recall_threshold=0.50, level='pat'):
     g.set_xlabel(xlabel)
 
 
-def plot_curve(data_frames, ax, curve_type='roc'):
-    """Plot evaluation curve of a certain type.""" 
-    columns = ['pat_specificity', 'pat_recall']
-
-    if curve_type == 'pr':
-        columns = ['pat_recall', 'pat_precision']
-
-    data_frames = [
-        df[columns + ['model']] for df in data_frames
-    ]
-
-    df = pd.concat(data_frames)
-
-    # We could also rename the column but this is easier.
-    if curve_type == 'roc':
-        df['pat_specificity'] = 1 - df['pat_specificity']
-
-    g = sns.lineplot(
-        x=columns[0],
-        y=columns[1],
-        data=df,
-        hue='model',
-        ci=None,
-        ax=ax,
-    )
-
-    if curve_type == 'roc':
-        g.set_title('ROC curve')
-        g.set_xlabel('FPR')
-        g.set_ylabel('TPR')
-        g.legend(loc='lower right')
-
-        g.plot([0, 1], [0, 1], color='k', linestyle='dashed')
-
-    elif curve_type == 'pr':
-        g.set_title('PR curve')
-        g.set_xlabel('Precision')
-        g.set_ylabel('Recall')
-        g.legend(loc='lower left')
-
-        # TODO: get prevalence from somewhere and plot it?
-
-    g.set_xlim((-0.01, 1.05))
-    g.set_ylim((-0.01, 1.05))
-    g.set_aspect(1.0)
-
-    # Calculate AUCs for each model and update the legend accordingly.
-    # Notice that this might be slightly less precise than calling the
-    # `average_precision_score` or `roc_auc_score` functions, but here
-    # we do not need the predictions, making the script easier to call
-    # from jobs.
-    aucs = [
-        auc(df_.iloc[:, 0], df_.iloc[:, 1]) for _, df_ in df.groupby('model')
-    ]
-
-    for text, area in zip(g.legend_.texts, aucs):
-        text.set_text(text.get_text() + f' (AUC: {area:.2f})')
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -201,6 +144,21 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        '-r', '--recall-threshold',
+        default=0.9,
+        type=float,
+        help='Recall threshold in [0,1]'
+    )
+
+    parser.add_argument(
+        '-l', '--level',
+        default='pat',
+        type=str,
+        choices=['pat', 'tp'],
+        help='Species patient or time point level'
+    )
+
+    parser.add_argument(
         '-s', '--show',
         action='store_true',
         help='If set, indicates that the resulting plots should be shown, '
@@ -211,9 +169,9 @@ if __name__ == '__main__':
 
     df = pd.read_csv(args.FILE)
 
-    fig, ax = plt.subplots(nrows=2, figsize=(4, 8))
+    fig, ax = plt.subplots(figsize=(4, 4))
 
-    make_scatterplot(df, ax[0])
+    make_scatterplot(df, ax, args.recall_threshold, args.level)
 
     plt.tight_layout()
 
