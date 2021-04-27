@@ -122,9 +122,13 @@ def main():
         help='split repetition', type=int, 
         default=0)
     parser.add_argument(
-        '--task', default='regression', 
+        '--repetition_model', 
+        help='bool if repetition model is used, or not', action='store_true', 
+        default=False)
+    parser.add_argument(
+        '--task', default='classification', 
         help='which prediction task to use: [classification, regression]'
-    )
+    )   
     parser.add_argument(
         '--index', default='multi',
         help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
@@ -141,6 +145,12 @@ def main():
     train_dataset = args.train_dataset
     eval_dataset = args.eval_dataset
     task = args.task
+    rep = args.rep
+    # pass this argument to data loading and pipeline creator 
+    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
+        args.baselines = True
+    else: 
+        args.baselines = False
 
     args.dataset = eval_dataset #load_data_splits expect this property
     data, lam = load_data_splits(args, splits=[args.split])
@@ -152,7 +162,10 @@ def main():
     # Load pretrained model
     ##TODO: define model_path, compute checksum, load model, then eval scores on eval data
     model_path = os.path.join(args.model_path, train_dataset + '_' + method)
-    model_path = os.path.join(model_path, 'best_estimator.pkl')
+    model_file = 'best_estimator' if not args.repetition_model else f'model_repetition_{rep}'
+    model_file += '.pkl'
+    model_path = os.path.join(model_path, model_file)
+    print(f'Loading model from {model_path}')
     model, checksum = load_model(model_path) 
 
     #scores = {
@@ -184,7 +197,7 @@ def main():
     results['dataset_train'] = train_dataset
     results['dataset_eval'] = eval_dataset
     results['split'] = split
-    results['rep'] = args.rep 
+    results['rep'] = rep 
     results['task'] = task 
  
     #results['predictions']
