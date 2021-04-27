@@ -29,7 +29,8 @@ def extract_model_information(run_path, tmp):
         "model_params": run_info,
         "dataset_train": run_info['dataset'],
         "task": run_info['task'],
-        "label_propagation": run_info['label_propagation']
+        "label_propagation": run_info['label_propagation'],
+        "rep": run_info['rep']
     }
 
 
