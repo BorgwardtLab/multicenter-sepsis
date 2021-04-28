@@ -138,7 +138,7 @@ def make_scatterplot(
         marker='x',
     )
 
-    g.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    g.legend(loc='upper right')
     g.set_ylabel(f'{ylabel} @ {recall_threshold:.2f}R')
     g.set_ylim((0.0, 1.0))
     g.set_xlabel(xlabel)
