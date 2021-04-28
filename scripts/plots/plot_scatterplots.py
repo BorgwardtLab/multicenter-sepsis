@@ -92,7 +92,14 @@ def get_coordinates(df, recall_threshold, level, x_stat='earliness_median'):
     return x, x_stat, y, precision_col
 
 
-def make_scatterplot(df, ax, recall_threshold, level, show_glyph=True):
+def make_scatterplot(
+    df,
+    ax,
+    recall_threshold,
+    level,
+    point_alpha,
+    line_alpha,
+):
     """Create model-based scatterplot from joint data frame."""
     # Will contain a single data frame to plot. This is slightly more
     # convenient because it permits us to use `seaborn` directly.
@@ -118,7 +125,8 @@ def make_scatterplot(df, ax, recall_threshold, level, show_glyph=True):
         x='x', y='y',
         data=plot_df,
         hue='model',
-        ax=ax
+        ax=ax,
+        alpha=point_alpha
     )
 
     g.legend(loc='center left', bbox_to_anchor=(1, 0.5))
@@ -127,31 +135,36 @@ def make_scatterplot(df, ax, recall_threshold, level, show_glyph=True):
 
     # Summarise each model by one glyph, following the same colour map
     # that `seaborn` uses.
-    if show_glyph:
+    palette = sns.color_palette()
 
-        palette = sns.color_palette()
+    for index, (model, df_) in enumerate(plot_df.groupby('model')):
+        x_mean = df_['x'].mean()
+        y_mean = df_['y'].mean()
+        x_sdev = df_['x'].std()
+        y_sdev = df_['y'].std()
 
-        for index, (model, df_) in enumerate(plot_df.groupby('model')):
-            x_mean = df_['x'].mean()
-            y_mean = df_['y'].mean()
-            x_sdev = df_['x'].std()
-            y_sdev = df_['y'].std()
+        g.vlines(
+            x_mean,
+            y_mean - y_sdev,
+            y_mean + y_sdev,
+            colors=palette[index],
+            alpha=line_alpha,
+        )
 
-            g.vlines(
-                x_mean,
-                y_mean - y_sdev,
-                y_mean + y_sdev,
-                colors=palette[index]
-            )
+        g.hlines(
+            y_mean,
+            x_mean - x_sdev,
+            x_mean + x_sdev,
+            colors=palette[index],
+            alpha=line_alpha,
+        )
 
-            g.hlines(
-                y_mean,
-                x_mean - x_sdev,
-                x_mean + x_sdev,
-                colors=palette[index]
-            )
-
-            g.scatter(x_mean, y_mean, color=palette[index], marker='x')
+        g.scatter(
+            x_mean, y_mean,
+            color=palette[index],
+            marker='x',
+            alpha=line_alpha,
+        )
 
 
 if __name__ == '__main__':
@@ -170,16 +183,24 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        '--point-alpha',
+        default=1.0,
+        type=float,
+        help='Alpha to use for all points'
+    )
+
+    parser.add_argument(
+        '--line-alpha',
+        default=1.0,
+        type=float,
+        help='Alpha to use for all lines and glyphs'
+    )
+
+    parser.add_argument(
         '-r', '--recall-threshold',
         default=0.8,
         type=float,
         help='Recall threshold in [0,1]'
-    )
-
-    parser.add_argument(
-        '-G', '--no-glyph',
-        action='store_true',
-        help='If set, does *not* show glyph summarising a model.'
     )
 
     parser.add_argument(
@@ -213,7 +234,8 @@ if __name__ == '__main__':
             ax,
             args.recall_threshold,
             args.level,
-            not args.no_glyph,
+            point_alpha=args.point_alpha,
+            line_alpha=args.line_alpha,
         )
 
         plt.tight_layout()
@@ -225,6 +247,7 @@ if __name__ == '__main__':
             filename = os.path.join(
                 args.output_directory,
                 f'scatterplot_{source}_{target}_'
+                f'{args.level}_'
                 f'thres_{100 * args.recall_threshold:.0f}.png'
             )
 
