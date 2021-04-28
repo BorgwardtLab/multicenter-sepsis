@@ -6,13 +6,14 @@ inputs. Only evaluation files are required.
 Example call:
 
     python -m scripts.plots.plot_scatterplots \
-        --output /tmp/                        \
+        --output-directory /tmp/              \
         FILE
 
 This will create plots in `tmp`.
 """
 
 import argparse
+import os
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -163,9 +164,9 @@ if __name__ == '__main__':
              'the repetition runs of a model.'
     )
     parser.add_argument(
-        '--output',
+        '--output-directory',
         type=str,
-        help='Output file'
+        help='Output directory'
     )
 
     parser.add_argument(
@@ -217,8 +218,20 @@ if __name__ == '__main__':
 
         plt.tight_layout()
 
-        if args.output:
-            plt.savefig(args.output)
+        if args.output_directory:
+
+            os.makedirs(args.output_directory, exist_ok=True)
+
+            filename = os.path.join(
+                args.output_directory,
+                f'scatterplot_{source}_{target}_'
+                f'thres_{100 * args.recall_threshold:.0f}.png'
+            )
+
+            print(f'Storing {filename}...')
+            plt.savefig(filename, dpi=300)
 
         if args.show:
             plt.show()
+
+        plt.close()
