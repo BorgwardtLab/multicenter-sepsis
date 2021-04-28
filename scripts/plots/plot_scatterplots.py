@@ -92,6 +92,14 @@ def get_coordinates(df, recall_threshold, level, x_stat='earliness_median'):
     return x, x_stat, y, precision_col
 
 
+def sanitise_model_name(model):
+    """Return sanitised model name."""
+    if model == 'AttentionModel':
+        return 'attention model'
+    else:
+        return model
+
+
 def make_scatterplot(
     df,
     ax,
@@ -114,7 +122,7 @@ def make_scatterplot(
             pd.DataFrame.from_dict({
                 'x': [x],
                 'y': [y],
-                'model': [model],
+                'model': [sanitise_model_name(model)],
                 'repetition': [repetition],
             })
         )
