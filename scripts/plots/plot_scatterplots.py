@@ -134,11 +134,13 @@ def make_scatterplot(
         data=plot_df,
         hue='model',
         ax=ax,
-        alpha=point_alpha
+        alpha=point_alpha,
+        marker='x',
     )
 
     g.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     g.set_ylabel(f'{ylabel} @ {recall_threshold:.2f}R')
+    g.set_ylim((0.0, 1.0))
     g.set_xlabel(xlabel)
 
     # Summarise each model by one glyph, following the same colour map
@@ -157,6 +159,7 @@ def make_scatterplot(
             y_mean + y_sdev,
             colors=palette[index],
             alpha=line_alpha,
+            linewidth=0.5,
         )
 
         g.hlines(
@@ -165,6 +168,7 @@ def make_scatterplot(
             x_mean + x_sdev,
             colors=palette[index],
             alpha=line_alpha,
+            linewidth=0.5,
         )
 
         g.scatter(
@@ -172,6 +176,7 @@ def make_scatterplot(
             color=palette[index],
             marker='x',
             alpha=line_alpha,
+            linewidth=0.5,
         )
 
 
