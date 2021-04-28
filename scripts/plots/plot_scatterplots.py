@@ -5,23 +5,19 @@ inputs. Only evaluation files are required.
 
 Example call:
 
-    python -m scripts.plots.plot_model_curves \
-        --output-directory /tmp/              \
+    python -m scripts.plots.plot_scatterplots \
+        --output /tmp/                        \
         FILE
 
 This will create plots in `tmp`.
 """
 
 import argparse
-import json
-import os
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 import pandas as pd
-
-from sklearn.metrics import auc
 
 
 def interpolate_at(df, x):
@@ -76,7 +72,7 @@ def interpolate_at(df, x):
     return df.loc[new_index]
 
 
-def get_coordinates(df, recall_threshold, level, x_stat='earliness_mean'):
+def get_coordinates(df, recall_threshold, level, x_stat='earliness_median'):
     """Get coordinate from model-based data frame."""
     recall_col = f'{level}_recall'
     precision_col = f'{level}_precision'
@@ -95,7 +91,7 @@ def get_coordinates(df, recall_threshold, level, x_stat='earliness_mean'):
     return x, x_stat, y, precision_col
 
 
-def make_scatterplot(df, ax, recall_threshold, level):
+def make_scatterplot(df, ax, recall_threshold, level, show_glyph=True):
     """Create model-based scatterplot from joint data frame."""
     # Will contain a single data frame to plot. This is slightly more
     # convenient because it permits us to use `seaborn` directly.
@@ -124,8 +120,37 @@ def make_scatterplot(df, ax, recall_threshold, level):
         ax=ax
     )
 
+    g.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     g.set_ylabel(f'{ylabel} @ {recall_threshold:.2f}R')
     g.set_xlabel(xlabel)
+
+    # Summarise each model by one glyph, following the same colour map
+    # that `seaborn` uses.
+    if show_glyph:
+
+        palette = sns.color_palette()
+
+        for index, (model, df_) in enumerate(plot_df.groupby('model')):
+            x_mean = df_['x'].mean()
+            y_mean = df_['y'].mean()
+            x_sdev = df_['x'].std()
+            y_sdev = df_['y'].std()
+
+            g.vlines(
+                x_mean,
+                y_mean - y_sdev,
+                y_mean + y_sdev,
+                colors=palette[index]
+            )
+
+            g.hlines(
+                y_mean,
+                x_mean - x_sdev,
+                x_mean + x_sdev,
+                colors=palette[index]
+            )
+
+            g.scatter(x_mean, y_mean, color=palette[index], marker='x')
 
 
 if __name__ == '__main__':
@@ -145,9 +170,15 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '-r', '--recall-threshold',
-        default=0.9,
+        default=0.8,
         type=float,
         help='Recall threshold in [0,1]'
+    )
+
+    parser.add_argument(
+        '-G', '--no-glyph',
+        action='store_true',
+        help='If set, does *not* show glyph summarising a model.'
     )
 
     parser.add_argument(
@@ -169,14 +200,25 @@ if __name__ == '__main__':
 
     df = pd.read_csv(args.FILE)
 
-    fig, ax = plt.subplots(figsize=(4, 4))
+    for (source, target), df_ in df.groupby(['dataset_train', 'dataset_eval']):
 
-    make_scatterplot(df, ax, args.recall_threshold, args.level)
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.set_box_aspect(1)
 
-    plt.tight_layout()
+        plt.title(f'Train: {source}, Eval: {target}')
 
-    if args.output:
-        plt.savefig(args.output)
+        make_scatterplot(
+            df_,
+            ax,
+            args.recall_threshold,
+            args.level,
+            not args.no_glyph,
+        )
 
-    if args.show:
-        plt.show()
+        plt.tight_layout()
+
+        if args.output:
+            plt.savefig(args.output)
+
+        if args.show:
+            plt.show()
