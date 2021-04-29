@@ -46,7 +46,7 @@ for method in ${methods[@]}; do
                 python -m src.evaluation.patient_evaluation \
                     --input-file $pred_file \
                     --output-file $eval_file \
-                    --n_jobs=50 \
+                    --n_jobs=100 \
                     --force \
                     --cost $cost
 

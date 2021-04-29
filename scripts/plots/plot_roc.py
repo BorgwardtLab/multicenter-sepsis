@@ -19,7 +19,7 @@ def model_map(name):
     return name
 
 def main():
-    models = ['AttentionModel', 'lgbm', 'sofa', 'qsofa'] #'sirs', 'mews', 'news',
+    models = ['AttentionModel', 'lgbm', 'sofa', 'qsofa', 'sirs', 'mews', 'news'] #, 'news',
     datasets = ['aumc', 'hirid', 'eicu', 'mimic']
 
     infile ='results/evaluation/plots/result_data.csv'
@@ -74,6 +74,6 @@ def main():
                 title = f'ROC Curve for external validation: trained on {train_dataset}, tested on {eval_dataset}'
             plt.title(title) 
             plt.legend(loc='lower right') 
-            plt.savefig(f'results/evaluation/plots/roc_{train_dataset}_{eval_dataset}.png') 
+            plt.savefig(f'results/evaluation/plots/roc_{train_dataset}_{eval_dataset}.png', dpi=300) 
 if __name__ == '__main__':
     main()

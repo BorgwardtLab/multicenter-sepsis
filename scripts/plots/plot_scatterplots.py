@@ -136,6 +136,7 @@ def make_scatterplot(
         hue='model',
         ax=ax,
         alpha=point_alpha,
+        linewidth=1.2,
         marker='x'
     )
     g.axhline(
@@ -165,7 +166,7 @@ def make_scatterplot(
             y_mean + y_sdev,
             colors=palette[index],
             alpha=line_alpha,
-            linewidth=0.6,
+            linewidth=1.2,
         )
 
         g.hlines(
@@ -174,7 +175,7 @@ def make_scatterplot(
             x_mean + x_sdev,
             colors=palette[index],
             alpha=line_alpha,
-            linewidth=0.6,
+            linewidth=1.2,
         )
 
         g.scatter(
@@ -244,7 +245,7 @@ if __name__ == '__main__':
 
     for (source, target), df_ in df.groupby(['dataset_train', 'dataset_eval']):
 
-        fig, ax = plt.subplots(figsize=(6, 4)) #6,4
+        fig, ax = plt.subplots(figsize=(4, 4)) #6,4
         ax.set_box_aspect(1)
         
         # determine prevalence of eval dataset: 
@@ -276,7 +277,7 @@ if __name__ == '__main__':
             )
 
             print(f'Storing {filename}...')
-            plt.savefig(filename, dpi=300)
+            plt.savefig(filename, dpi=400)
 
         if args.show:
             plt.show()
