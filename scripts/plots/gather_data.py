@@ -48,7 +48,7 @@ def process_run(eval_file, pred_file, recall_threshold=0.90):
     return df
 
 if __name__ == "__main__":
-    methods = ['lgbm', 'sofa', 'qsofa', 'sirs'] #attn model not in file name
+    methods = ['lgbm', 'sofa', 'qsofa', 'sirs', 'mews', 'news'] #attn model not in file name
     attn_datasets = ['EICU', 'AUMC', 'Hirid', 'MIMIC'] 
     #attn file names have this dataset namings (from datset cls)
     keys = methods + attn_datasets
