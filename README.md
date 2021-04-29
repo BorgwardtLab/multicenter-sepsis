@@ -79,8 +79,7 @@ For creating ROC plots, run:
 ```>python scripts/plots/plot_roc.py```  
 
 For creating precision/earliness plots, run:
-```>python -m scripts.plots.plot_scatterplots results/evaluation/plots/result_data.csv   
-    --r 0.80 --point-alpha 0.65 --line-alpha 1.0 --output results/evaluation/plots/```  
+```>python -m scripts.plots.plot_scatterplots results/evaluation/plots/result_data.csv --r 0.80 --point-alpha 0.65 --line-alpha 1.0 --output results/evaluation/plots/```  
 
 ## R-code pipeline
 This was used for creating the harmonized raw datasets.
