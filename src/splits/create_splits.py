@@ -96,8 +96,8 @@ def main(args):
             d['dev'][f'split_{counter}'] = current_split
         
         # 3. we split the test split into n_test_splits splits for varying the test data.
-        test_size = 1-test_boost_size # if we want 80% of the data, use test_size 0.2 
-        sss_te = StratifiedShuffleSplit(n_splits=n_test_splits, test_size=test_size, random_state=42)
+        test_size_boost = 1-test_boost_size # if we want 80% of the data, use test_size 0.2 
+        sss_te = StratifiedShuffleSplit(n_splits=n_test_splits, test_size=test_size_boost, random_state=42)
         test_labels = labels[test_index]
         sss_te.get_n_splits(test_labels)
         for counter, (te_ind, _) in enumerate(sss_te.split(test_labels, test_labels)):
