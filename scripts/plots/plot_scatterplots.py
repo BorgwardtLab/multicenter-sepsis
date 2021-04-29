@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import pandas as pd
-
+from scripts.plots.plot_patient_eval import prev_dict
 
 def interpolate_at(df, x):
     """Interpolate a data frame at certain positions.
@@ -107,6 +107,7 @@ def make_scatterplot(
     level,
     point_alpha,
     line_alpha,
+    prev,
 ):
     """Create model-based scatterplot from joint data frame."""
     # Will contain a single data frame to plot. This is slightly more
@@ -135,10 +136,15 @@ def make_scatterplot(
         hue='model',
         ax=ax,
         alpha=point_alpha,
-        marker='x',
+        marker='x'
+    )
+    g.axhline(
+        prev, 
+        linestyle='--', color='black',
+        linewidth=0.5
     )
 
-    g.legend(loc='upper right')
+    g.legend(loc='upper right', fontsize=7)
     g.set_ylabel(f'{ylabel} @ {recall_threshold:.2f}R')
     g.set_ylim((0.0, 1.0))
     g.set_xlabel(xlabel)
@@ -159,7 +165,7 @@ def make_scatterplot(
             y_mean + y_sdev,
             colors=palette[index],
             alpha=line_alpha,
-            linewidth=0.5,
+            linewidth=0.6,
         )
 
         g.hlines(
@@ -168,15 +174,16 @@ def make_scatterplot(
             x_mean + x_sdev,
             colors=palette[index],
             alpha=line_alpha,
-            linewidth=0.5,
+            linewidth=0.6,
         )
 
         g.scatter(
             x_mean, y_mean,
             color=palette[index],
-            marker='x',
+            marker='o',
             alpha=line_alpha,
-            linewidth=0.5,
+            linewidth=0.8,
+            s=10
         )
 
 
@@ -237,9 +244,12 @@ if __name__ == '__main__':
 
     for (source, target), df_ in df.groupby(['dataset_train', 'dataset_eval']):
 
-        fig, ax = plt.subplots(figsize=(6, 4))
+        fig, ax = plt.subplots(figsize=(6, 4)) #6,4
         ax.set_box_aspect(1)
-
+        
+        # determine prevalence of eval dataset: 
+        prev = prev_dict[target]['validation']['case_prevalence'] 
+        
         plt.title(f'Train: {source}, Eval: {target}')
 
         make_scatterplot(
@@ -249,6 +259,7 @@ if __name__ == '__main__':
             args.level,
             point_alpha=args.point_alpha,
             line_alpha=args.line_alpha,
+            prev=prev
         )
 
         plt.tight_layout()
