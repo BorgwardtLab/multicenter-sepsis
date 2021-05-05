@@ -113,6 +113,11 @@ def load_data_splits(args,
         d[f'X_{split}'] = data 
     return d, lam
 
+def compute_imbalance_factor(data):
+    y = data['y_train']
+    prev = y.sum() / len(y)
+    return (1 - prev) / prev 
+
 def get_pipeline_and_grid(args):
     """Get sklearn pipeline and parameter grid."""
     # first determine which feature set to use for current model:
@@ -120,7 +125,7 @@ def get_pipeline_and_grid(args):
     method_name = args.method
     clf_params = args.clf_params 
     task = args.task
- 
+     
     steps = [] #pipeline steps
      
     # Convert input format from argparse into a dict
@@ -144,8 +149,11 @@ def get_pipeline_and_grid(args):
             'est__num_leaves': [30, 50, 100],
             'est__reg_alpha': [0,0.1,0.5,1,3,5], 
         }
-        #if args.task == 'classification':
-        #    param_dist['est__scale_pos_weight'] = [1, 10, 20, 50, 100]
+        if args.task == 'classification':
+            cif = args.class_imbalance_factor
+            param_dist['est__scale_pos_weight'] = [cif]
+            print(f'Using imbalance factor of {cif}')
+            
         return pipe, param_dist
     elif method_name == 'rf':
         from sklearn.ensemble import RandomForestClassifier as RF
@@ -171,7 +179,10 @@ def get_pipeline_and_grid(args):
         
         if task == 'classification':
             from sklearn.linear_model import LogisticRegression as LogReg
-            parameters = {'n_jobs': 10} #10 for non-eicu #-1 led to OOM
+            cif = args.class_imbalance_factor
+            print(f'Using imbalance factor of {cif}')
+            weights = {0: 1, 1: cif}
+            parameters = {'n_jobs': 10, 'class_weight': weights} #10 for non-eicu #-1 led to OOM
             parameters.update(clf_params)
             est = LogReg(**parameters)
             # hyper-parameter grid:
@@ -290,7 +301,7 @@ def main():
         help='split repetition', type=int, 
         default=0)
     parser.add_argument(
-        '--task', default='regression', 
+        '--task', default='classification', 
         help='which prediction task to use: [classification, regression]'
     )
     parser.add_argument(
@@ -323,7 +334,9 @@ def main():
     data, lam = load_data_splits(args)
     #data = load_data_from_input_path(
     #    args.input_path, args.dataset, args.index, args.extended_features)
+
     if task == 'classification':
+        args.class_imbalance_factor = compute_imbalance_factor(data)
         # for regression task the label shift happens in target calculation
         data = handle_label_shift(args, data)
  
@@ -336,7 +349,7 @@ def main():
     #    data['baselines_validation'].index = data['X_validation'].index
     #    data['X_train'] = data['baselines_train']
     #    data['X_validation'] = data['baselines_validation']
- 
+     
     pipeline, hparam_grid = get_pipeline_and_grid(args)
      
     if task == 'classification':
