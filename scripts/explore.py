@@ -6,6 +6,8 @@ import pandas as pd
 sys.path.append(os.getcwd())
 from src.sklearn.data.utils import load_pickle
 from IPython import embed
+import json
+import numpy as np 
 
 def check_times(df):
     patients = df.index.unique()
@@ -49,6 +51,23 @@ def print_shape(df, name):
 def check_df(df, name):
     check_nans(df, name)
     print_shape(df, name)
+
+def compute_pooled_prev(d):
+    
+    prevs = {}
+    # aggregate dataset prevalence:
+    for dataset in d.keys():
+        data = d[dataset]
+        tot = 0.; cases = 0.
+        for split in ['train','validation']:
+            tot += data[split]['total_stays']
+            cases += data[split]['total_cases']
+        prev = cases / tot 
+        # prevalence as computed on entire train data
+        prevs[dataset] = prev
+    print(prevs)
+    mean = np.mean(list(prevs.values()))
+    print(f'Mean prevalence = {mean:5f}') 
  
 if __name__ == "__main__":
     
@@ -63,6 +82,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     split = args.split 
     dataset = args.dataset
+    output = 'results/evaluation/stats/'
+    os.makedirs(output, exist_ok=True)
 
     #check if looping over all splits and datasets or just single provided one
     if split == 'all':
@@ -119,5 +140,10 @@ if __name__ == "__main__":
         print(dataset, total, cases)
     print(overall_total, overall_cases)
     print(lengths/(24*365), 'years')
+
+    out_file = os.path.join(output, 'dataset_stats.json')
+    with open(out_file, 'w') as f:
+        json.dump(results, f)
+    compute_pooled_prev(results)
     embed()
 

@@ -198,6 +198,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     input_path = args.input_path
+    with open('results/evaluation/stats/dataset_stats.json', 'r') as f:
+        prev_dict = json.load(f)
+ 
     with open(input_path, 'r') as f:
         d = json.load(f)
     df = pd.DataFrame(d)
