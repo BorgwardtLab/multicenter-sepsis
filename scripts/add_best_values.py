@@ -13,11 +13,15 @@ def main(run_or_sweep: str):
 
     for run in runs:
         print(f'Updating run {run}')
-        best = run.history(keys=['online_val/loss']).min()
-        best_step, best_loss = best['_step'], best['online_val/loss']
-        run.summary['online_val/best_step'] = best_step
-        run.summary['online_val/best_loss'] = best_loss
-        run.update()
+        try:
+            best = run.history(keys=['online_val/loss']).min()
+            best_step, best_loss = best['_step'], best['online_val/loss']
+            run.summary['online_val/best_step'] = best_step
+            run.summary['online_val/best_loss'] = best_loss
+            run.update()
+        except:
+            print(f'exception in run {run}, skipping ..')
+            continue
 
 
 if __name__ == '__main__':
