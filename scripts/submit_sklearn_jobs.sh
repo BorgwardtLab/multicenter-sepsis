@@ -33,7 +33,7 @@ run() {
   fi
 }
 
-run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=100 --method lr --dataset aumc " $RUNTIME
-run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=100 --method lr --dataset eicu " $RUNTIME
-run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=100 --method lr --dataset hirid " $RUNTIME
-run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=100 --method lr --dataset mimic " $RUNTIME
+run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset aumc " $RUNTIME
+run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset eicu " $RUNTIME
+run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset hirid " $RUNTIME
+run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset mimic " $RUNTIME
