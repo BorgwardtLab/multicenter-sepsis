@@ -7,17 +7,14 @@
 # provided by caller of this script.
 RESULTS_PATH=${1}
 
-# Main configuration for *what* all jobs will run.
-N_ITER=20
-FEATURE_SET=middle
-COST=5
-
 # Main configuration for *how* all jobs will be run on the cluster.
 # It is easiest to specify this here because we can modify it later
 # on for individual classifiers.
 N_CORES=1
-MEM_PER_CORE=524288
-RUNTIME=23:59
+MEM_PER_CORE=131072
+RUNTIME=119:59
+FEATURE_SET=middle
+COST=5
 
 # Try to be smart: if `bsub` does *not* exist on the system, we just
 # pretend that it is an empty command.
@@ -36,19 +33,7 @@ run() {
   fi
 }
 
-# Main command to execute for all combinations created in the script
-# below. The space at the end of the string is important.
-MAIN="poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --n_iter_search=${N_ITER} --feature_set ${FEATURE_SET} --cost ${COST} "
-
-for data in aumc eicu hirid mimic; do
-  for method in lr lgbm; do
-
-    if [ ${method} = "lgbm" ]; then
-      TIME=119:59
-    else
-      TIME=$RUNTIME
-    fi
-
-    run "${MAIN} --cv_n_jobs=${N_CORES} --dataset=${data} --method=${method}" $TIME
-  done
-done
+run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=100 --method lr --dataset aumc " $RUNTIME
+run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=100 --method lr --dataset eicu " $RUNTIME
+run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=100 --method lr --dataset hirid " $RUNTIME
+run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=100 --method lr --dataset mimic " $RUNTIME
