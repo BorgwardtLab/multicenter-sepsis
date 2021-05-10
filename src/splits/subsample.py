@@ -49,7 +49,7 @@ def compute_subsamples(ids, labels, n_subsamplings, target_prev, seed=123):
     for i in np.arange(n_subsamplings):
         assert n_select < len(id_pool)
         n_select = int(np.round(n_select))
-        selected_ids = np.random.choice(id_pool, n_select)  
+        selected_ids = np.random.choice(id_pool, n_select, replace=False)  
         # adding together subsampled plus unmodified ids (of opposing class)  
         tot = np.concatenate([selected_ids, untouched.values])
         curr_df = df.loc[tot].reset_index()
