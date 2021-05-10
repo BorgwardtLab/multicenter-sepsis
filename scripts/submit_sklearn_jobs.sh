@@ -11,7 +11,7 @@ RESULTS_PATH=${1}
 # It is easiest to specify this here because we can modify it later
 # on for individual classifiers.
 N_CORES=1
-MEM_PER_CORE=131072
+MEM_PER_CORE=524288
 RUNTIME=119:59
 FEATURE_SET=middle
 COST=5
