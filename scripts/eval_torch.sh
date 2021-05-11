@@ -4,21 +4,47 @@ run_id=$1
 base_dir=results
 eval_dir=${base_dir}/evaluation
 eval_datasets=(AUMC MIMIC Hirid EICU)
+eval_datasets2=(aumc mimic hirid eicu) #sklearn formatting
 
 cost=5 #lambda cost
 earliness=median
 level=pat
 thres=0.8
+subsampling_pred_dir=${eval_dir}/prediction_output_subsampled
+subsampling_eval_dir=${eval_dir}/evaluation_output_subsampled
 
-for dataset in ${eval_datasets[@]}; do
-    pred_file=${eval_dir}/prediction_output/${run_id}_${dataset}.json
-    eval_file=${eval_dir}/evaluation_output/${run_id}_${dataset}.json
- 
-    # Patient-based Evaluation:
+for index in ${!eval_datasets[*]}; do
+    dataset=${eval_datasets[$index]}
+    sklearn_dataset=${eval_datasets2[$index]}
+
+    output_name=${run_id}_${dataset}
+    pred_file=${eval_dir}/prediction_output/${output_name}.json
+    eval_file=${eval_dir}/evaluation_output/${output_name}.json
+
+    # Subsampling 10 times at harmonized prevalence 
+    python src/evaluation/subsampling.py \
+        --input-file $pred_file \
+        --output-dir $subsampling_pred_dir \
+        --subsampling-file config/splits/subsamples_${sklearn_dataset}.json
+
+    for subsample in {0..9}; do
+        subsampled_predictions=${subsampling_pred_dir}/${output_name}_subsample_${subsample}.json
+        subsampled_evaluations=${subsampling_eval_dir}/${output_name}_subsample_${subsample}.json 
+
+        # Patient-based Evaluation (on subsample):
+        python -m src.evaluation.patient_evaluation \
+        --input-file $subsampled_predictions \
+        --output-file $subsampled_evaluations \
+        --n_jobs=70 \
+        --force \
+        --cost $cost
+    done
+
+    # Patient-based Evaluation (on total dataset):
     python -m src.evaluation.patient_evaluation \
         --input-file $pred_file \
         --output-file $eval_file \
-        --n_jobs=100 \
+        --n_jobs=70 \
         --force \
         --cost $cost
 
