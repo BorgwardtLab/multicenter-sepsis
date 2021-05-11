@@ -21,6 +21,11 @@ def extract_model_information(run_path, tmp):
             f'Run "{run_path}" does not have a stored checkpoint file.')
 
     model_checksum = compute_md5hash(checkpoint_path)
+    dataset_kwargs = {}
+    for key in run_info.keys():
+        if 'dataset_kwargs' in key:
+            new_key = key.split('/')[-1]
+            dataset_kwargs[new_key] = run_info[key]
     return run, {
         "model": run_info['model'],
         "run_id": run_path,
@@ -30,7 +35,8 @@ def extract_model_information(run_path, tmp):
         "dataset_train": run_info['dataset'],
         "task": run_info['task'],
         "label_propagation": run_info['label_propagation'],
-        "rep": run_info['rep']
+        "rep": run_info['rep'],
+        "dataset_kwargs": dataset_kwargs
     }
 
 
@@ -50,7 +56,7 @@ def main(run_id, dataset, split, output):
         )
     model.to(device)
     eval_results = online_eval(
-        model, dataset_cls, split, check_matching_unmasked=True)
+        model, dataset_cls, split, check_matching_unmasked=True, **out['dataset_kwargs'])
     out.update(eval_results)
 
     print({
