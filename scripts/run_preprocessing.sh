@@ -8,9 +8,9 @@ python -m src.splits.create_splits --version $version
 
 export DASK_DISTRIBUTED__COMM__RETRY__COUNT=30                                                                                                                                                                  
 export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT="180s" #45s
-datasets=(mimic_demo) # mimic aumc eicu hirid physionet2019)  #mimic_demo mimic aumc physionet2019 hirid eicu) #mimic_demo mimic 
+datasets=(mimic aumc hirid eicu physionet2019)  #mimic_demo mimic aumc physionet2019 hirid eicu) #mimic_demo mimic 
 cost=5
-feature_sets=(middle) #small
+feature_sets=(small middle)
 for dataset in ${datasets[@]}; do
 
     echo ">>> Processing $dataset ..."
@@ -71,3 +71,6 @@ for dataset in ${datasets[@]}; do
         done
     done
 done
+
+# run subsampling procedure to write out ids (assuming target prev=0.17)
+python src/splits/subsample.py
