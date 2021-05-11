@@ -58,7 +58,7 @@ Fitting an attention-model on Physionet: #TODO update this
 ```>source scripts/eval_sklearn.sh <results_folder_name>``` where the results folder refers to the output folder of the hyperparameter search
 Make sure that the eval_sklearn script reads all those methods you wish to evaluate. This script already assumes that repetitions are available.  
 
-### Deep moels  
+### Deep models  
 
 First determine the best run of your sweep, giving you a run-id.
 First apply this model to all datasets:  
@@ -66,9 +66,9 @@ First apply this model to all datasets:
 Once this is completed, the prediction files can be processed in the patient eval:  
 ```>source scripts/eval_torch.sh run-id```  
 
-For evaluating a repetition sweep, run:  
-```>source scripts/wandb/get_repetition_runs.py sweep-id``` and once completed, run:
-```>source scripts/wandb/get_repetition_evals.py sweep-id```.  
+For evaluating a repetition sweep, run (on slurm)   
+```>pipenv run python scripts/wandb/get_repetition_runs.py sweep-id1 sweep-id2 ..``` and once completed, run (again cpu server):    
+```>python scripts/wandb/get_repetition_evals.py sweep-id1 sweep-id2 ..```.  
 
 ## Results and plots
 
