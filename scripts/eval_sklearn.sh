@@ -7,7 +7,7 @@ eval_dir=${base_dir}/evaluation
 
 train_datasets=(aumc hirid mimic eicu) #aumc eicu) #aumc #mimic
 eval_datasets=(aumc hirid mimic eicu) #aumc #mimic
-methods=(lgbm) # sofa qsofa sirs mews news) #sofa
+method=$2 #(lgbm sofa qsofa sirs mews news)) #lgbm sofa
 task=classification 
 feature_set=middle #large
 cost=5 #lambda cost
@@ -20,8 +20,8 @@ input_features=datasets/{}/data/parquet/features_${feature_set}
 subsampling_pred_dir=${eval_dir}/prediction_output_subsampled
 subsampling_eval_dir=${eval_dir}/evaluation_output_subsampled
 
-for method in ${methods[@]}; do
-    for rep in {0..4}; do
+#for method in ${methods[@]}; do
+    for rep in {0..4}; do #{0..4}
         for train_dataset in ${train_datasets[@]}; do
             for eval_dataset in ${eval_datasets[@]}; do
                 output_name=${method}_${train_dataset}_${eval_dataset}_${task}_${feature_set}_cost_${cost}_${n_iter}_iter_rep_${rep} 
@@ -52,7 +52,7 @@ for method in ${methods[@]}; do
                     --output-dir $subsampling_pred_dir \
                     --subsampling-file config/splits/subsamples_${eval_dataset}.json
 
-                for subsample in {0..9}; do
+                for subsample in {0..9}; do #9
                     subsampled_predictions=${subsampling_pred_dir}/${output_name}_subsample_${subsample}.json
                     subsampled_evaluations=${subsampling_eval_dir}/${output_name}_subsample_${subsample}.json 
  
@@ -60,16 +60,16 @@ for method in ${methods[@]}; do
                     python -m src.evaluation.patient_evaluation \
                     --input-file $subsampled_predictions \
                     --output-file $subsampled_evaluations \
-                    --n_jobs=70 \
+                    --n_jobs=1 \
                     --force \
-                    --cost $cost
+                    --cost $cost &
                 done
      
                 # Patient-based Evaluation (on full dataset):
                 python -m src.evaluation.patient_evaluation \
                     --input-file $pred_file \
                     --output-file $eval_file \
-                    --n_jobs=70 \
+                    --n_jobs=1 \
                     --force \
                     --cost $cost
 
@@ -80,7 +80,8 @@ for method in ${methods[@]}; do
                     --earliness-stat $earliness \
                     --predictions_path $pred_file \
                     --recall_thres $thres
+
             done
         done
     done
-done
+#done

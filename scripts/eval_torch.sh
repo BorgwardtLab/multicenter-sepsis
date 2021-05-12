@@ -35,16 +35,16 @@ for index in ${!eval_datasets[*]}; do
         python -m src.evaluation.patient_evaluation \
         --input-file $subsampled_predictions \
         --output-file $subsampled_evaluations \
-        --n_jobs=70 \
+        --n_jobs=1 \
         --force \
-        --cost $cost
+        --cost $cost &
     done
 
     # Patient-based Evaluation (on total dataset):
     python -m src.evaluation.patient_evaluation \
         --input-file $pred_file \
         --output-file $eval_file \
-        --n_jobs=70 \
+        --n_jobs=1 \
         --force \
         --cost $cost
 
