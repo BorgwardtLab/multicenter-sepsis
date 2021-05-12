@@ -323,7 +323,7 @@ def main(args):
         'tp_precision': flatten_wrapper(
             functools.partial(precision_score, zero_division=0)
         ),
-        'pat_physionet2019_score': utility_score_wrapper(lam=lam),
+        #'pat_physionet2019_score': utility_score_wrapper(lam=lam),
         'pat_eval': first_alarm_eval
     }
 
