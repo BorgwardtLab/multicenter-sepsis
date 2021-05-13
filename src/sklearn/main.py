@@ -28,6 +28,21 @@ VM_CONFIG_PATH = str(
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
+
+def make_filename(prefix, suffix, args):
+    """Create filename based on prefix, suffix, and arguments."""
+    filename = prefix
+
+    if args.baselines:
+        filename += f'_rep_{args.rep}'
+
+    if args.iteration is not None:
+        filename += f'_iteration_{args.iteration}'
+
+    filename += suffix
+    return filename
+
+
 def load_data(args, split):
     """
     util function to load current data split
@@ -317,7 +332,13 @@ def main():
         '--target_name', default='neg_log_loss',
         help='Only for classification: which objective to optimize in model selection [physionet_utility, roc_auc, average_precision]'
     )
-
+    parser.add_argument(
+        '-i', '--iteration',
+        default=None,
+        type=int,
+        help='Specifies external iteration number for hyperparameter search. '
+             'This simplifies the parallelisation of jobs.'
+    )
 
     args = parser.parse_args()
     ## Process arguments:
