@@ -29,12 +29,12 @@ VM_CONFIG_PATH = str(
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
 
-def make_filename(prefix, suffix, args):
+def make_filename(prefix, suffix, args, rep_name='rep'):
     """Create filename based on prefix, suffix, and arguments."""
     filename = prefix
 
     if args.baselines:
-        filename += f'_rep_{args.rep}'
+        filename += f'_{rep_name}_{args.rep}'
 
     if args.iteration is not None:
         filename += f'_iteration_{args.iteration}'
@@ -458,10 +458,15 @@ def main():
         except AttributeError:
             # Not all estimators support all methods
             continue
-    res_jsn_file = 'results.json' if not args.baselines else f'results_rep_{rep}.json'
+    res_jsn_file = make_filename('results', '.json', args)
+
     with open(os.path.join(result_path, res_jsn_file), 'w') as f:
         json.dump(results, f)
-    est_file = 'best_estimator.pkl' if not args.baselines else f'model_repetition_{rep}.pkl' 
+
+    est_file = make_filename(
+        'best_estimator', '.pkl', args, rep_name='repetition'
+    )
+
     joblib.dump(
         best_estimator,
         os.path.join(result_path, est_file),
