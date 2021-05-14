@@ -113,41 +113,74 @@ def make_scatterplot(
     # Will contain a single data frame to plot. This is slightly more
     # convenient because it permits us to use `seaborn` directly.
     plot_df = []
+    if 'subsample' in df.columns:
+        for (model, repetition, subsample), df_ in df.groupby(['model', 'rep', 'subsample']):
+            # We are tacitly assuming that all the labels remain the same
+            # during the iteration.
+            x, xlabel, y, ylabel = get_coordinates(df_, recall_threshold, level)
 
-    for (model, repetition), df_ in df.groupby(['model', 'rep']):
-        # We are tacitly assuming that all the labels remain the same
-        # during the iteration.
-        x, xlabel, y, ylabel = get_coordinates(df_, recall_threshold, level)
+            plot_df.append(
+                pd.DataFrame.from_dict({
+                    'x': [x],
+                    'y': [y],
+                    'model': [sanitise_model_name(model)],
+                    'repetition': [repetition],
+                    'subsample': [subsample]
+                })
+            )
+    else:
+        for (model, repetition), df_ in df.groupby(['model', 'rep']):
+            # We are tacitly assuming that all the labels remain the same
+            # during the iteration.
+            x, xlabel, y, ylabel = get_coordinates(df_, recall_threshold, level)
 
-        plot_df.append(
-            pd.DataFrame.from_dict({
-                'x': [x],
-                'y': [y],
-                'model': [sanitise_model_name(model)],
-                'repetition': [repetition],
-            })
-        )
+            plot_df.append(
+                pd.DataFrame.from_dict({
+                    'x': [x],
+                    'y': [y],
+                    'model': [sanitise_model_name(model)],
+                    'repetition': [repetition],
+                })
+            )
 
     plot_df = pd.concat(plot_df)
-
-    g = sns.scatterplot(
-        x='x', y='y',
-        data=plot_df,
-        hue='model',
-        ax=ax,
-        alpha=point_alpha,
-        linewidth=1.2,
-        marker='x'
-    )
-    g.axhline(
-        prev, 
-        linestyle='--', color='black',
-        linewidth=0.5
-    )
-
-    g.legend(loc='upper right', fontsize=7)
+    if 'subsample' in df.columns:
+        sns.set(color_codes=True)
+        graph = sns.jointplot(
+            data=plot_df,
+            x='x', y='y', hue='model',
+            ax=ax,
+            kind="kde",
+            alpha=point_alpha,
+            legend=True
+        )
+        g = graph.ax_joint
+        g.axhline(
+            y=prev, 
+            linestyle='--', color='black', 
+            linewidth=0.5
+        )
+    else:
+        g = sns.scatterplot(
+            x='x', y='y',
+            data=plot_df,
+            hue='model',
+            ax=ax,
+            alpha=point_alpha,
+            linewidth=1.2,
+            marker='x'
+        )
+        g.axhline(
+            prev, 
+            linestyle='--', color='black',
+            linewidth=0.5
+        )
+    ax = plt.gca()
+    ax.legend(loc='upper right', fontsize=7)  #
+    #g.legend(loc='upper right', fontsize=7)
+ 
     g.set_ylabel(f'{ylabel} @ {recall_threshold:.2f}R')
-    g.set_ylim((0.0, 1.0))
+    g.set_ylim((0.0, 0.75))
     g.set_xlabel(xlabel)
 
     # Summarise each model by one glyph, following the same colour map
@@ -245,11 +278,24 @@ if __name__ == '__main__':
 
     for (source, target), df_ in df.groupby(['dataset_train', 'dataset_eval']):
 
-        fig, ax = plt.subplots(figsize=(4, 4)) #6,4
+        fig, ax = plt.subplots(figsize=(6, 6)) #6,4
         ax.set_box_aspect(1)
         
-        # determine prevalence of eval dataset: 
-        prev = prev_dict[target]['validation']['case_prevalence'] 
+        # determine prevalence of eval dataset:
+        if 'subsample' in df_.columns:
+            prev = 0.17 #target prevalence (precomputed)
+            use_subsamples = True
+            prev_obs = df['subsampled_prevalence']
+            prev_max = prev_obs.max()
+            prev_min = prev_obs.min()
+            # sanity check, as actually used prevalence could vary by tiny amount 
+            assert prev*0.9 < prev_min
+            assert prev*1.1 > prev_max
+  
+        else:
+            # stratified splits, so val and test prevalence are identical 
+            prev = prev_dict[target]['validation']['case_prevalence']
+            use_subsamples = False 
         
         plt.title(f'Train: {source}, Eval: {target}')
 
@@ -273,8 +319,11 @@ if __name__ == '__main__':
                 args.output_directory,
                 f'scatterplot_{source}_{target}_'
                 f'{args.level}_'
-                f'thres_{100 * args.recall_threshold:.0f}.png'
+                f'thres_{100 * args.recall_threshold:.0f}'
             )
+            if use_subsamples:
+                filename += '_subsampled'
+            filename += '.png'
 
             print(f'Storing {filename}...')
             plt.savefig(filename, dpi=400)
