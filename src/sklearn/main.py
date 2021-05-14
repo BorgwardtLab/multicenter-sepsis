@@ -424,7 +424,7 @@ def main():
     os.makedirs(result_path, exist_ok=True)
 
     cv_results = pd.DataFrame(random_search.cv_results_)
-    cv_results_file = 'cv_results.csv' if not args.baselines else f'cv_results_rep_{rep}.csv'
+    cv_results_file = make_filename('cv_results', '.csv', args)
     cv_results.to_csv(os.path.join(result_path, cv_results_file))
 
     # Quantify performance on validation split
