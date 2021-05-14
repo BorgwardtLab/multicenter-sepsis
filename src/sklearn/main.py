@@ -464,7 +464,9 @@ def main():
         json.dump(results, f)
 
     est_file = make_filename(
-        'best_estimator', '.pkl', args, rep_name='repetition'
+        'best_estimator' if not args.baselines else 'model', '.pkl',
+        args,
+        rep_name='repetition'
     )
 
     joblib.dump(
