@@ -39,7 +39,7 @@ def process_run(eval_file, pred_file, recall_threshold=0.90):
     maybe_keys = ['subsample', 'subsampled_prevalence']
     for key in maybe_keys:
         if key in d_p.keys():
-            pred_dict['subsample'] = d_p['subsample']
+            pred_dict[key] = d_p[key]
 
     df = pd.DataFrame(d_ev)
     for key in pred_dict.keys():
