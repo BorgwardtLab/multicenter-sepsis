@@ -26,26 +26,29 @@ import numpy as np
 from src.evaluation.patient_evaluation import format_dataset
 
 # hard-coded prevalences (for now):
-prev_dict = {'physionet2019': {'validation': {'tp_prevalence': 0.005078736911534339,
-   'case_prevalence': 0.052750992626205334,
-   'total_stays': 1763,
-   'total_cases': 93}},
- 'mimic': {'validation': {'tp_prevalence': 0.12132375975840508,
-   'case_prevalence': 0.2606824469720258,
-   'total_stays': 3253,
-   'total_cases': 848}},
- 'eicu': {'validation': {'tp_prevalence': 0.03642906177626566,
-   'case_prevalence': 0.08283789139912802,
-   'total_stays': 5046,
-   'total_cases': 418}},
- 'hirid': {'validation': {'tp_prevalence': 0.19987524505435753,
-   'case_prevalence': 0.37278350515463915,
-   'total_stays': 2425,
-   'total_cases': 904}},
- 'aumc': {'validation': {'tp_prevalence': 0.055438335195068474,
-   'case_prevalence': 0.0801987224982257,
-   'total_stays': 1409,
-   'total_cases': 113}}}
+with open('results/evaluation/stats/dataset_stats.json','r') as f:
+    prev_dict = json.load(f)
+
+#prev_dict = {'physionet2019': {'validation': {'tp_prevalence': 0.005078736911534339,
+#   'case_prevalence': 0.052750992626205334,
+#   'total_stays': 1763,
+#   'total_cases': 93}},
+# 'mimic': {'validation': {'tp_prevalence': 0.12132375975840508,
+#   'case_prevalence': 0.2606824469720258,
+#   'total_stays': 3253,
+#   'total_cases': 848}},
+# 'eicu': {'validation': {'tp_prevalence': 0.03642906177626566,
+#   'case_prevalence': 0.08283789139912802,
+#   'total_stays': 5046,
+#   'total_cases': 418}},
+# 'hirid': {'validation': {'tp_prevalence': 0.19987524505435753,
+#   'case_prevalence': 0.37278350515463915,
+#   'total_stays': 2425,
+#   'total_cases': 904}},
+# 'aumc': {'validation': {'tp_prevalence': 0.055438335195068474,
+#   'case_prevalence': 0.0801987224982257,
+#   'total_stays': 1409,
+#   'total_cases': 113}}}
 
 def plot_curves(df, ax, names={}, level='pat'):
     """Plot curve-based evaluation."""
