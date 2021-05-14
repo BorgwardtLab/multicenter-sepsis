@@ -4,7 +4,8 @@ import seaborn as sns
 import numpy as np
 from sklearn.metrics import auc 
 from scipy import interpolate
-
+import argparse
+import os
 from IPython import embed
 import sys
 
@@ -19,11 +20,26 @@ def model_map(name):
     return name
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--input_path',
+        required=True,
+        type=str,
+        help='Path to result dataframe file',
+    )
+    args = parser.parse_args()
+    input_path = args.input_path
     models = ['AttentionModel', 'lgbm', 'sofa', 'qsofa', 'sirs', 'mews', 'news'] #, 'news',
     datasets = ['aumc', 'hirid', 'eicu', 'mimic']
 
-    infile ='results/evaluation/plots/result_data.csv'
-    df = pd.read_csv(infile)
+    #infile ='results/evaluation/plots/result_data.csv'
+    df = pd.read_csv(input_path)
+    use_subsamples = True if 'subsample' in df.columns else False
+    if use_subsamples:
+        n_subsamples = df['subsample'].unique().shape[0]
+    else:
+        n_subsamples = 1 # to mimic subsampling
+
     for train_dataset in datasets:
         for eval_dataset in datasets:
             plt.figure()
@@ -43,26 +59,35 @@ def main():
                 aucs = []
                 mean_fpr = np.linspace(0, 1, 200)
                 metrics = pd.DataFrame()
-                for rep in reps:
-                    rep_data = data[data['rep'] == rep]
-                    tpr = rep_data['pat_recall'].values
-                    fpr = 1 - rep_data['pat_specificity'].values
-                    tpr = np.append(np.append([1], tpr), [0])
-                    fpr = np.append(np.append([1], fpr), [0])
-                    fn = interpolate.interp1d(fpr, tpr) #interpolation fn
-                    interp_tpr = fn(mean_fpr)
-                    #interp_tpr = np.interp(mean_fpr, fpr, tpr.values)
-                    #interp_tpr[0] = 0.0
-                    roc_auc = auc(fpr, tpr) #on raw values
-                    interp_auc = auc(mean_fpr, interp_tpr) #on raw values
-                    tprs.append(interp_tpr)
-                    aucs.append(roc_auc)
-                    curr_df = pd.DataFrame(
-                        { 'fpr': mean_fpr,
-                          'tpr': interp_tpr}
-                    )
-                    curr_df['rep'] = rep
-                    metrics = metrics.append(curr_df)
+               
+                # loop over (potential) subsamples and repetition folds:
+                for subsample in np.arange(n_subsamples):
+                    for rep in reps:
+                        if use_subsamples:
+                            rep_filter = {'rep': rep, 'subsample': subsample}
+                        else:
+                            rep_filter = {'rep': rep}
+                        rep_data = df_filter(data, rep_filter)
+
+                        tpr = rep_data['pat_recall'].values
+                        fpr = 1 - rep_data['pat_specificity'].values
+                        tpr = np.append(np.append([1], tpr), [0])
+                        fpr = np.append(np.append([1], fpr), [0])
+                        fn = interpolate.interp1d(fpr, tpr) #interpolation fn
+                        interp_tpr = fn(mean_fpr)
+                        #interp_tpr = np.interp(mean_fpr, fpr, tpr.values)
+                        #interp_tpr[0] = 0.0
+                        roc_auc = auc(fpr, tpr) #on raw values
+                        interp_auc = auc(mean_fpr, interp_tpr) #on raw values
+                        tprs.append(interp_tpr)
+                        aucs.append(roc_auc)
+                        curr_df = pd.DataFrame(
+                            { 'fpr': mean_fpr,
+                              'tpr': interp_tpr}
+                        )
+                        curr_df['rep'] = rep
+                        metrics = metrics.append(curr_df)
+
                 aucs = np.array(aucs)
                 auc_mean = aucs.mean()
                 auc_std = aucs.std()
@@ -73,7 +98,11 @@ def main():
             else: 
                 title = f'ROC Curve for external validation: trained on {train_dataset}, tested on {eval_dataset}'
             plt.title(title) 
-            plt.legend(loc='lower right') 
-            plt.savefig(f'results/evaluation/plots/roc_{train_dataset}_{eval_dataset}.png', dpi=300) 
+            plt.legend(loc='lower right')
+            outfile = f'roc_{train_dataset}_{eval_dataset}'
+            if 'subsampled' in os.path.split(input_path)[-1]:
+                outfile += '_subsampled'
+            outfile = os.path.join(os.path.split(input_path)[0], outfile + '.png') 
+            plt.savefig(outfile, dpi=300) 
 if __name__ == '__main__':
     main()
