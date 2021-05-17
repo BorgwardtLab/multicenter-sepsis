@@ -2,6 +2,7 @@
 import bisect
 import json
 import os
+from itertools import accumulate
 from pathlib import Path
 
 import pandas as pd
@@ -437,6 +438,42 @@ class AUMC(SplittedDataset):
         #    Impute(),
         #]
         #self.pd_transform = ComposeTransformations(transforms)
+
+
+class ComposedDataset(Dataset):
+    """Dataset class which combines multiple data sources."""
+
+
+    def __init__(self, datasets, **kwargs):
+        super().__init__()
+        self.datasets = [d(**kwargs) for d in datasets]
+        self.dataset_lengths = [len(d) for d in self.datasets]
+        self.cumsum = list(accumulate(
+            self.dataset_lengths,
+            func=sum,
+            initial=0
+        ))
+
+    def __len__(self):
+        return sum(self.dataset_lengths)
+
+    def __getitem__(self, index):
+        for i, (begin, end) in enumerate(zip(self.cumsum, self.cumsum[1:])):
+            if begin <= index < end:
+                return self.datasets[i].__getitem__(index - begin)
+
+        raise IndexError(
+            f'Index {index} is out of range for ComposedDataset with length {len(self)}')
+
+    def get_stratified_split(self, random_state=None):
+        train_indices = []
+        test_indices = []
+        for offset, dataset in zip(self.cumsum, self.datasets):
+            cur_train, cur_test = dataset.get_stratified_split(
+                random_state=random_state)
+            train_indices.extend(map(lambda i: i + offset, cur_train))
+            test_indices.extend(map(lambda i: i + offset, cur_test))
+        return train_indices, test_indices
 
 
 if __name__ == '__main__':
