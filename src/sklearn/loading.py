@@ -36,17 +36,28 @@ class SplitInfo:
         with open(path, 'r') as f:
             return json.load(f) 
 
-    def __call__(self, split='train', rep=0):
+    def __call__(self, split='train', rep=0, test_repetitions=False):
         """
         Args:
         - split: which split to use 
                 [train,validation,test]
         - rep: repetition to use [0 - 4]
+            --> repetitions are by default only active 
+                for train and validation split, 
+                if repetitions of test split are to be used,
+                set `test_repetitions=True`. Otherwise, for 
+                the test split, the rep argument is ignored!
         """
         if split == 'test':
-            ids = self.d[split][f'split_{rep}']
+            if test_repetitions:
+                ids = self.d[split][f'split_{rep}']
+                print(f'{split} split repetition {rep} is used.')
+            else:
+                ids = self.d[split][f'total']
+                print(f'The entire test split is used. Repetition argument ignored.')
         else:
             ids = self.d['dev'][f'split_{rep}'][split]
+            print(f'{split} split repetition {rep} is used.')
         return ids 
 
 
