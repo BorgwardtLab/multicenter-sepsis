@@ -81,7 +81,7 @@ class BaseModel(pl.LightningModule):
             # the same time.
             self.dataset_cls = partial(
                 ComposedDataset,
-                datasets=[getattr(src.torch.datasets, d) for d in self.hparams.datset]
+                datasets=[getattr(src.torch.datasets, d) for d in self.hparams.dataset]
             )
         else:
             self.dataset_cls = getattr(src.torch.datasets, self.hparams.dataset)

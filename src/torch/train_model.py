@@ -2,6 +2,7 @@
 from argparse import ArgumentParser, Namespace
 import json
 from collections import defaultdict
+from functools import partial
 import os
 import sys
 import pytorch_lightning as pl
@@ -14,6 +15,7 @@ sys.path.append(os.getcwd()) # hack for executing module as script (for wandb)
 
 import src.torch.models
 import src.torch.datasets
+from src.torch.datasets import ComposedDataset
 from src.torch.torch_utils import JsonEncoder, TbWithBestValueLogger
 
 
@@ -34,12 +36,13 @@ def main(hparams, model_cls):
     #wandb.init(project='mc-sepsis', entity='sepsis', config=hparams)
     ##config = wandb.config
      
+
     model = model_cls(**vars(namespace_without_none(hparams)))
     ##wandb.watch(model)
 
     # Wandb logger:
    # Loggers and callbacks
-    job_name = f'{hparams.model}_{hparams.dataset}'
+    job_name = f'{hparams.model}_{",".join(hparams.dataset)}'
     # check if slurm array job id is available:
     job_id = os.getenv('SLURM_ARRAY_TASK_ID')
     if job_id is not None:
@@ -50,15 +53,20 @@ def main(hparams, model_cls):
     save_dir = f'/local0/scratch/{username}/'
     os.makedirs(save_dir, exist_ok=True)
 
+    tags = [hparams.model, hparams.task]
     wandb_logger = WandbLogger(
         name=job_name,
         project="mc-sepsis",
         entity="sepsis",
         log_model=True,
-        tags=[hparams.model, hparams.dataset, hparams.task],
+        tags=[
+            hparams.model,
+            ','.join(hparams.dataset),
+            hparams.task
+        ],
         save_dir=save_dir,
         settings=wandb.Settings(start_method="fork")
-    ) 
+    )
     #logger = TbWithBestValueLogger(
     #    hparams.log_path,
     #    model.metrics_initial,
@@ -112,10 +120,15 @@ def main(hparams, model_cls):
     #        if name.startswith(prefix):
     #            results[prefix][name.split('/')[1]] = value
 
+    val_dataset_cls = partial(
+        ComposedDataset,
+        datasets=(getattr(src.torch.datasets, d) for d in hparams.dataset)
+    )
     from src.torch.eval_model import online_eval
+    
     masked_result = online_eval(
         loaded_model,
-        getattr(src.torch.datasets, hparams.dataset, 'validation'),
+        val_dataset_cls,
         'validation',
         device='cuda' if torch.cuda.is_available() else 'cpu'
         #feature_set=hparams.feature_set

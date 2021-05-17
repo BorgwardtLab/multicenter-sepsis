@@ -3,6 +3,7 @@ import bisect
 import json
 import os
 from itertools import accumulate
+import operator
 from pathlib import Path
 
 import pandas as pd
@@ -444,14 +445,13 @@ class ComposedDataset(Dataset):
     """Dataset class which combines multiple data sources."""
 
 
-    def __init__(self, datasets, **kwargs):
+    def __init__(self, datasets, *args, **kwargs):
         super().__init__()
-        self.datasets = [d(**kwargs) for d in datasets]
+        self.datasets = [d(*args, **kwargs) for d in datasets]
         self.dataset_lengths = [len(d) for d in self.datasets]
-        self.cumsum = list(accumulate(
+        self.cumsum = [0] + list(accumulate(
             self.dataset_lengths,
-            func=sum,
-            initial=0
+            func=operator.add,
         ))
 
     def __len__(self):
@@ -464,6 +464,18 @@ class ComposedDataset(Dataset):
 
         raise IndexError(
             f'Index {index} is out of range for ComposedDataset with length {len(self)}')
+
+    @property
+    def lam(self):
+        """Weighted mean of lambdas of composed datasets."""
+        return sum(d.lam * len(d) for d in self.datasets) / self.cumsum[-1]
+
+    @property
+    def class_imbalance_factor(self):
+        prev = sum(d.data[VM_DEFAULT('label')].sum() for d in self.datasets)
+        cif = (1 - prev) / prev
+        print(f'Using imbalance factor: {cif}')
+        return cif
 
     def get_stratified_split(self, random_state=None):
         train_indices = []
