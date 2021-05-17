@@ -441,7 +441,7 @@ class AUMC(SplittedDataset):
         #self.pd_transform = ComposeTransformations(transforms)
 
 
-class ComposedDataset(Dataset):
+class CombinedDataset(Dataset):
     """Dataset class which combines multiple data sources."""
 
 
@@ -463,7 +463,7 @@ class ComposedDataset(Dataset):
                 return self.datasets[i].__getitem__(index - begin)
 
         raise IndexError(
-            f'Index {index} is out of range for ComposedDataset with length {len(self)}')
+            f'Index {index} is out of range for CombinedDataset with length {len(self)}')
 
     @property
     def lam(self):

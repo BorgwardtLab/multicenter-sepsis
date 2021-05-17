@@ -12,7 +12,7 @@ from sklearn.metrics import (
 # from test_tube import HyperOptArgumentParser
 
 import src.torch.datasets
-from src.torch.datasets import ComposedDataset
+from src.torch.datasets import CombinedDataset
 from src.evaluation import physionet2019_utility
 from src.torch.torch_utils import (
     variable_length_collate, ComposeTransformations, LabelPropagation)
@@ -80,7 +80,7 @@ class BaseModel(pl.LightningModule):
             # Handle composed datasets, i.e. training on multiple datasets at
             # the same time.
             self.dataset_cls = partial(
-                ComposedDataset,
+                CombinedDataset,
                 datasets=[getattr(src.torch.datasets, d) for d in self.hparams.dataset]
             )
         else:

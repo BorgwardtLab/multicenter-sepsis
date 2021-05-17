@@ -15,7 +15,7 @@ sys.path.append(os.getcwd()) # hack for executing module as script (for wandb)
 
 import src.torch.models
 import src.torch.datasets
-from src.torch.datasets import ComposedDataset
+from src.torch.datasets import CombinedDataset
 from src.torch.torch_utils import JsonEncoder, TbWithBestValueLogger
 
 
@@ -121,7 +121,7 @@ def main(hparams, model_cls):
     #            results[prefix][name.split('/')[1]] = value
 
     val_dataset_cls = partial(
-        ComposedDataset,
+        CombinedDataset,
         datasets=(getattr(src.torch.datasets, d) for d in hparams.dataset)
     )
     from src.torch.eval_model import online_eval
