@@ -19,6 +19,16 @@ from src.torch.torch_utils import (
 from src.torch.cli_utils import str2bool
 
 
+def parse_dataset(v):
+    """Takes list of elements and checks if they are valid datasets."""
+    valid_datasets = src.torch.datasets.__all__
+    v = v.split(',')
+    for frag in v:
+        if frag not in valid_datasets:
+            raise argparse.ArgumentTypeError('Invalid dataset: {}'.format(frag))
+    return v
+
+
 class BaseModel(pl.LightningModule):
     """Base model for all models implementing datasets and training."""
 
@@ -312,8 +322,8 @@ class BaseModel(pl.LightningModule):
         parser = argparse.ArgumentParser(parents=[parent_parser])
         # training specific
         parser.add_argument(
-            '--dataset', type=str, choices=src.torch.datasets.__all__,
-            nargs='+',
+            '--dataset',
+            type=parse_dataset,
             default='MIMICDemo'
         )
         parser.add_argument(
