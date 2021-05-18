@@ -129,7 +129,8 @@ def load_and_transform_data(
     variable_set='full',
     task='regression',
     baselines=False,
-    form='pandas'
+    form='pandas',
+    test_repetitions=False
 ):
     """
     Data loading function (for classic models).
@@ -149,6 +150,10 @@ def load_and_transform_data(
     - task: regression or classification
     - baselines: flag, if set overrides feature and variable set
         and only loads baselines as input features
+    - form: format to return, (pandas,dask)
+    - test_repetitions: flag to return boosted test repetitions, 
+        otherwise full test set returned if split='test' and rep only 
+        used for normalization.
 
     returns data and lambda 
     """
@@ -173,7 +178,7 @@ def load_and_transform_data(
 
     # determine patient ids of current split:
     si = SplitInfo(split_path)
-    ids = si(split, rep)
+    ids = si(split, rep, test_repetitions)
 
     # 1. Load Patient Data (selected ids and columns):
     pl = ParquetLoader(data_path, form=form)
