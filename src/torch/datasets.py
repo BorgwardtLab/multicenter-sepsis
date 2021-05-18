@@ -193,12 +193,19 @@ class SplittedDataset(ParquetLoadedDataset):
 
     def __init__(self, path, split_file, split, feature_set,
                  only_physionet_features=False, fold=0, pd_transform=None, transform=None):
+        """
+        Args:
+        - test_repetitions: if true boosting reps of test split are loaded, else full test split.
+        """
         with open(split_file, 'r') as f:
             d = json.load(f)
             if split in ['train', 'validation']:
                 ids = d['dev']['split_{}'.format(fold)][split]
             else:
-                ids = d[split]['split_{}'.format(fold)]
+                assert split == 'test'
+                ids = d[split]['total']
+                # when boosting test repetitions:
+                # ids = d[split]['split_{}'.format(fold)]
             # Need this to construct stratified split
             self.id_to_label = dict(zip(d['total']['ids'], d['total']['labels']))
 
@@ -271,10 +278,11 @@ class SplittedDataset(ParquetLoadedDataset):
 class Physionet2019(SplittedDataset):
     """Physionet 2019 dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=True, fold=0, cost=5, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=True, 
+        fold=0, cost=5, transform=None):
+
         super().__init__(
             f'datasets/physionet2019/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
-            #'datasets/physionet2019/data/parquet/features_small',
             'config/splits/splits_physionet2019.json',
             split,
             feature_set,
@@ -282,21 +290,10 @@ class Physionet2019(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        #normalize = Normalize(
-        #    'config/normalizer/normalizer_physionet2019_rep_{}.json'.format(fold),
-        #    self.columns
-        #)
-        
+                
         self.lam = LoadLambda(
             lambda_path =  f'config/lambdas/lambda_physionet2019_rep_{fold}_cost_{cost}.json').lam 
         
-        #transforms = [
-        #    normalize,
-        #    apply_lam,
-        #    Impute(),
-        #]
-        #self.pd_transform = ComposeTransformations(transforms)
-
 
 class MIMICDemo(SplittedDataset):
     """MIMIC demo dataset."""
