@@ -214,6 +214,9 @@ if __name__ == '__main__':
 
     parser = model_cls.add_model_specific_args(parser)
     hparams = parser.parse_args()
+    if isinstance(hparams.dataset, (list, tuple)) and len(hparams.dataset) == 1:
+        hparams.dataset = hparams.dataset[0].split(',')
+
     hparams.dataset_kwargs = {
         'cost': hparams.cost,
         'fold': hparams.rep #`rep` naming to conform with shallow models                                        
