@@ -469,7 +469,7 @@ class CombinedDataset(Dataset):
 
     @property
     def class_imbalance_factor(self):
-        prev = sum(d.data[VM_DEFAULT('label')].sum() for d in self.datasets)
+        prev = sum(d.data[VM_DEFAULT('label')].sum() for d in self.datasets) / self.cumsum[-1]
         cif = (1 - prev) / prev
         print(f'Using imbalance factor: {cif}')
         return cif
