@@ -298,7 +298,7 @@ def main(args):
         labels = [[int(x) for x in pat] for pat in labels]
         d['labels'] = labels
 
-    for rep in np.arange(1):  # 5
+    for rep in np.arange(5):  # 5
         if cost > 0:
             curr_path = lambda_path.format(eval_dataset, rep, cost)
         else:
@@ -323,7 +323,7 @@ def main(args):
         'tp_precision': flatten_wrapper(
             functools.partial(precision_score, zero_division=0)
         ),
-        'pat_physionet2019_score': utility_score_wrapper(lam=lam),
+        #'pat_physionet2019_score': utility_score_wrapper(lam=lam),
         'pat_eval': first_alarm_eval
     }
 
@@ -400,7 +400,7 @@ if __name__ in "__main__":
     )
     parser.add_argument(
         '-s', '--num-steps',
-        default=200,
+        default=100,
         type=int,
         help='Number of steps for thresholding'
     )

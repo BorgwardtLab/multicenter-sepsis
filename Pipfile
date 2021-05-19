@@ -21,7 +21,7 @@ lightgbm = "*"
 pytorch-lightning = "==1.0.5"
 dask = {extras = ["dataframe"],version = "*"}
 distributed = "*"
-dask-ml = "*"
+dask-ml = "==1.8.0"
 pyarrow = "*"
 seaborn = "*"
 kymatio = "*"
@@ -34,6 +34,7 @@ iisignature = "*"
 parquet-tools = "*"
 simplejson = "*"
 wandb = "*"
+networkx = "*"
 
 [requires]
 python_version = "3.7"

@@ -8,9 +8,9 @@ python -m src.splits.create_splits --version $version
 
 export DASK_DISTRIBUTED__COMM__RETRY__COUNT=30                                                                                                                                                                  
 export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT="180s" #45s
-datasets=(mimic_demo mimic aumc hirid eicu physionet2019) # aumc physionet2019 hirid eicu) #mimic_demo mimic 
+datasets=(mimic_demo mimic aumc hirid eicu physionet2019)  #mimic_demo mimic aumc physionet2019 hirid eicu) #mimic_demo mimic 
 cost=5
-feature_sets=(small middle) #small
+feature_sets=(small middle)
 for dataset in ${datasets[@]}; do
 
     echo ">>> Processing $dataset ..."
@@ -25,7 +25,7 @@ for dataset in ${datasets[@]}; do
             --n-workers=20 \
             --feature_set=$feature_set 
     done
-    for rep in {0..4}; do # {0..4} 
+    for rep in {0..4}; do 
         normalizer_file=config/normalizer/normalizer_${dataset}_rep_${rep}.json
         
         lambda_file=config/lambdas/lambda_${dataset}_rep_${rep}_cost_${cost}.json
@@ -54,6 +54,7 @@ done
 # also extract all feature sets and write to json:
 python -m src.variables.feature_groups --input_path $features 
 
+# datasets=(mimic_demo mimic aumc eicu physionet2019 hirid)
 # caching for deep models: (depends on feature groups)
 splits=(train validation test)
 for dataset in ${datasets[@]}; do
@@ -70,3 +71,7 @@ for dataset in ${datasets[@]}; do
         done
     done
 done
+
+
+## run subsampling procedure to write out ids (assuming target prev=0.17)
+python src/splits/subsample.py

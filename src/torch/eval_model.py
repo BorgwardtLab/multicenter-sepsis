@@ -118,7 +118,8 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
         dataloader_um = DataLoader(
             dataset_cls(
                 split=split,
-                transform=ComposeTransformations(model.transforms)
+                transform=ComposeTransformations(model.transforms),
+                **kwargs
             ),
             batch_size=1,
             shuffle=False,

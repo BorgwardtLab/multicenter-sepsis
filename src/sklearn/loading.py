@@ -36,17 +36,28 @@ class SplitInfo:
         with open(path, 'r') as f:
             return json.load(f) 
 
-    def __call__(self, split='train', rep=0):
+    def __call__(self, split='train', rep=0, test_repetitions=False):
         """
         Args:
         - split: which split to use 
                 [train,validation,test]
         - rep: repetition to use [0 - 4]
+            --> repetitions are by default only active 
+                for train and validation split, 
+                if repetitions of test split are to be used,
+                set `test_repetitions=True`. Otherwise, for 
+                the test split, the rep argument is ignored!
         """
         if split == 'test':
-            ids = self.d[split][f'split_{rep}']
+            if test_repetitions:
+                ids = self.d[split][f'split_{rep}']
+                print(f'{split} split repetition {rep} is used.')
+            else:
+                ids = self.d[split][f'total']
+                print(f'The entire test split is used. Repetition argument ignored.')
         else:
             ids = self.d['dev'][f'split_{rep}'][split]
+            print(f'{split} split repetition {rep} is used.')
         return ids 
 
 
@@ -118,7 +129,8 @@ def load_and_transform_data(
     variable_set='full',
     task='regression',
     baselines=False,
-    form='pandas'
+    form='pandas',
+    test_repetitions=False
 ):
     """
     Data loading function (for classic models).
@@ -138,14 +150,20 @@ def load_and_transform_data(
     - task: regression or classification
     - baselines: flag, if set overrides feature and variable set
         and only loads baselines as input features
+    - form: format to return, (pandas,dask)
+    - test_repetitions: flag to return boosted test repetitions, 
+        otherwise full test set returned if split='test' and rep only 
+        used for normalization.
 
     returns data and lambda 
     """
+    print(f'Loading {feature_set} feature set')
     # determine columns to load:
     with open(feature_path, 'r') as f:
         feat_dict = json.load(f)
     if baselines:
         cols = VM_DEFAULT.all_cat('baseline')
+        cols.extend([VM_DEFAULT(x) for x in ['id', 'time']])
     else:
         cols = feat_dict[variable_set][feature_set]['columns']
     if task == 'regression':
@@ -160,8 +178,8 @@ def load_and_transform_data(
 
     # determine patient ids of current split:
     si = SplitInfo(split_path)
-    ids = si(split, rep)
-    
+    ids = si(split, rep, test_repetitions)
+
     # 1. Load Patient Data (selected ids and columns):
     pl = ParquetLoader(data_path, form=form)
     start = time()

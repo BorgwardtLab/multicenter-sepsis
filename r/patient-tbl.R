@@ -5,6 +5,7 @@ library(assertthat)
 library(icd)
 library(plyr)
 library(xtable)
+library(data.table)
 
 root <- file.path(rprojroot::find_root(".git/index"))
 utils_dir <- file.path(root, "r", "utils")
@@ -12,8 +13,17 @@ invisible(lapply(list.files(utils_dir, full.names = TRUE), source))
 Sys.setenv(RICU_CONFIG_PATH = file.path(root, "config", "ricu-dict"))
 
 src <- c("mimic", "eicu", "hirid", "aumc")
-cohort_list <- read_json(file.path(root, "config", "cohorts.json"), simplifyVector = T)
-cohorts <- lapply(src, function(x) cohort_list[[x]][["final"]])
+emory <- TRUE
+cohorts <- lapply(
+  src, 
+  function(dsrc) {
+    if (dsrc == "eicu_demo") return(eicu_demo$patient$patientunitstayid)
+    fl <- read_json(file.path(root, "config", "splits",
+                              paste0("splits_", dsrc, ".json")), 
+                    simplifyVector = T)
+    fl[["total"]][["ids"]]
+  }
+)
 names(cohorts) <- src
 
 vars <- list(
@@ -132,6 +142,9 @@ pts_source_sum <- function(source, patient_ids) {
     cohort_info,
     pts_tbl
   )
+  
+  pts_tbl$V3 <- gsub("NA \(NA-NA\)", "-", pts_tbl$V3)
+  
 
   names(pts_tbl) <- c("Variable", "Reported", srcwrap(source))
 
@@ -140,15 +153,64 @@ pts_source_sum <- function(source, patient_ids) {
     to = sapply(names(concept_translator), function(x) concept_translator[[x]])
   )
 
+  add_report <- ifelse(grepl("hspace3mm", pts_tbl$Variable),
+                       "", paste0(" (", pts_tbl$Reported, ")"))
+  
+  pts_tbl$Variable <- paste0(pts_tbl$Variable, add_report)
+  pts_tbl$Reported <- NULL
+
   pts_tbl
 
 }
 
 res <- Reduce(
-  function(x, y) merge(x, y, by = c("Variable", "Reported"),
+  function(x, y) merge(x, y, by = c("Variable"),
                        sort = F, all = T),
   Map(pts_source_sum, src, cohorts)
 )
 
-print(xtable(res, align = c("c", "l", "c", "c", "c", "c", "c")),
+# make columns into characters
+for (col in names(res)) res[[col]] <- as.character(res[[col]])
+
+# replace NAs by "-"
+rep_list <- lapply(seq_along(names(res)), function(x) "-")
+names(rep_list) <- names(res)
+res <- tidyr::replace_na(res, rep_list)
+
+if (emory) {
+  
+  res <- cbind(res, Emory = "-", stringsAsFactors = FALSE)
+  
+  dat <- arrow::read_parquet(file.path(root, "emory-data", 
+                                       "physionet2019_0.4.0.parquet"))
+  dat <- as.data.table(dat)
+  
+  # cohort size
+  n_coh <- length(unique(dat$stay_id))
+  res[res$Variable == "Cohort size (n)", "Emory"] <- n_coh
+  
+  # prevalence
+  dat$onset_ind
+  n_sep <- sum(dat[, any(onset_ind), by = "stay_id"][["V1"]], na.rm = T)
+  perc_sep <- round(n_sep / n_coh * 100, 2)
+  res[res$Variable == "Sepsis-3 prevalence (n (%))", "Emory"] <- 
+    paste0(n_sep, " (", perc_sep, ")")
+  
+  # age
+  age <- as_id_tbl(dat[, unique(age_static), by = "stay_id"], 
+                   id_vars = "stay_id")
+  
+  res[res$Variable == "Age, years (Median (IQR))", "Emory"] <- 
+    med_iqr(age, NULL)[[3L]]
+  
+  # gender
+  n_fem <- sum(dat[, any(female_static), by = "stay_id"][["V1"]])
+  perc_fem <- round(n_fem / n_coh * 100)
+  res[res$Variable == "Gender, female (%)", "Emory"] <- perc_fem
+  res[res$Variable == "Gender, male (%)", "Emory"] <- 100L - perc_fem
+  
+}
+
+align_vec <- c("c", "l", rep("c", length(src) + emory))
+print(xtable(res, align = align_vec),
       floating=FALSE, latex.environments=NULL, include.rownames = F)

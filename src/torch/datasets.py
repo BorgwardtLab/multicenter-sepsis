@@ -2,6 +2,8 @@
 import bisect
 import json
 import os
+from itertools import accumulate
+import operator
 from pathlib import Path
 
 import pandas as pd
@@ -193,12 +195,19 @@ class SplittedDataset(ParquetLoadedDataset):
 
     def __init__(self, path, split_file, split, feature_set,
                  only_physionet_features=False, fold=0, pd_transform=None, transform=None):
+        """
+        Args:
+        - test_repetitions: if true boosting reps of test split are loaded, else full test split.
+        """
         with open(split_file, 'r') as f:
             d = json.load(f)
             if split in ['train', 'validation']:
                 ids = d['dev']['split_{}'.format(fold)][split]
             else:
-                ids = d[split]['split_{}'.format(fold)]
+                assert split == 'test'
+                ids = d[split]['total']
+                # when boosting test repetitions:
+                # ids = d[split]['split_{}'.format(fold)]
             # Need this to construct stratified split
             self.id_to_label = dict(zip(d['total']['ids'], d['total']['labels']))
 
@@ -271,10 +280,11 @@ class SplittedDataset(ParquetLoadedDataset):
 class Physionet2019(SplittedDataset):
     """Physionet 2019 dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=True, fold=0, cost=5, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=True, 
+        fold=0, cost=5, transform=None):
+
         super().__init__(
             f'datasets/physionet2019/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
-            #'datasets/physionet2019/data/parquet/features_small',
             'config/splits/splits_physionet2019.json',
             split,
             feature_set,
@@ -282,21 +292,10 @@ class Physionet2019(SplittedDataset):
             fold=fold,
             transform=transform
         )
-        #normalize = Normalize(
-        #    'config/normalizer/normalizer_physionet2019_rep_{}.json'.format(fold),
-        #    self.columns
-        #)
-        
+                
         self.lam = LoadLambda(
             lambda_path =  f'config/lambdas/lambda_physionet2019_rep_{fold}_cost_{cost}.json').lam 
         
-        #transforms = [
-        #    normalize,
-        #    apply_lam,
-        #    Impute(),
-        #]
-        #self.pd_transform = ComposeTransformations(transforms)
-
 
 class MIMICDemo(SplittedDataset):
     """MIMIC demo dataset."""
@@ -328,6 +327,7 @@ class MIMIC(SplittedDataset):
     """MIMIC dataset."""
 
     def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+        print(f'Using data fold {fold}...')
         super().__init__(
             f'datasets/mimic/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             'config/splits/splits_mimic.json',
@@ -436,6 +436,53 @@ class AUMC(SplittedDataset):
         #    Impute(),
         #]
         #self.pd_transform = ComposeTransformations(transforms)
+
+
+class CombinedDataset(Dataset):
+    """Dataset class which combines multiple data sources."""
+
+
+    def __init__(self, datasets, *args, **kwargs):
+        super().__init__()
+        self.datasets = [d(*args, **kwargs) for d in datasets]
+        self.dataset_lengths = [len(d) for d in self.datasets]
+        self.cumsum = [0] + list(accumulate(
+            self.dataset_lengths,
+            func=operator.add,
+        ))
+
+    def __len__(self):
+        return sum(self.dataset_lengths)
+
+    def __getitem__(self, index):
+        for i, (begin, end) in enumerate(zip(self.cumsum, self.cumsum[1:])):
+            if begin <= index < end:
+                return self.datasets[i].__getitem__(index - begin)
+
+        raise IndexError(
+            f'Index {index} is out of range for CombinedDataset with length {len(self)}')
+
+    @property
+    def lam(self):
+        """Weighted mean of lambdas of composed datasets."""
+        return sum(d.lam * len(d) for d in self.datasets) / self.cumsum[-1]
+
+    @property
+    def class_imbalance_factor(self):
+        prev = sum(d.data[VM_DEFAULT('label')].sum() for d in self.datasets) / sum(len(d.data) for d in self.datasets)
+        cif = (1 - prev) / prev
+        print(f'Using imbalance factor: {cif}')
+        return cif
+
+    def get_stratified_split(self, random_state=None):
+        train_indices = []
+        test_indices = []
+        for offset, dataset in zip(self.cumsum, self.datasets):
+            cur_train, cur_test = dataset.get_stratified_split(
+                random_state=random_state)
+            train_indices.extend(map(lambda i: i + offset, cur_train))
+            test_indices.extend(map(lambda i: i + offset, cur_test))
+        return train_indices, test_indices
 
 
 if __name__ == '__main__':

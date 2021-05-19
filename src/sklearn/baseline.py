@@ -20,7 +20,8 @@ class BaselineModel(BaseEstimator):
         - theta: which threshold is used to binarize prediction
         """ 
         self.column = column
-        self.theta = theta 
+        self.theta = theta
+        self.classes_ = np.array([0., 1.])
     
     def fit(self, X, y):
         return self
@@ -37,7 +38,7 @@ class BaselineModel(BaseEstimator):
     def predict_proba(self, X):
         scores = self._forward(X)
         scores = pd.concat([1-scores, scores], axis=1)
-        return scores
+        return scores.values 
 
     def decision_function(self, X):
         return self._forward(X)

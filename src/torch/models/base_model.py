@@ -1,6 +1,7 @@
 """Base model for all models implementing datasets and training."""
 import argparse
 import numpy as np
+from functools import partial
 
 import torch
 from torch.utils.data import DataLoader, Subset
@@ -11,10 +12,21 @@ from sklearn.metrics import (
 # from test_tube import HyperOptArgumentParser
 
 import src.torch.datasets
+from src.torch.datasets import CombinedDataset
 from src.evaluation import physionet2019_utility
 from src.torch.torch_utils import (
     variable_length_collate, ComposeTransformations, LabelPropagation)
 from src.torch.cli_utils import str2bool
+
+
+def parse_dataset(v):
+    """Takes list of elements and checks if they are valid datasets."""
+    valid_datasets = src.torch.datasets.__all__
+    v = v.split(',')
+    for frag in v:
+        if frag not in valid_datasets:
+            raise argparse.ArgumentTypeError('Invalid dataset: {}'.format(frag))
+    return v
 
 
 class BaseModel(pl.LightningModule):
@@ -73,7 +85,16 @@ class BaseModel(pl.LightningModule):
                  dataset_kwargs={}, **kwargs):
         super().__init__()
         self.save_hyperparameters()
-        self.dataset_cls = getattr(src.torch.datasets, self.hparams.dataset)
+        if isinstance(self.hparams.dataset, (list, tuple)):
+            print('Using composed dataset:', self.hparams.dataset)
+            # Handle composed datasets, i.e. training on multiple datasets at
+            # the same time.
+            self.dataset_cls = partial(
+                CombinedDataset,
+                datasets=[getattr(src.torch.datasets, d) for d in self.hparams.dataset]
+            )
+        else:
+            self.dataset_cls = getattr(src.torch.datasets, self.hparams.dataset)
         d = self.dataset_cls(split='train', **dataset_kwargs)
         self.train_indices, self.val_indices = d.get_stratified_split(87346583)
         self.task = task
@@ -301,7 +322,8 @@ class BaseModel(pl.LightningModule):
         parser = argparse.ArgumentParser(parents=[parent_parser])
         # training specific
         parser.add_argument(
-            '--dataset', type=str, choices=src.torch.datasets.__all__,
+            '--dataset',
+            type=parse_dataset,
             default='MIMICDemo'
         )
         parser.add_argument(

@@ -45,7 +45,7 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        '--input_path', default='datasets/{}/data/parquet/features',
+        '--input_path', default='datasets/{}/data/parquet/features_middle',
         help='Path to input data, (dataset name not formatted, but left as {})'
     )
     parser.add_argument(
@@ -64,9 +64,19 @@ def main():
         '--eval_dataset', default='mimic_demo',
         help='Evaluation Dataset Name: [physionet2019, ..]'
     )
+    #parser.add_argument(
+    #    '--label-propagation', default=6, type=int,
+    #    help='By how many hours to shift label into the past. Default: 6'
+    #)
     parser.add_argument(
-        '--label-propagation', default=6, type=int,
-        help='By how many hours to shift label into the past. Default: 6'
+        '--label_propagation', default=6, type=int,
+        help="""(Active for classification task) By how many hours to 
+            shift label into the past. Default: 6"""
+    )
+    parser.add_argument(
+        '--label_propagation_right', default=24, type=int,
+        help="""(Active for classification task) By how many hours to 
+            shift label into the future, afterwards 0 again. Default: 24"""
     )
     parser.add_argument(
         '--method', default='lgbm', type=str,
@@ -112,9 +122,13 @@ def main():
         help='split repetition', type=int, 
         default=0)
     parser.add_argument(
-        '--task', default='regression', 
+        '--repetition_model', 
+        help='bool if repetition model is used, or not', action='store_true', 
+        default=False)
+    parser.add_argument(
+        '--task', default='classification', 
         help='which prediction task to use: [classification, regression]'
-    )
+    )   
     parser.add_argument(
         '--index', default='multi',
         help='multi index vs single index (only pat_id, time becomes column): [multi, single]'
@@ -131,6 +145,12 @@ def main():
     train_dataset = args.train_dataset
     eval_dataset = args.eval_dataset
     task = args.task
+    rep = args.rep
+    # pass this argument to data loading and pipeline creator 
+    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
+        args.baselines = True
+    else: 
+        args.baselines = False
 
     args.dataset = eval_dataset #load_data_splits expect this property
     data, lam = load_data_splits(args, splits=[args.split])
@@ -142,7 +162,10 @@ def main():
     # Load pretrained model
     ##TODO: define model_path, compute checksum, load model, then eval scores on eval data
     model_path = os.path.join(args.model_path, train_dataset + '_' + method)
-    model_path = os.path.join(model_path, 'best_estimator.pkl')
+    model_file = 'best_estimator' if not args.repetition_model else f'model_repetition_{rep}'
+    model_file += '.pkl'
+    model_path = os.path.join(model_path, model_file)
+    print(f'Loading model from {model_path}')
     model, checksum = load_model(model_path) 
 
     #scores = {
@@ -174,7 +197,7 @@ def main():
     results['dataset_train'] = train_dataset
     results['dataset_eval'] = eval_dataset
     results['split'] = split
-    results['rep'] = args.rep 
+    results['rep'] = rep 
     results['task'] = task 
  
     #results['predictions']
@@ -219,6 +242,7 @@ def main():
     for key in ['steps', 'est']:
         results['model_params'].pop(key, None)
 
+    os.makedirs(os.path.split(outfile)[0], exist_ok=True) 
     with open(outfile, 'w') as f:
         json.dump(results, f, indent=4)
 

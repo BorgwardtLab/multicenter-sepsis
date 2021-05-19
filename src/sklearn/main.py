@@ -28,6 +28,21 @@ VM_CONFIG_PATH = str(
 
 VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
 
+
+def make_filename(prefix, suffix, args, rep_name='rep'):
+    """Create filename based on prefix, suffix, and arguments."""
+    filename = prefix
+
+    if args.baselines:
+        filename += f'_{rep_name}_{args.rep}'
+
+    if args.iteration is not None:
+        filename += f'_iteration_{args.iteration}'
+
+    filename += suffix
+    return filename
+
+
 def load_data(args, split):
     """
     util function to load current data split
@@ -58,7 +73,7 @@ def load_data(args, split):
         feature_set=args.feature_set,
         variable_set=args.variable_set,
         task=args.task,
-        baselines=False
+        baselines=args.baselines
     )
 
 def load_data_splits(args, 
@@ -113,6 +128,11 @@ def load_data_splits(args,
         d[f'X_{split}'] = data 
     return d, lam
 
+def compute_imbalance_factor(data):
+    y = data['y_train']
+    prev = y.sum() / len(y)
+    return (1 - prev) / prev 
+
 def get_pipeline_and_grid(args):
     """Get sklearn pipeline and parameter grid."""
     # first determine which feature set to use for current model:
@@ -120,14 +140,14 @@ def get_pipeline_and_grid(args):
     method_name = args.method
     clf_params = args.clf_params 
     task = args.task
- 
+     
     steps = [] #pipeline steps
      
     # Convert input format from argparse into a dict
     clf_params = dict(zip(clf_params[::2], clf_params[1::2]))
     if method_name == 'lgbm':
         import lightgbm as lgb
-        parameters = {'n_jobs': 30}
+        parameters = {'n_jobs': -1}
         parameters.update(clf_params)
         if task == 'classification':
             est = lgb.LGBMClassifier(**parameters)
@@ -144,8 +164,11 @@ def get_pipeline_and_grid(args):
             'est__num_leaves': [30, 50, 100],
             'est__reg_alpha': [0,0.1,0.5,1,3,5], 
         }
-        #if args.task == 'classification':
-        #    param_dist['est__scale_pos_weight'] = [1, 10, 20, 50, 100]
+        if args.task == 'classification':
+            cif = args.class_imbalance_factor
+            param_dist['est__scale_pos_weight'] = [cif]
+            print(f'Using imbalance factor of {cif}')
+            
         return pipe, param_dist
     elif method_name == 'rf':
         from sklearn.ensemble import RandomForestClassifier as RF
@@ -171,7 +194,10 @@ def get_pipeline_and_grid(args):
         
         if task == 'classification':
             from sklearn.linear_model import LogisticRegression as LogReg
-            parameters = {'n_jobs': 10} #10 for non-eicu #-1 led to OOM
+            cif = args.class_imbalance_factor
+            print(f'Using imbalance factor of {cif}')
+            weights = {0: 1, 1: cif}
+            parameters = {'n_jobs': 10, 'class_weight': weights} #10 for non-eicu #-1 led to OOM
             parameters.update(clf_params)
             est = LogReg(**parameters)
             # hyper-parameter grid:
@@ -192,7 +218,7 @@ def get_pipeline_and_grid(args):
         steps.append(('est', est))
         pipe = Pipeline(steps)
         return pipe, param_dist
-    elif method_name in ['sofa', 'qsofa', 'sirs', 'mews', 'news']:
+    elif args.baselines:
         from src.sklearn.baseline import BaselineModel
         import scipy.stats as stats
         parameters = {'column': method_name}
@@ -290,7 +316,7 @@ def main():
         help='split repetition', type=int, 
         default=0)
     parser.add_argument(
-        '--task', default='regression', 
+        '--task', default='classification', 
         help='which prediction task to use: [classification, regression]'
     )
     parser.add_argument(
@@ -306,21 +332,36 @@ def main():
         '--target_name', default='neg_log_loss',
         help='Only for classification: which objective to optimize in model selection [physionet_utility, roc_auc, average_precision]'
     )
-
+    parser.add_argument(
+        '-i', '--iteration',
+        default=None,
+        type=int,
+        help='Specifies external iteration number for hyperparameter search. '
+             'This simplifies the parallelisation of jobs.'
+    )
 
     args = parser.parse_args()
     ## Process arguments:
-    task = args.task 
+    task = args.task
+    rep = args.rep
+    # pass this argument to data loading and pipeline creator 
+    if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
+        args.baselines = True
+    else: 
+        args.baselines = False
+
  
     # Load data and current lambda and apply on-the-fly transforms:
     data, lam = load_data_splits(args)
     #data = load_data_from_input_path(
     #    args.input_path, args.dataset, args.index, args.extended_features)
+
     if task == 'classification':
+        args.class_imbalance_factor = compute_imbalance_factor(data)
         # for regression task the label shift happens in target calculation
         data = handle_label_shift(args, data)
  
-    # TODO: add (update) baseline option! 
+    # TODO: add (update) baseline option!
     ## for baselines: 
     #if args.method in ['sofa', 'qsofa', 'sirs', 'news', 'mews']:
     #    # use baselines as prediction input data
@@ -329,7 +370,7 @@ def main():
     #    data['baselines_validation'].index = data['X_validation'].index
     #    data['X_train'] = data['baselines_train']
     #    data['X_validation'] = data['baselines_validation']
- 
+     
     pipeline, hparam_grid = get_pipeline_and_grid(args)
      
     if task == 'classification':
@@ -359,7 +400,7 @@ def main():
         scores = { 
                 target_name: SCORERS['neg_mean_squared_error'],
         }
-    
+
     random_search = RandomizedSearchCV(
         pipeline,
         param_distributions=hparam_grid,
@@ -383,7 +424,8 @@ def main():
     os.makedirs(result_path, exist_ok=True)
 
     cv_results = pd.DataFrame(random_search.cv_results_)
-    cv_results.to_csv(os.path.join(result_path, 'cv_results.csv'))
+    cv_results_file = make_filename('cv_results', '.csv', args)
+    cv_results.to_csv(os.path.join(result_path, cv_results_file))
 
     # Quantify performance on validation split
     best_estimator = random_search.best_estimator_
@@ -416,12 +458,20 @@ def main():
         except AttributeError:
             # Not all estimators support all methods
             continue
+    res_jsn_file = make_filename('results', '.json', args)
 
-    with open(os.path.join(result_path, 'results.json'), 'w') as f:
+    with open(os.path.join(result_path, res_jsn_file), 'w') as f:
         json.dump(results, f)
+
+    est_file = make_filename(
+        'best_estimator' if not args.baselines else 'model', '.pkl',
+        args,
+        rep_name='repetition'
+    )
+
     joblib.dump(
         best_estimator,
-        os.path.join(result_path, 'best_estimator.pkl'),
+        os.path.join(result_path, est_file),
         compress=1
     )
 
