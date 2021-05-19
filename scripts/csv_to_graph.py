@@ -1,7 +1,10 @@
 """Create `networkx` graph from CSV of results."""
 
 import networkx as nx
+import numpy as np
 import pandas as pd
+
+import matplotlib.pyplot as plt
 
 import argparse
 import itertools
@@ -55,3 +58,24 @@ if __name__ == '__main__':
         G.add_edge(source, target, weight=weight)
 
     nx.write_graphml(G, args.output)
+
+    # Sad excuse for drawing some stuff here...
+
+    positions = nx.circular_layout(G)
+    weights = list(nx.get_edge_attributes(G, 'weight').values())
+    weights = np.asarray(weights)
+
+    min_weight = np.min(weights)
+    max_weight = np.max(weights)
+    o = 0.5
+    s = 2.0
+
+    weights = s * (weights - min_weight) / (max_weight - min_weight) + o
+
+    nx.draw_networkx(
+        G,
+        positions,
+        width=list(weights)
+    )
+
+    plt.show()
