@@ -21,6 +21,11 @@ if __name__ == '__main__':
         default='auc_mean',
         help='Metric to use for edge weights'
     )
+    parser.add_argument(
+        '-d', '--no-diagonal',
+        action='store_true',
+        help='If set, removes diagonal from heat map'
+    )
 
     args = parser.parse_args()
 
@@ -32,10 +37,11 @@ if __name__ == '__main__':
         values=args.metric
     )
 
-    for dataset in df.columns:
-        df[dataset][dataset] = np.nan
+    if args.no_diagonal:
+        for dataset in df.columns:
+            df[dataset][dataset] = np.nan
 
-    sns.heatmap(df, cmap='RdYlGn', annot=True)
+    sns.heatmap(df, cmap='Blues', annot=True)
 
     plt.tick_params(
         axis='both',
