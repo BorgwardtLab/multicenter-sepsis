@@ -290,10 +290,10 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
   cnt <- cnt[ts_count >= min_n_meas, ]
   cnt <- cnt[, ts_count := NULL]
 
-  tmp <- nrow(dat)
+  tmp <- id_col(dat)
   dat <- merge(dat, cnt, all.y = TRUE)
 
-  msg("--> removing {tmp - nrow(dat)} patients due to fewer",
+  msg("--> removing {length(setdiff(tmp, id_col(dat)))} patients due to fewer",
       " than {min_n_meas} in-icu measurements.")
 
   mis <- dat[stay_time > 0, list(
@@ -302,11 +302,11 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
   mis <- mis[(keep), ]
   mis <- mis[, keep := NULL]
 
-  tmp <- nrow(dat)
+  tmp <- id_col(dat)
   dat <- merge(dat, mis, all.y = TRUE)
 
-  msg("--> removing {tmp - nrow(dat)} patients due to missing windows",
-      " of size larger than {format_unit(max_miss_win)}.")
+  msg("--> removing {length(setdiff(tmp, id_col(dat)))} patients due to",
+      " missing windows of size larger than {format_unit(max_miss_win)}.")
 
   dat <- rename_cols(dat, cfg$name, cfg$concept, by_ref = TRUE,
                      skip_absent = TRUE)
