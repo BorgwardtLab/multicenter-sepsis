@@ -20,6 +20,7 @@ import seaborn as sns
 
 import pandas as pd
 from scripts.plots.plot_patient_eval import prev_dict
+from scripts.plots.plot_roc import model_map
 
 def interpolate_at(df, x):
     """Interpolate a data frame at certain positions.
@@ -91,15 +92,6 @@ def get_coordinates(df, recall_threshold, level, x_stat='earliness_median'):
     # TODO: find nicer names for these labels
     return x, x_stat, y, precision_col
 
-
-def sanitise_model_name(model):
-    """Return sanitised model name."""
-    if model == 'AttentionModel':
-        return 'attention model'
-    else:
-        return model
-
-
 def make_scatterplot(
     df,
     ax,
@@ -108,12 +100,15 @@ def make_scatterplot(
     point_alpha,
     line_alpha,
     prev,
+    aggregation='macro', 
 ):
     """Create model-based scatterplot from joint data frame."""
     # Will contain a single data frame to plot. This is slightly more
     # convenient because it permits us to use `seaborn` directly.
     plot_df = []
-    if 'subsample' in df.columns:
+    use_subsamples=True if 'subsample' in df.columns else False
+    assert aggregation in ['micro','macro']
+    if use_subsamples: 
         for (model, repetition, subsample), df_ in df.groupby(['model', 'rep', 'subsample']):
             # We are tacitly assuming that all the labels remain the same
             # during the iteration.
@@ -123,7 +118,7 @@ def make_scatterplot(
                 pd.DataFrame.from_dict({
                     'x': [x],
                     'y': [y],
-                    'model': [sanitise_model_name(model)],
+                    'model': [model_map(model)],
                     'repetition': [repetition],
                     'subsample': [subsample]
                 })
@@ -138,13 +133,18 @@ def make_scatterplot(
                 pd.DataFrame.from_dict({
                     'x': [x],
                     'y': [y],
-                    'model': [sanitise_model_name(model)],
+                    'model': [model_map(model)],
                     'repetition': [repetition],
                 })
             )
 
     plot_df = pd.concat(plot_df)
-    if 'subsample' in df.columns:
+    # if macro aggregation, average over subsamples:
+    if use_subsamples & (aggregation == 'macro'):
+        print('Averaging out the subsamples..') 
+        plot_df = plot_df.groupby(['model','repetition']).mean()[['x','y']].reset_index()  
+    
+    if aggregation == 'micro':
         sns.set(color_codes=True)
         graph = sns.jointplot(
             data=plot_df,
@@ -176,7 +176,7 @@ def make_scatterplot(
             linewidth=0.5
         )
     ax = plt.gca()
-    ax.legend(loc='upper right', fontsize=7)  #
+    ax.legend(loc='lower right', fontsize=7,  ncol=3)  #
     #g.legend(loc='upper right', fontsize=7)
  
     g.set_ylabel(f'{ylabel} @ {recall_threshold:.2f}R')
@@ -278,7 +278,7 @@ if __name__ == '__main__':
 
     for (source, target), df_ in df.groupby(['dataset_train', 'dataset_eval']):
 
-        fig, ax = plt.subplots(figsize=(6, 6)) #6,4
+        fig, ax = plt.subplots(figsize=(4, 4)) #6,4
         ax.set_box_aspect(1)
         
         # determine prevalence of eval dataset:
@@ -293,8 +293,10 @@ if __name__ == '__main__':
             assert prev*1.1 > prev_max
   
         else:
-            # stratified splits, so val and test prevalence are identical 
-            prev = prev_dict[target]['validation']['case_prevalence']
+            # stratified splits, so val and test prevalence are identical
+            assert len(df_['split'].unique()) == 1
+            split = df_['split'].values[0]  
+            prev = prev_dict[target][split]['case_prevalence']
             use_subsamples = False 
         
         plt.title(f'Train: {source}, Eval: {target}')
