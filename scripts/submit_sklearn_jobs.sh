@@ -10,9 +10,9 @@ RESULTS_PATH=${1}
 # Main configuration for *how* all jobs will be run on the cluster.
 # It is easiest to specify this here because we can modify it later
 # on for individual classifiers.
-N_CORES=1
-MEM_PER_CORE=524288
-RUNTIME=119:59
+N_CORES=2
+MEM_PER_CORE=131072
+RUNTIME=23:59
 FEATURE_SET=middle
 COST=5
 
@@ -33,7 +33,10 @@ run() {
   fi
 }
 
-run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset aumc " $RUNTIME
-run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset eicu " $RUNTIME
-run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset hirid " $RUNTIME
-run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset mimic " $RUNTIME
+for i in $(seq 1 100); do
+  run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=${N_CORES} --n_iter_search=1 --iteration $i --method lr --dataset eicu " $RUNTIME
+done
+
+#run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset aumc " $RUNTIME
+#run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset hirid " $RUNTIME
+#run "poetry run python -m src.sklearn.main --result_path ${RESULTS_PATH} --feature_set ${FEATURE_SET} --cost ${COST} --cv_n_jobs=20 --n_iter_search=50 --method lr --dataset mimic " $RUNTIME
