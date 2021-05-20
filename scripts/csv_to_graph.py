@@ -87,7 +87,6 @@ if __name__ == '__main__':
     nx.draw_networkx_labels(
         G,
         positions,
-        verticalalignment='bottom',
     )
 
     nx.draw_networkx_edges(

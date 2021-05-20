@@ -26,7 +26,6 @@ if __name__ == '__main__':
         action='store_true',
         help='If set, removes diagonal from heat map'
     )
-
     parser.add_argument(
         '-M', '--model',
         default='AttentionModel',
