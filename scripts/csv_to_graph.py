@@ -27,10 +27,16 @@ if __name__ == '__main__':
         default='auc_mean',
         help='Metric to use for edge weights'
     )
+    parser.add_argument(
+        '-M', '--model',
+        default='AttentionModel',
+        help='Select model to visualise'
+    )
 
     args = parser.parse_args()
 
     df = pd.read_csv(args.INPUT)
+    df = df.query('model == @args.model')
 
     dataset_names = df['train_dataset'].unique().tolist()
     dataset_names.extend(df['eval_dataset'].unique().tolist())
@@ -68,14 +74,27 @@ if __name__ == '__main__':
     min_weight = np.min(weights)
     max_weight = np.max(weights)
     o = 0.5
-    s = 2.0
+    s = 3.0
 
     weights = s * (weights - min_weight) / (max_weight - min_weight) + o
 
-    nx.draw_networkx(
+    nx.draw_networkx_nodes(
         G,
         positions,
-        width=list(weights)
+        node_size=75,
+    )
+
+    nx.draw_networkx_labels(
+        G,
+        positions,
+        verticalalignment='bottom',
+    )
+
+    nx.draw_networkx_edges(
+        G,
+        positions,
+        width=list(weights),
+        connectionstyle='arc3, rad=0.2',
     )
 
     plt.show()
