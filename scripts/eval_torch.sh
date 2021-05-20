@@ -2,7 +2,9 @@
 
 run_id=$1
 base_dir=results
-eval_dir=${base_dir}/evaluation
+split=validation
+eval_dir=${base_dir}/evaluation_${split}
+
 eval_datasets=(AUMC MIMIC Hirid EICU)
 eval_datasets2=(aumc mimic hirid eicu) #sklearn formatting
 
@@ -12,14 +14,21 @@ level=pat
 thres=0.8
 subsampling_pred_dir=${eval_dir}/prediction_output_subsampled
 subsampling_eval_dir=${eval_dir}/evaluation_output_subsampled
+pred_path=${eval_dir}/prediction_output
+eval_path=${eval_dir}/evaluation_output
+plot_path=${eval_dir}/plots
+paths=($subsampling_pred_dir $subsampling_eval_dir $pred_path $eval_path $plot_path)
+for path in ${paths[@]}; do
+    mkdir -p $path
+done 
 
 for index in ${!eval_datasets[*]}; do
     dataset=${eval_datasets[$index]}
     sklearn_dataset=${eval_datasets2[$index]}
 
     output_name=${run_id}_${dataset}
-    pred_file=${eval_dir}/prediction_output/${output_name}.json
-    eval_file=${eval_dir}/evaluation_output/${output_name}.json
+    pred_file=${pred_path}/${output_name}.json
+    eval_file=${eval_path}/${output_name}.json
 
     # Subsampling 10 times at harmonized prevalence 
     python src/evaluation/subsampling.py \
@@ -51,7 +60,7 @@ for index in ${!eval_datasets[*]}; do
     # Plot patient-based eval metrics:
     python -m scripts.plots.plot_patient_eval \
         --input_path $eval_file  \
-        --output_path results/evaluation/plots \
+        --output_path $plot_path \
         --earliness-stat $earliness \
         --predictions_path $pred_file \
         --level $level \
