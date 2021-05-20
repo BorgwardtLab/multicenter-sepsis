@@ -27,9 +27,16 @@ if __name__ == '__main__':
         help='If set, removes diagonal from heat map'
     )
 
+    parser.add_argument(
+        '-M', '--model',
+        default='AttentionModel',
+        help='Select model to visualise'
+    )
+
     args = parser.parse_args()
 
     df = pd.read_csv(args.INPUT)
+    df = df.query('model == @args.model')
 
     df = df.pivot(
         'train_dataset',
