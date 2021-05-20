@@ -3,7 +3,8 @@ input_dir=$1 # path to hyperparameter search results e.g. hypersearch10_regressi
 #output_dir=$2 #intermediate results are written folders of this name
 
 base_dir=results
-eval_dir=${base_dir}/evaluation
+split=validation
+eval_dir=${base_dir}/evaluation_${split}
 
 train_datasets=(aumc hirid mimic eicu) #aumc eicu) #aumc #mimic
 eval_datasets=(aumc hirid mimic eicu) #aumc #mimic
@@ -14,22 +15,29 @@ cost=5 #lambda cost
 n_iter=50 #50 iterations of hypersearch used
 earliness=median
 thres=0.8
-split=validation
+
 
 input_features=datasets/{}/data/parquet/features_${feature_set}
 subsampling_pred_dir=${eval_dir}/prediction_output_subsampled
 subsampling_eval_dir=${eval_dir}/evaluation_output_subsampled
-
+pred_path=${eval_dir}/prediction_output
+eval_path=${eval_dir}/evaluation_output
+plot_path=${eval_dir}/plots
+paths=($subsampling_pred_dir $subsampling_eval_dir $pred_path $eval_path $plot_path)
+for path in ${paths[@]}; do
+    mkdir -p $path 
+done
+ 
 #for method in ${methods[@]}; do
     for rep in {0..4}; do #{0..4}
         for train_dataset in ${train_datasets[@]}; do
             for eval_dataset in ${eval_datasets[@]}; do
                 output_name=${method}_${train_dataset}_${eval_dataset}_${task}_${feature_set}_cost_${cost}_${n_iter}_iter_rep_${rep} 
                 # here we write out the predictions as json
-                pred_file=${eval_dir}/prediction_output/${output_name}.json
+                pred_file=${pred_path}/${output_name}.json
                 #pred_file=$pred_dir/${method}_${train_dataset}_${eval_dataset}.json
                 # here we write out the evaluation metrics as json
-                eval_file=${eval_dir}/evaluation_output/${output_name}.json
+                eval_file=${eval_path}/${output_name}.json
 
                 # Apply pretrained model to validation (or test) split:
                 python -m src.sklearn.eval_model \
@@ -76,7 +84,7 @@ subsampling_eval_dir=${eval_dir}/evaluation_output_subsampled
                 # Plot patient-based eval metrics:
                 python -m scripts.plots.plot_patient_eval \
                     --input_path $eval_file  \
-                    --output_path results/evaluation/plots \
+                    --output_path $plot_path \
                     --earliness-stat $earliness \
                     --predictions_path $pred_file \
                     --recall_thres $thres
