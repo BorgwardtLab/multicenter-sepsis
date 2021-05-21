@@ -14,6 +14,8 @@ BEST_ITERATION=`find $1 -maxdepth 1 -name "*.json" -type f            \
   | cut -f 2 -d ' '                                                   \
   | sed -n -e 's/^.*_\(iteration_[[:digit:]]\+\).json/\1/p'`
 
+echo "Found best iteration:" `echo $BEST_ITERATION | sed -n -e 's/iteration_//p'`
+
 for FILE in $1/*${BEST_ITERATION}.*; do
   NEW_FILENAME=`echo $FILE | sed -n -e 's/_iteration_[[:digit:]]\+//p'`
   echo "Creating $NEW_FILENAME..."
