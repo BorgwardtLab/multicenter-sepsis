@@ -81,7 +81,7 @@ if __name__ == '__main__':
     nx.draw_networkx_nodes(
         G,
         positions,
-        node_size=75,
+        node_size=1500,
     )
 
     nx.draw_networkx_labels(
@@ -93,7 +93,8 @@ if __name__ == '__main__':
         G,
         positions,
         width=list(weights),
-        connectionstyle='arc3, rad=0.2',
+        node_size=1500,
+        connectionstyle='arc3, rad=0.3',
     )
 
     plt.show()
