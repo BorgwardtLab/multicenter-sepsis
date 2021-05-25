@@ -130,8 +130,8 @@ def main(hparams, model_cls):
         loaded_model,
         val_dataset_cls,
         'validation',
-        device='cuda' if torch.cuda.is_available() else 'cpu'
-        #feature_set=hparams.feature_set
+        device='cuda' if torch.cuda.is_available() else 'cpu',
+        **hparams.dataset_kwargs
     )
     masked_result = { 'masked_validation_'+key: value for key, value in masked_result.items()
         if key not in ['labels', 'predictions', 'ids', 'times', 'scores', 'targets']
