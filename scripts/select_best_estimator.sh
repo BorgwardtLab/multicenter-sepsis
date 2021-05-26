@@ -6,12 +6,12 @@
 INPUT_DIR=$1
 N_FILES=50
 
-BEST_ITERATION=`find $1 -maxdepth 1 -name "*.json" -type f            \
-  | head -n ${N_FILES}                                                \
-  | xargs jq -r '(.val_neg_log_loss|tostring) + " " + input_filename' \
-  | sort -nr                                                          \
-  | head -n 1                                                         \
-  | cut -f 2 -d ' '                                                   \
+BEST_ITERATION=`find $1 -maxdepth 1 -name "*_iteration_*.json" -type f \
+  | head -n ${N_FILES}                                                 \
+  | xargs jq -r '(.val_neg_log_loss|tostring) + " " + input_filename'  \
+  | sort -nr                                                           \
+  | head -n 1                                                          \
+  | cut -f 2 -d ' '                                                    \
   | sed -n -e 's/^.*_\(iteration_[[:digit:]]\+\).json/\1/p'`
 
 echo "Found best iteration:" `echo $BEST_ITERATION | sed -n -e 's/iteration_//p'`
