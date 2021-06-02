@@ -4,7 +4,7 @@ import tempfile
 import wandb
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from src.torch.eval_model import compute_md5hash, device
 from src.torch.torch_utils import ComposeTransformations, variable_length_collate
@@ -14,6 +14,9 @@ import shap
 
 wandb_api = wandb.Api()
 
+
+# Shap evaluation perturbs the inputs, thus we cannot rely on the length
+# argument.  Instead use Nan padding and reconstruct length in model.
 def variable_length_collate_nan_padding(batch):
     """Combine multiple instances of irregular lengths into a batch."""
     # This converts the batch from [{'a': 1, 'b': 2}, ..] format to
@@ -96,6 +99,7 @@ def variable_length_collate_nan_padding(batch):
 
 
 def extract_model_information(run_path, tmp):
+    """Get model information from wandb run."""
     run = wandb_api.run(run_path)
     run_info = run.config
     checkpoint_path = None
@@ -128,8 +132,8 @@ def extract_model_information(run_path, tmp):
     }
 
 
-def get_model_and_dataset(run_id, output):
-    """Main function to evaluate a model."""
+def get_model_and_dataset(run_id):
+    """Get model and dataset from finished wandb run."""
     with tempfile.TemporaryDirectory() as tmp:
         # Download checkpoint to temporary directory
         run, out = extract_model_information(run_id, tmp)
@@ -155,40 +159,88 @@ def get_feature_names(dataset):
     return [col for col in dataset.columns if col not in remove_columns]
 
 
-def run_shap_analysis(model, dataset):
-    dataloader = DataLoader(
-        dataset,
-        batch_size=50,
-        shuffle=False,
-        collate_fn=variable_length_collate_nan_padding,
-    )
+class ModelWrapper(torch.nn.Module):
+    """Wrapper class for compatibility with shap analysis."""
+
+    def __init__(self, model, hours_before_end=0):
+        """Wrap a model to only return output at the end of the stay.
+
+        Args:
+            model: Model to wrap
+            hours_before_end: Number of hours before the end of the stay at
+                which we should extract the output.
+        """
+        super().__init__()
+        self.model = model
+        self.hours_before_end = hours_before_end
+
+    def forward(self, x, lengths=None, statics=None):
+        if lengths is None:
+            # Assume we use nan to pad values. This helps when using shap for
+            # explanations as it manipulates the input and automatically adds
+            # noise to the lengths parameter (making it useless for us).
+            not_all_nan = (~torch.all(torch.isnan(x), dim=-1)).float()
+            # We want to find the last instance where not all inputs are nan.
+            # We can do this by flipping the no_nan tensor along the time axis
+            # and determining the position of the maximum. This should return
+            # us the first maximum, i.e. the first time when (in the reversed
+            # order) where the tensor does not contain only nans.
+            # Strangely, torch.argmax and tensor.max do different things.
+
+            # TODO: It looks like something might still be wrong here!
+            print(not_all_nan)
+            lengths = not_all_nan.shape[1] - not_all_nan.flip(1).max(1).indices
+            print(lengths)
+
+            # Remove the nan values again prior to model input
+            x = torch.where(torch.isnan(x), torch.zeros_like(x), x)
+
+        out = self.model(x, lengths=lengths, statics=statics)
+        index = lengths - self.hours_before_end - 1
+        assert torch.all(index >= 0)
+        return out[torch.arange(out.shape[0]), index]
+
+
+def run_shap_analysis(model, dataset, hours_before_end=0, n_samples=200, min_length=5, max_examples=50):
+    """Run shap analysis on a model dataset pair."""
+    # Get instance with at least min_length datapoints.
+    lengths = np.array(list(map(lambda instance: len(instance['labels']), dataset)))
+    indices = np.where(lengths >= min_length)[0]
+    subset = Subset(dataset, indices)
+    first_batch = [subset[i] for i in range(min(max_examples, len(subset)))]
+    first_batch = variable_length_collate_nan_padding(first_batch)
+    print(first_batch.keys())
 
     def get_model_inputs(batch):
         return [batch['ts'].to(device)]
 
-    first_batch = dataloader.__iter__().__next__()
+    print(lengths[:min(max_examples, len(subset))])
     sample_dataset = get_model_inputs(first_batch)
-    explainer = shap.GradientExplainer(model, sample_dataset, batch_size=50)
+    wrapped_model = ModelWrapper(model, hours_before_end=hours_before_end)
+    explainer = shap.GradientExplainer(wrapped_model, sample_dataset, batch_size=50)
+    n_examples = 2
     shap_values = explainer.shap_values(
-        [sample_dataset[0][:2]])
+        [sample_dataset[0][:n_examples]], n_samples)
     out = {
         'shap_values': shap_values,
-        'input': first_batch['ts'][:2],
-        'lengths': first_batch['lengths'][:2],
-        'labels': first_batch['labels'][:2],
+        'input': first_batch['ts'][:n_examples],
+        'lengths': first_batch['lengths'][:n_examples],
+        'labels': first_batch['labels'][:n_examples],
+        # 'times': first_batch['time'],
         'feature_names': get_feature_names(dataset)
-
     }
     return out
-
-
-
 
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
     parser.add_argument('wandb_run', type=str)
+    parser.add_argument('--n_samples', type=int, default=200, help="Number of samples to use for the shap computation.")
+    parser.add_argument('--hours_before_end', type=int, default=0, help="Number of hours prior to the end of stay to look at for feature importance estimation.")
+    parser.add_argument('--min_length', type=int, default=5, help="Minimal length of instance in order to be used for background.")
+    parser.add_argument('--max_examples', type=int, default=50, help="Number of instances from dataset to use as background.")
+
     # parser.add_argument(
     #     '--dataset', required=True, type=str, choices=src.torch.datasets.__all__,
     # )
@@ -198,18 +250,16 @@ if __name__ == '__main__':
     #     choices=['train', 'validation', 'test'],
     #     type=str
     # )
-    parser.add_argument('--output', type=str, required=True)
+    parser.add_argument('--output', type=str, required=True, help='Output path to store pickle with shap values.')
     params = parser.parse_args()
 
-    model, dataset = get_model_and_dataset(
-        params.wandb_run,
-        params.output,
-    )
-    shap_values = run_shap_analysis(model, dataset)
-    print(shap_values)
+    model, dataset = get_model_and_dataset(params.wandb_run)
+    shap_values = run_shap_analysis(
+        model, dataset, hours_before_end=params.hours_before_end,
+        n_samples=params.n_samples, min_length=params.min_length,
+        max_examples=params.max_examples)
+    # print(shap_values)
     import pickle
     with open(params.output, 'wb') as f:
         pickle.dump(shap_values, f)
-
-
 
