@@ -149,6 +149,12 @@ def get_model_and_dataset(run_id, output):
     return model, dataset
 
 
+def get_feature_names(dataset):
+    """Get names of features from dataset."""
+    remove_columns = [dataset.TIME_COLUMN, dataset.LABEL_COLUMN, dataset.UTILITY_COLUMN] + dataset.STATIC_COLUMNS
+    return [col for col in dataset.columns if col not in remove_columns]
+
+
 def run_shap_analysis(model, dataset):
     dataloader = DataLoader(
         dataset,
@@ -165,7 +171,16 @@ def run_shap_analysis(model, dataset):
     explainer = shap.GradientExplainer(model, sample_dataset, batch_size=50)
     shap_values = explainer.shap_values(
         [sample_dataset[0][:2]])
-    return shap_values
+    out = {
+        'shap_values': shap_values,
+        'input': first_batch['ts'][:2],
+        'lengths': first_batch['lengths'][:2],
+        'labels': first_batch['labels'][:2],
+        'feature_names': get_feature_names(dataset)
+
+    }
+    return out
+
 
 
 
