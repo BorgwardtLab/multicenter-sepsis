@@ -280,6 +280,9 @@ if __name__ == "__main__":
                         help="""if provided transformed df is cached as parquet to this base_dir 
                         in a folder {dump_name}_cache/{split}_{rep}""", 
                         default=None)
+    parser.add_argument('--feature_set', 
+                        help='which feature set to use (middle, small)', 
+                        default='small')
     parser.add_argument('--cost', type=int, 
                         help='cost parameter in lambda to use',
                         default=0)
@@ -310,7 +313,7 @@ if __name__ == "__main__":
         args.feature_path,
         split,
         rep,
-        feature_set='small',
+        feature_set=args.feature_set,
         variable_set='full',
         task='regression',
         baselines=False
