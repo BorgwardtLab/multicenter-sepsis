@@ -31,10 +31,16 @@ def process_run(eval_file, pred_file):
     with open(pred_file, 'r') as f:
         d_p = json.load(f)
     
-    #greater = df['pat_recall'] > recall_threshold
-    #index = df['pat_recall'][greater].argmin()
-    #info = df.loc[index]
-    #result = info.to_dict()
+    physionet_vars = False 
+    if 'dataset_kwargs' in d_p.keys(): 
+        if 'only_physionet_features' in d_p['dataset_kwargs'].keys():
+            if d_p['dataset_kwargs']['only_physionet_features']:
+                physionet_vars = True
+    if 'variable_set' in d_p.keys(): #sklearn pipe
+        if d_p['variable_set'] == 'physionet':
+            physionet_vars = True
+    df['physionet_variables'] = physionet_vars
+     
     #interesting keys from pred file:
     keys = ['model', 'dataset_train', 'dataset_eval', 'split', 'task', 'label_propagation', 'rep']
     pred_dict = {key: d_p[key] for key in keys if key in d_p.keys() }
@@ -43,7 +49,6 @@ def process_run(eval_file, pred_file):
         if key in d_p.keys():
             pred_dict[key] = d_p[key]
 
-    df = pd.DataFrame(d_ev)
     for key in pred_dict.keys():
         df[key] = pred_dict[key]
     if 'task' not in d_p.keys():
@@ -71,7 +76,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     methods = ['lgbm', 'lr', 'sofa', 'qsofa', 'sirs', 'mews', 'news'] #attn model not in file name
-    attn_datasets = ['EICU', 'AUMC', 'Hirid', 'MIMIC'] 
+    attn_datasets = ['EICU', 'AUMC', 'Hirid', 'MIMIC', 'Physionet2019'] 
     #deep model file names have this dataset namings (from datset cls)
     keys = methods + attn_datasets
  
@@ -87,7 +92,7 @@ if __name__ == "__main__":
         if any([x in eval_f for x in keys]):
             used_eval_files.append(eval_f)
             used_pred_files.append(pred_f)
-    df_list = Parallel(n_jobs=40)(delayed(process_run)(eval_f, pred_f) for eval_f, pred_f in zip(used_eval_files, used_pred_files))
+    df_list = Parallel(n_jobs=80, batch_size=50)(delayed(process_run)(eval_f, pred_f) for eval_f, pred_f in zip(used_eval_files, used_pred_files))
     for i, eval_f in enumerate(used_eval_files):
         df_list[i]['fname'] = eval_f 
         df_list[i]['job_id'] = i

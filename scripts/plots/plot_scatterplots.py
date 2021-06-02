@@ -139,6 +139,8 @@ def make_scatterplot(
             )
 
     plot_df = pd.concat(plot_df)
+    # plot_df['x'] = plot_df['x'] * -1
+
     # if macro aggregation, average over subsamples:
     if use_subsamples & (aggregation == 'macro'):
         print('Averaging out the subsamples..') 
@@ -176,12 +178,13 @@ def make_scatterplot(
             linewidth=0.5
         )
     ax = plt.gca()
+    ax.invert_xaxis()
     ax.legend(loc='lower right', fontsize=7,  ncol=3)  #
     #g.legend(loc='upper right', fontsize=7)
  
-    g.set_ylabel(f'{ylabel} @ {recall_threshold:.2f}R')
+    g.set_ylabel(f'Precision @ {int(100*recall_threshold)}% Recall')
     g.set_ylim((0.0, 0.75))
-    g.set_xlabel(xlabel)
+    g.set_xlabel('Median earliness (hours before onset)')
 
     # Summarise each model by one glyph, following the same colour map
     # that `seaborn` uses.
