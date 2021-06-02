@@ -152,20 +152,20 @@ def get_model_and_dataset(run_id, output):
 def run_shap_analysis(model, dataset):
     dataloader = DataLoader(
         dataset,
-        batch_size=100,
+        batch_size=50,
         shuffle=False,
         collate_fn=variable_length_collate_nan_padding,
     )
 
     def get_model_inputs(batch):
-        return [batch['ts']]
+        return [batch['ts'].to(device)]
 
     first_batch = dataloader.__iter__().__next__()
     sample_dataset = get_model_inputs(first_batch)
-    explainer = shap.GradientExplainer(model, sample_dataset, batch_size=100)
+    explainer = shap.GradientExplainer(model, sample_dataset, batch_size=50)
     shap_values = explainer.shap_values(
-        [sample_dataset[0][:3]])
-    print(shap_values)
+        [sample_dataset[0][:2]])
+    return shap_values
 
 
 
@@ -183,13 +183,18 @@ if __name__ == '__main__':
     #     choices=['train', 'validation', 'test'],
     #     type=str
     # )
-    parser.add_argument('--output', type=str, default=None)
+    parser.add_argument('--output', type=str, required=True)
     params = parser.parse_args()
-    print('test')
 
-    main(
+    model, dataset = get_model_and_dataset(
         params.wandb_run,
         params.output,
     )
+    shap_values = run_shap_analysis(model, dataset)
+    print(shap_values)
+    import pickle
+    with open(params.output, 'wb') as f:
+        pickle.dump(shap_values, f)
+
 
 

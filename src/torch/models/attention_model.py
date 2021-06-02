@@ -197,6 +197,9 @@ class AttentionModel(BaseModel):
             # Strangely, torch.argmax and tensor.max do different things.
             lengths = not_all_nan.shape[1] - not_all_nan.flip(1).max(1).indices
 
+            # Remove the nan values again prior to model input
+            x = torch.where(torch.isnan(x), torch.zeros_like(x), x)
+
         mask = length_to_mask(lengths, offset=offset, max_len=x.shape[1])
         future_mask = get_subsequent_mask(x, offset=offset)
         x = self.layers[0](x)
