@@ -180,14 +180,27 @@ class AttentionModel(BaseModel):
         ])
         return parent_transforms
 
-    def forward(self, x, lengths, statics=None):
+    def forward(self, x, lengths=None, statics=None):
         """Apply attention model to input x."""
-        offset = 0 if statics is None else 1
+        offset = 0 if statics is None or self.hparams.ignore_statics else 1
         # Invert mask as multi head attention ignores values which are true
-        mask = length_to_mask(lengths, offset=offset)
+        if lengths is None:
+            # Assume we use nan to pad values. This helps when using shap for
+            # explanations as it manipulates the input and automatically adds
+            # noise to the lengths parameter (making it useless for us).
+            not_all_nan = (~torch.all(torch.isnan(x), dim=-1)).long()
+            # We want to find the last instance where not all inputs are nan.
+            # We can do this by flipping the no_nan tensor along the time axis
+            # and determining the position of the maximum. This should return
+            # us the first maximum, i.e. the first time when (in the reversed
+            # order) where the tensor does not contain only nans.
+            # Strangely, torch.argmax and tensor.max do different things.
+            lengths = not_all_nan.shape[1] - not_all_nan.flip(1).max(1).indices
+
+        mask = length_to_mask(lengths, offset=offset, max_len=x.shape[1])
         future_mask = get_subsequent_mask(x, offset=offset)
         x = self.layers[0](x)
-        if statics is not None:
+        if statics is not None and not self.hparams.ignore_statics:
             # prepend statics embedding
             embed_statics = self.statics_embedding(statics).unsqueeze(1)
             x = torch.cat([embed_statics, x], dim=1)

@@ -35,6 +35,7 @@ parquet-tools = "*"
 simplejson = "*"
 wandb = "*"
 networkx = "*"
+shap = "*"
 
 [requires]
 python_version = "3.7"
