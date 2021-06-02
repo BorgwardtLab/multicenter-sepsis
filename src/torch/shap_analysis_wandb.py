@@ -179,7 +179,7 @@ class ModelWrapper(torch.nn.Module):
             # Assume we use nan to pad values. This helps when using shap for
             # explanations as it manipulates the input and automatically adds
             # noise to the lengths parameter (making it useless for us).
-            not_all_nan = (~torch.all(torch.isnan(x), dim=-1)).float()
+            not_all_nan = (~torch.all(torch.isnan(x), dim=-1)).long()
             # We want to find the last instance where not all inputs are nan.
             # We can do this by flipping the no_nan tensor along the time axis
             # and determining the position of the maximum. This should return
@@ -188,8 +188,10 @@ class ModelWrapper(torch.nn.Module):
             # Strangely, torch.argmax and tensor.max do different things.
 
             # TODO: It looks like something might still be wrong here!
-            print(not_all_nan)
-            lengths = not_all_nan.shape[1] - not_all_nan.flip(1).max(1).indices
+            # FIXME: Here is an issue, please fix. Seems to only happen on GPU.
+            print(not_all_nan.flip(1))
+            print(not_all_nan.flip(1).contiguous().max(1).indices)
+            lengths = not_all_nan.shape[1] - not_all_nan.flip(1).contiguous().max(1).indices
             print(lengths)
 
             # Remove the nan values again prior to model input
