@@ -160,7 +160,6 @@ def main():
         data = handle_label_shift(args, data)
  
     # Load pretrained model
-    ##TODO: define model_path, compute checksum, load model, then eval scores on eval data
     model_path = os.path.join(args.model_path, train_dataset + '_' + method)
     model_file = 'best_estimator' if not args.repetition_model else f'model_repetition_{rep}'
     model_file += '.pkl'
@@ -168,14 +167,6 @@ def main():
     print(f'Loading model from {model_path}')
     model, checksum = load_model(model_path) 
 
-    #scores = {
-    #    'physionet2019_score': get_physionet2019_scorer(args.label_propagation),
-    #    'auroc': SCORERS['roc_auc'],
-    #    'average_precision': SCORERS['average_precision'],
-    #    'balanced_accuracy': SCORERS['balanced_accuracy'],
-    #}
-    
-    
     # Select split for evaluation:
     split = args.split
     if split not in ['validation', 'test']:
@@ -184,12 +175,6 @@ def main():
     y_eval = data[f'y_{split}']
     tp_labels = data[f'tp_labels_{split}'] #only for down-stream eval 
     results = {}
-    #cache = {}
-    #call = partial(_cached_call, cache)
-    #for score_name, scorer in scores.items():
-    #    results[score_name] = scorer._score(
-    #        call, model, X_eval, y_eval)
-    #print(results)
     results['model'] = method
     results['model_path'] = model_path
     results['model_checksum'] = checksum
@@ -198,7 +183,9 @@ def main():
     results['dataset_eval'] = eval_dataset
     results['split'] = split
     results['rep'] = rep 
-    results['task'] = task 
+    results['task'] = task
+    results['feature_set'] = args.feature_set
+    results['variable_set'] = args.variable_set 
  
     #results['predictions']
     if task == 'classification':
