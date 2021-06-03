@@ -145,5 +145,4 @@ if __name__ == "__main__":
     with open(out_file, 'w') as f:
         json.dump(results, f)
     compute_pooled_prev(results)
-    embed()
-
+    #embed()

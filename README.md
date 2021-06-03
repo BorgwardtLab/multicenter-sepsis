@@ -73,7 +73,7 @@ For evaluating a repetition sweep, run (on slurm)
 ## Results and plots
 
 For gathering all repetition results, run:  
-```>python -m scripts.plots.gather_data --input_path results/evaluation/evaluation_output_subsampled/ ```  
+```>python -m scripts.plots.gather_data --input_path results/evaluation_validation/evaluation_output_subsampled --output_path results/evaluation_validation/plots/ ```  
 
 For creating ROC plots, run:  
 ```>python scripts/plots/plot_roc.py --input_path results/evaluation/plots/result_data.csv```  

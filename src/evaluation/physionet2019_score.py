@@ -126,7 +126,7 @@ def compute_prediction_utility(labels, predictions, dt_early=-12,
         return np.sum(u)
 
 
-def physionet2019_utility(y_true, y_score, shift_labels=0, u_fp=-0.05, lam=1):
+def physionet2019_utility(y_true, y_score, shift_labels=0, u_fp=-0.05, lam=1, **kwargs):
     """Compute physionet 2019 Sepsis eary detection utility.
 
     Args:

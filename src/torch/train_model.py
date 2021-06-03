@@ -130,8 +130,8 @@ def main(hparams, model_cls):
         loaded_model,
         val_dataset_cls,
         'validation',
-        device='cuda' if torch.cuda.is_available() else 'cpu'
-        #feature_set=hparams.feature_set
+        device='cuda' if torch.cuda.is_available() else 'cpu',
+        **hparams.dataset_kwargs
     )
     masked_result = { 'masked_validation_'+key: value for key, value in masked_result.items()
         if key not in ['labels', 'predictions', 'ids', 'times', 'scores', 'targets']
@@ -192,6 +192,8 @@ if __name__ == '__main__':
                         help='Repetition fold of splits [0,..,4]')
     parser.add_argument('--dummy_repetition', type=int, default=1,
                         help='inactive argument, used for debugging (enabling grid repetitions)')
+    parser.add_argument('--only_physionet_features', type=bool, default=False,
+                        help='boolean indicator if physionet variable set should be used')
 
     # parser.add_argument(
     #     '--feature-set', default='all',
@@ -219,7 +221,8 @@ if __name__ == '__main__':
 
     hparams.dataset_kwargs = {
         'cost': hparams.cost,
-        'fold': hparams.rep #`rep` naming to conform with shallow models                                        
+        'fold': hparams.rep, #`rep` naming to conform with shallow models                                        
+        'only_physionet_features': hparams.only_physionet_features
     }
     #if hparams.hyperparam_draws > 0:
     #    for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
