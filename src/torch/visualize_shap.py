@@ -4,20 +4,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 # plt.style.use('dark_background')
-input_file = 'shap_test.pickle'
+input_file = 'test_runs/shap_test_10.pkl'
 
 with open(input_file, 'rb') as f:
     data = pickle.load(f)
 
 data
 feature_names = data['feature_names']
-instance = 0
+instance = 1
 input_data = data['input'][instance].numpy()
 length = data['lengths'][instance]
 data.keys()
 # We get shap values for each prediction output, for now only take those of the
 # last one
-shap_values = data['shap_values'][0][instance]
+#shap_values = data['shap_values'][0][instance]
+shap_values = data['shap_values'][instance]
+
 
 # For now ignore indicator and count features
 keep_features = [True if not col.endswith('indicator') and not col.endswith('count') else False for col in feature_names]
@@ -36,6 +38,8 @@ def get_interpolated_values(values, n_values=200):
     x = np.linspace(0, len(values)-1, n_values)
     return f(x)
 
+from IPython import embed; embed()
+
 fig, axs = plt.subplots(nrows=len(selected_features) // 2, ncols=2, sharex=True, figsize=(2*5, 1*(len(selected_features) // 2)))
 axs = np.ravel(axs)
 for i, (name, ax) in enumerate(zip(selected_features, axs)):
@@ -49,4 +53,6 @@ for i, (name, ax) in enumerate(zip(selected_features, axs)):
     ax.set_ylim(min_val, max_val)
     ax.set_ylabel(name)
 
-fig.show()
+plt.savefig('test_runs/shap_viz_10.png')
+
+

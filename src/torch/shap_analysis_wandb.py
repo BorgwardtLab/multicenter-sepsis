@@ -221,6 +221,7 @@ def run_shap_analysis(model, dataset, hours_before_end=0, n_samples=200, min_len
     wrapped_model = ModelWrapper(model, hours_before_end=hours_before_end)
     explainer = shap.GradientExplainer(wrapped_model, sample_dataset, batch_size=50)
     n_examples = 2
+
     shap_values = explainer.shap_values(
         [sample_dataset[0][:n_examples]], n_samples)
     out = {
