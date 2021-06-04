@@ -19,9 +19,10 @@ def model_map(name):
         name = 'attn'
     elif name == 'GRUModel':
         name = 'gru'
-    # harmonize str length:
-    name = "{:<6}".format(name + ',')
-    return name
+
+    # harmonize str length; adjust as we see fit
+    return name.ljust(6, ' ')
+
 
 def main():
     parser = argparse.ArgumentParser()
