@@ -78,7 +78,7 @@ def to_dict(df, d_in):
         'dataset_eval', 'split', 'ids', 'labels', 'targets',
         'times', 'subsample', 'subsampled_prevalence', 'model'
     ]
-    d_out = {key: d_in[key] for key in keys}
+    d_out = {key: d_in[key] for key in keys if key in d_in.keys()}
     d_out['dataset_train'] = 'pooled'
 
     # sanity check:
@@ -129,7 +129,7 @@ def main(args):
                 d = to_dict(pooled, input_dict)
                 
                 # write pooled dict out
-                pooled_path = os.path.join(output_path, fn)
+                pooled_path = os.path.join(output_path, fn, 'prediction_output')
                 os.makedirs(pooled_path, exist_ok=True)
                 fname = f'preds_{fn}_pooled_{model}_{dataset_eval}_rep_{rep}_subsample_{subsample}'
                 if args.add_emory:
