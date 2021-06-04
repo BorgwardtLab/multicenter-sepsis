@@ -23,7 +23,20 @@ def model_map(name):
     # harmonize str length; adjust as we see fit
     return name.ljust(6, ' ')
 
-
+def raw_to_csv(metrics, csv_path):
+    """ write raw roc values to csv"""
+    cols = [col for col in metrics.columns if not 'rep' in col]
+    out = {}
+    for col in cols:
+        curr_df = metrics[[col, 'rep']]
+        piv = curr_df.pivot(columns='rep')
+        mu = piv.mean(axis=1)
+        sig = piv.std(axis=1)
+        out[col + '_mean'] = mu
+        out[col + '_std'] = sig
+    df = pd.DataFrame(out)
+    df.to_csv(csv_path, index=False)
+    
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -48,6 +61,8 @@ def main():
     summary = []
 
     sns.set(font='Helvetica')
+
+    output_path = os.path.split(input_path)[0]
 
     for (train_dataset, eval_dataset), df_ in df.groupby(['dataset_train', 'dataset_eval']):
         print(train_dataset)
@@ -112,6 +127,10 @@ def main():
             )
                 # [model_map(model),'AUROC = ', f'{auc_mean:.3f}' + r' $\pm$ ' + f'{auc_std:.3f}'])
                 # model_map(model) + rf' AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}')
+            
+            # write raw roc data to csv:
+            csv_path = os.path.join(output_path, f'raw_roc_data_{model}_{train_dataset}_{eval_dataset}.csv')
+            raw_to_csv(metrics, csv_path) 
 
             summary_df = pd.DataFrame(
                 {
@@ -132,11 +151,11 @@ def main():
         outfile = f'roc_{train_dataset}_{eval_dataset}'
         if 'subsampled' in os.path.split(input_path)[-1]:
             outfile += '_subsampled'
-        outfile = os.path.join(os.path.split(input_path)[0], outfile + '.png') 
+        outfile = os.path.join(output_path, outfile + '.png') 
         plt.savefig(outfile, dpi=300)
 
     summary = pd.concat(summary)
-    summary_file = os.path.join(os.path.split(input_path)[0], 'roc_summary') 
+    summary_file = os.path.join(output_path, 'roc_summary') 
     if 'subsampled' in os.path.split(input_path)[-1]:
         summary_file += '_subsampled'
     summary.to_csv(summary_file + '.csv')
