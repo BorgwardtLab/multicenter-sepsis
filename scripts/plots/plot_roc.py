@@ -47,6 +47,9 @@ def main():
 
     summary = []
 
+    # FIXME: adjust as you see fit :-)
+    sns.set(font='Monospace')
+
     for (train_dataset, eval_dataset), df_ in df.groupby(['dataset_train', 'dataset_eval']):
         print(train_dataset)
 
@@ -102,8 +105,12 @@ def main():
             aucs = np.array(aucs)
             auc_mean = aucs.mean()
             auc_std = aucs.std()
-            sns.lineplot(data=metrics, x="False positive rate", y="True positive rate", 
-                label=model_map(model) +'\t' + rf'AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}')
+            sns.lineplot(
+                data=metrics,
+                x="False positive rate",
+                y="True positive rate", 
+                label=model_map(model) +'\t' + rf'AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}',
+            )
                 # [model_map(model),'AUROC = ', f'{auc_mean:.3f}' + r' $\pm$ ' + f'{auc_std:.3f}'])
                 # model_map(model) + rf' AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}')
 
