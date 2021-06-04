@@ -19,6 +19,8 @@ def model_map(name):
         name = 'attn'
     elif name == 'GRUModel':
         name = 'gru'
+    # harmonize str length:
+    name = "{:<6}".format(name + ',')
     return name
 
 def main():
@@ -45,6 +47,8 @@ def main():
     summary = []
 
     for (train_dataset, eval_dataset), df_ in df.groupby(['dataset_train', 'dataset_eval']):
+        print(train_dataset)
+
         plt.figure()
         for (model), data in df_.groupby(['model']): #same ordering as scatter plot
             #for train_dataset in datasets:
@@ -88,8 +92,8 @@ def main():
                 roc_auc = auc(mean_fpr, mean_tpr) #on raw values
                 aucs.append(roc_auc)
                 curr_df = pd.DataFrame(
-                    { 'fpr': mean_fpr,
-                      'tpr': mean_tpr}
+                    { 'False positive rate': mean_fpr,
+                      'True positive rate': mean_tpr}
                 )
                 curr_df['rep'] = rep
                 metrics = metrics.append(curr_df)
@@ -97,8 +101,11 @@ def main():
             aucs = np.array(aucs)
             auc_mean = aucs.mean()
             auc_std = aucs.std()
-            sns.lineplot(data=metrics, x="fpr", y="tpr", 
-                label=model_map(model) + rf', AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}')
+            sns.lineplot(data=metrics, x="False positive rate", y="True positive rate", 
+                label=model_map(model) +'\t' + rf'AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}')
+                # [model_map(model),'AUROC = ', f'{auc_mean:.3f}' + r' $\pm$ ' + f'{auc_std:.3f}'])
+                # model_map(model) + rf' AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}')
+
             summary_df = pd.DataFrame(
                 {
                     'model': [model],
@@ -114,7 +121,7 @@ def main():
         else: 
             title = f'ROC Curve for external validation: trained on {train_dataset}, tested on {eval_dataset}'
         plt.title(title) 
-        plt.legend(loc='lower right')
+        plt.legend(loc='lower right') #, ncol = 2)
         outfile = f'roc_{train_dataset}_{eval_dataset}'
         if 'subsampled' in os.path.split(input_path)[-1]:
             outfile += '_subsampled'
