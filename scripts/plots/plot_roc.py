@@ -47,8 +47,7 @@ def main():
 
     summary = []
 
-    # FIXME: adjust as you see fit :-)
-    sns.set(font='Monospace')
+    sns.set(font='Helvetica')
 
     for (train_dataset, eval_dataset), df_ in df.groupby(['dataset_train', 'dataset_eval']):
         print(train_dataset)
