@@ -192,6 +192,7 @@ class ModelWrapper(torch.nn.Module):
         self.hours_before_end = hours_before_end
 
     def forward(self, x, lengths=None, statics=None):
+        """Perform forward pass through model."""
         if lengths is None:
             # Assume we use nan to pad values. This helps when using shap for
             # explanations as it manipulates the input and automatically adds
