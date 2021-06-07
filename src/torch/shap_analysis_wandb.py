@@ -1,16 +1,20 @@
 """Script to load trained model and run shape analysis."""
+
 import json
 import tempfile
 import wandb
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Subset
+
+from torch.utils.data import Subset
 
 from src.torch.eval_model import compute_md5hash, device
-from src.torch.torch_utils import ComposeTransformations, variable_length_collate
+from src.torch.torch_utils import ComposeTransformations
 import src.torch.datasets
 import src.torch.models
+
 import shap
+import warnings
 
 wandb_api = wandb.Api()
 
@@ -200,12 +204,33 @@ class ModelWrapper(torch.nn.Module):
             # order) where the tensor does not contain only nans.
             # Strangely, torch.argmax and tensor.max do different things.
 
-            # TODO: It looks like something might still be wrong here!
-            # FIXME: Here is an issue, please fix. Seems to only happen on GPU.
-            print(not_all_nan.flip(1))
-            print(not_all_nan.flip(1).contiguous().max(1).indices)
-            lengths = not_all_nan.shape[1] - not_all_nan.flip(1).contiguous().max(1).indices
-            print(lengths)
+            # The release we suggest to use here is plagued by certain
+            # issues that are actually to our advantage here: `argmax`
+            # actually returns the last index, so there's no other ops
+            # that we to perform. See [1] for more details.
+            #
+            # [1]: https://github.com/pytorch/pytorch/issues/47296
+            if torch.__version__ == '1.6.0':
+                lengths = not_all_nan.argmax(1) + 1
+
+                warnings.warn(
+                    'Using pure `argmax` function call to determine '
+                    'lengths of data.'
+                )
+
+            # Use the proposed strategy from above: reverse the ordering
+            # of time points, pick the maximum, and use its index. Here,
+            # `argmax` would also work.
+            else:
+                lengths = not_all_nan.shape[1] - not_all_nan.flip(1)        \
+                                                            .contiguous()   \
+                                                            .max(1)         \
+                                                            .indices
+
+                warnings.warn(
+                    'Using flipped `argmax`/`max` function call to determine '
+                    'lengths of data. You should be using PyTorch 1.6.0.'
+                )
 
             # Remove the nan values again prior to model input
             x = torch.where(torch.isnan(x), torch.zeros_like(x), x)
