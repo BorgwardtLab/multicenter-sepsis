@@ -54,7 +54,7 @@ def variable_length_collate_nan_padding(batch):
     transposed_items['targets'] = np.stack(
         [
             np.pad(instance, ((0, max_len - len(instance)),),
-                   mode='constant', constant_values=np.NaN)
+                   mode='constant', constant_values=-100)
             for instance in transposed_items['targets']
         ],
         axis=0
