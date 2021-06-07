@@ -15,11 +15,4 @@ for dataset in ${datasets[@]}; do
     sbatch -p gpu --gres=gpu:1 --cpus-per-task 4 --mem-per-cpu 4G  -J 'mcsepsis' --wrap "pipenv run python -m src.torch.eval_model_wandb ${wandb_run} --dataset ${dataset} --split ${split} --output ${pred_file}"
 done
 
-#datasets=(EICU)
-#for dataset in ${datasets[@]}; do
-#    pred_file=${pred_path}/${run_id}_${dataset}.json
-#    sbatch -p gpu --gres=gpu:1 --cpus-per-task 4 --mem-per-cpu 6G  -J 'mcsepsis' --wrap "pipenv run python -m src.torch.eval_model_wandb ${wandb_run} --dataset ${dataset} --split ${split} --output ${pred_file}"
-#done
-
-
 

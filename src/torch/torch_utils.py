@@ -358,3 +358,15 @@ class ComposeTransformations():
         for transform in self.transformations:
             out = transform(out)
         return out
+
+
+
+def select_cohort(ids, cohort, dataset_name,
+        cohort_file='datasets/additional/admission.json'):
+    """ util function to subset ids for cohort """
+    with open(cohort_file, 'r') as f:
+        d = json.load(f)
+    out = [i for i in ids if i in d[dataset_name][cohort]]
+    print(f'>>> Cohort: Selecting {len(out)} {cohort} stays from a total of {len(ids)}.')
+    return out
+

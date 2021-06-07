@@ -42,7 +42,7 @@ def main(args):
         for d in results: 
             fmap[d['model']][d['dataset_train']][d['dataset_eval']]['rep_'+str(d['rep'])]['subsample_'+str(d['subsample'])] = d['filename']
         with open(output_path, 'w') as F:
-            json.dump(fmap, F)
+            json.dump(fmap, F, indent=4)
     else:
         print('Loading cached/precomputed prediction mapping json..')
         fmap = load_json(output_path)

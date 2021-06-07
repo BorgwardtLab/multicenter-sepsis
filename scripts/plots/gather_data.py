@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     
-    methods = ['lgbm', 'lr', 'sofa', 'qsofa', 'sirs', 'mews', 'news'] #attn model not in file name
+    methods = ['lgbm', 'lr', 'sofa', 'qsofa', 'sirs', 'mews', 'news', 'GRUModel', 'AttentionModel'] #attn model not in file name
     attn_datasets = ['EICU', 'AUMC', 'Hirid', 'MIMIC', 'Physionet2019'] 
     #deep model file names have this dataset namings (from datset cls)
     keys = methods + attn_datasets

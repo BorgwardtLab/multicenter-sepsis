@@ -79,7 +79,23 @@ For creating ROC plots, run:
 ```>python scripts/plots/plot_roc.py --input_path results/evaluation/plots/result_data.csv```  
 
 For creating precision/earliness plots, run:
-```>python -m scripts.plots.plot_scatterplots results/evaluation/plots/result_data.csv --r 0.80 --point-alpha 0.65 --line-alpha 1.0 --output results/evaluation/plots/```  
+```>python -m scripts.plots.plot_scatterplots results/evaluation/plots/result_data.csv --r 0.80 --point-alpha 0.35 --line-alpha 1.0 --output results/evaluation/plots/```  
+
+## Pooled predictions  
+
+First, we need to create a mapping from experiments (data_train,data_eval, model etc) to the prediction files:  
+```>python scripts/map_model_to_result_files.py <path_to_predictons> --output_path <output_json_path> ``` Use --overwrite, to overwrite an existing mapping json. 
+ 
+Next we actually pool the predictions:  
+```>source scripts/pool_predictions.sh```    
+
+Then, we evaluate them:  
+```>source scripts/eval_pooled.sh```  
+To create plots with the pooled predictions, run:  
+```>python -m scripts.plots.gather_data --input_path results/evaluation_test/prediction_pooled_subsampled/max/evaluation_output --output_path results/evaluation_test/prediction_pooled_subsampled/max/plots/```  
+```>python scripts/plots/plot_roc.py --input_path results/evaluation_test/prediction_pooled_subsampled/max/plots/result_data_subsampled.csv```  
+And heatmap incl. pooled preds:  
+```>python -m scripts.make_heatmap results/evaluation_test/plots/roc_summary_subsampled.csv --pooled_path results/evaluation_test/prediction_pooled_subsampled/max/plots/roc_summary_subsampled.csv```  
 
 ## R-code pipeline
 This was used for creating the harmonized raw datasets.

@@ -30,7 +30,8 @@ def format_dataset(name):
         'Hirid': 'hirid',
         'EICU': 'eicu',
         'AUMC': 'aumc',
-        'Physionet2019': 'physionet2019'
+        'Physionet2019': 'physionet2019',
+        'pooled': 'pooled'
     }
     if name in data_mapping.keys():
         return data_mapping[name]
@@ -345,8 +346,8 @@ def main(args):
     # Check whether label propagation is available in the data or not.
     # If it is available we perform it for all time-based measures.
     shift = 0
-    if 'label_propagation' in d['model_params']:
-        shift = d['model_params']['label_propagation']
+    if 'label_propagation' in d.keys():
+        shift = d['label_propagation']
         print(f'Using `label_propagation = {shift}` to shift labels')
 
     shifted_labels = [
