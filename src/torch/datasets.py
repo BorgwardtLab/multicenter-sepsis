@@ -502,7 +502,7 @@ class MIMICDemoSubset(SplittedDataset):
         self.lam = LoadLambda(
             lambda_path =  f'config/lambdas/lambda_mimic_demo_rep_{fold}_cost_{cost}.json' ).lam 
         from src.torch.torch_utils import SelectColumnSubset
-        self.pd_transform = SelectColumSubset(k=2) 
+        self.pd_transform = SelectColumnSubset(k=2) 
 
 
 if __name__ == '__main__':
