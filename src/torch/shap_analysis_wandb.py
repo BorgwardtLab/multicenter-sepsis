@@ -36,7 +36,7 @@ def variable_length_collate_nan_padding(batch):
     transposed_items['labels'] = np.stack(
         [
             np.pad(instance, ((0, max_len - len(instance)),),
-                   mode='constant', constant_values=np.NaN)
+                   mode='constant', constant_values=-100)
             for instance in transposed_items['labels']
         ],
         axis=0
@@ -44,7 +44,7 @@ def variable_length_collate_nan_padding(batch):
     transposed_items['labels_shifted'] = np.stack(
         [
             np.pad(instance, ((0, max_len - len(instance)),),
-                   mode='constant', constant_values=np.NaN)
+                   mode='constant', constant_values=-100)
             for instance in transposed_items['labels_shifted']
         ],
         axis=0
@@ -83,14 +83,21 @@ def variable_length_collate_nan_padding(batch):
         transposed_items[key] = np.stack(padded_instances, axis=0)
 
     transposed_items['statics'] = np.stack(transposed_items['statics'], axis=0)
+
     transposed_items['statics'] = \
         transposed_items['statics'].astype(np.float32)
     transposed_items['times'] = transposed_items['times'].astype(np.float32)
+
     transposed_items['ts'] = transposed_items['ts'].astype(np.float32)
+
     transposed_items['lengths'] = transposed_items['lengths'].astype(np.long)
+
     transposed_items['labels'] = transposed_items['labels'].astype(np.float32)
-    transposed_items['labels_shifted'] = transposed_items['labels_shifted'].astype(np.float32)
-    transposed_items['targets'] = transposed_items['targets'].astype(np.float32)
+
+    transposed_items['labels_shifted'] = \
+        transposed_items['labels_shifted'].astype(np.float32)
+    transposed_items['targets'] = \
+        transposed_items['targets'].astype(np.float32)
 
     return {
         key: torch.from_numpy(data) for key, data in
