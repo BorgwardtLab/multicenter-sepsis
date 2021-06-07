@@ -86,16 +86,18 @@ def variable_length_collate_nan_padding(batch):
 
     transposed_items['statics'] = \
         transposed_items['statics'].astype(np.float32)
+
     transposed_items['times'] = transposed_items['times'].astype(np.float32)
 
     transposed_items['ts'] = transposed_items['ts'].astype(np.float32)
 
-    transposed_items['lengths'] = transposed_items['lengths'].astype(np.long)
+    transposed_items['lengths'] = transposed_items['lengths'].astype(np.int32)
 
     transposed_items['labels'] = transposed_items['labels'].astype(np.float32)
 
     transposed_items['labels_shifted'] = \
         transposed_items['labels_shifted'].astype(np.float32)
+
     transposed_items['targets'] = \
         transposed_items['targets'].astype(np.float32)
 
