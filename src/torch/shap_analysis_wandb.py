@@ -158,7 +158,7 @@ def get_model_and_dataset(run_id):
         )
     model.to(device)
     dataset = model.dataset_cls(
-        split='validation',
+        split='test',
         transform=ComposeTransformations(model.transforms),
         **out['dataset_kwargs']
     )
@@ -248,7 +248,7 @@ def run_shap_analysis(
     hours_before_end=0,
     n_samples=200,
     min_length=5,
-    max_examples=50
+    max_examples=300,
 ):
     """Run shap analysis on a model dataset pair."""
     # Get instance with at least min_length datapoints.
