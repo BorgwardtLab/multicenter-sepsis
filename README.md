@@ -91,7 +91,11 @@ Next we actually pool the predictions:
 
 Then, we evaluate them:  
 ```>source scripts/eval_pooled.sh```  
-
+To create plots with the pooled predictions, run:  
+```>python -m scripts.plots.gather_data --input_path results/evaluation_test/prediction_pooled_subsampled/max/evaluation_output --output_path results/evaluation_test/prediction_pooled_subsampled/max/plots/```  
+```>python scripts/plots/plot_roc.py --input_path results/evaluation_test/prediction_pooled_subsampled/max/plots/result_data_subsampled.csv```  
+And heatmap incl. pooled preds:  
+```>python -m scripts.make_heatmap results/evaluation_test/plots/roc_summary_subsampled.csv --pooled_path results/evaluation_test/prediction_pooled_subsampled/max/plots/roc_summary_subsampled.csv```  
 
 ## R-code pipeline
 This was used for creating the harmonized raw datasets.
