@@ -414,7 +414,7 @@ class EICU(SplittedDataset):
 class AUMC(SplittedDataset):
     """AUMC dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None):
         super().__init__(
             f'datasets/aumc/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/aumc/data/parquet/features_small',
@@ -423,7 +423,8 @@ class AUMC(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            transform=transform
+            transform=transform,
+            cohort=cohort
         )
         #normalize = Normalize(
         #    'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold),

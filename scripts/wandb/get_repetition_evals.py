@@ -15,9 +15,16 @@ def main(args):
         for run in runs:
             run_ids.append(run.id)
 
+    #select script to run:
+    if args.cohorts:
+        script = 'eval_cohort_torch.sh'
+    else:
+        script = 'eval_torch.sh'
+    cmd = os.path.join('./scripts',script) 
+
     for run_id in run_ids:
         subprocess.run(
-            [ './scripts/eval_torch.sh', run_id
+            [ cmd, run_id
             ]
         )
  
@@ -26,5 +33,8 @@ if __name__ == '__main__':
     parser.add_argument('sweeps', type=str, nargs='+')
     parser.add_argument('--sweep_path', type=str, 
         default='sepsis/mc-sepsis/sweeps/')
+    parser.add_argument('--cohorts', action='store_true',
+        help='flag if model should be evaluated on sub cohorts', 
+        default=False)
     args = parser.parse_args()
     main(args)

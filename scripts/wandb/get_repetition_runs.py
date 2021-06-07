@@ -14,10 +14,16 @@ def main(args):
         runs = api.sweep(sweep).runs
         for run in runs:
             run_ids.append(run.id)
-    
+   
+    #select script to run:
+    if args.cohorts:
+        script = 'submit_cohort_evals.sh'
+    else:
+        script = 'submit_evals.sh'
+    cmd = os.path.join('./scripts/wandb',script) 
     for run_id in run_ids:
         subprocess.run(
-            [ './scripts/wandb/submit_evals.sh', run_id
+            [cmd, run_id
             ]
         )
  
@@ -26,5 +32,8 @@ if __name__ == '__main__':
     parser.add_argument('sweeps', type=str, nargs='+')
     parser.add_argument('--sweep_path', type=str, 
         default='sepsis/mc-sepsis/sweeps/')
+    parser.add_argument('--cohorts', action='store_true',
+        help='flag if model should be evaluated on sub cohorts', 
+        default=False)
     args = parser.parse_args()
     main(args)
