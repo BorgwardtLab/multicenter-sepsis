@@ -242,7 +242,14 @@ class ModelWrapper(torch.nn.Module):
         return out[torch.arange(out.shape[0]), index]
 
 
-def run_shap_analysis(model, dataset, hours_before_end=0, n_samples=200, min_length=5, max_examples=50):
+def run_shap_analysis(
+    model,
+    dataset,
+    hours_before_end=0,
+    n_samples=200,
+    min_length=5,
+    max_examples=50
+):
     """Run shap analysis on a model dataset pair."""
     # Get instance with at least min_length datapoints.
     lengths = np.array(list(map(lambda instance: len(instance['labels']), dataset)))
@@ -259,10 +266,13 @@ def run_shap_analysis(model, dataset, hours_before_end=0, n_samples=200, min_len
     sample_dataset = get_model_inputs(first_batch)
     wrapped_model = ModelWrapper(model, hours_before_end=hours_before_end)
     explainer = shap.GradientExplainer(wrapped_model, sample_dataset, batch_size=50)
-    n_examples = 2
+
+    # TODO: make configurable?
+    n_examples = max_examples
 
     shap_values = explainer.shap_values(
         [sample_dataset[0][:n_examples]], n_samples)
+
     out = {
         'shap_values': shap_values,
         'input': first_batch['ts'][:n_examples],
@@ -271,6 +281,7 @@ def run_shap_analysis(model, dataset, hours_before_end=0, n_samples=200, min_len
         # 'times': first_batch['time'],
         'feature_names': get_feature_names(dataset)
     }
+
     return out
 
 
