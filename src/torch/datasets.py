@@ -31,7 +31,8 @@ __all__ = [
     'MIMIC',
     'Hirid',
     'EICU',
-    'AUMC'
+    'AUMC',
+    'MIMICDemoSubset'   
 ]
 
 
@@ -483,6 +484,25 @@ class CombinedDataset(Dataset):
             train_indices.extend(map(lambda i: i + offset, cur_train))
             test_indices.extend(map(lambda i: i + offset, cur_test))
         return train_indices, test_indices
+
+
+class MIMICDemoSubset(SplittedDataset):
+    """MIMIC demo dataset with only a small subset of variable to test the SHAP pipeline."""
+
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+        super().__init__(
+            f'datasets/mimic_demo/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
+            'config/splits/splits_mimic_demo.json',
+            split,
+            feature_set,
+            only_physionet_features=only_physionet_features,
+            fold=fold,
+            transform=transform
+        )
+        self.lam = LoadLambda(
+            lambda_path =  f'config/lambdas/lambda_mimic_demo_rep_{fold}_cost_{cost}.json' ).lam 
+        from src.torch.torch_utils import SelectColumnSubset
+        self.pd_transform = SelectColumSubset(k=2) 
 
 
 if __name__ == '__main__':
