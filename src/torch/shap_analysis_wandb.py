@@ -155,7 +155,11 @@ def get_model_and_dataset(run_id):
 
 def get_feature_names(dataset):
     """Get names of features from dataset."""
-    remove_columns = [dataset.TIME_COLUMN, dataset.LABEL_COLUMN, dataset.UTILITY_COLUMN] + dataset.STATIC_COLUMNS
+    remove_columns = [
+        dataset.TIME_COLUMN,
+        dataset.LABEL_COLUMN,
+        dataset.UTILITY_COLUMN
+    ] + dataset.STATIC_COLUMNS
     return [col for col in dataset.columns if col not in remove_columns]
 
 
