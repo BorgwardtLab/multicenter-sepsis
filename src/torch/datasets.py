@@ -12,7 +12,7 @@ import pyarrow.parquet as pq
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 
-from src.torch.torch_utils import ComposeTransformations
+from src.torch.torch_utils import ComposeTransformations, select_cohort
 
 from src.variables.feature_groups import ColumnFilterLight
 from src.variables.mapping import VariableMapping
@@ -194,10 +194,9 @@ class SplittedDataset(ParquetLoadedDataset):
     UTILITY_COLUMN = VM_DEFAULT('utility')
 
     def __init__(self, path, split_file, split, feature_set,
-                 only_physionet_features=False, fold=0, pd_transform=None, transform=None):
+                 only_physionet_features=False, fold=0, pd_transform=None, transform=None, cohort=None):
         """
-        Args:
-        - test_repetitions: if true boosting reps of test split are loaded, else full test split.
+        Load split of dataset
         """
         with open(split_file, 'r') as f:
             d = json.load(f)
@@ -210,7 +209,9 @@ class SplittedDataset(ParquetLoadedDataset):
                 # ids = d[split]['split_{}'.format(fold)]
             # Need this to construct stratified split
             self.id_to_label = dict(zip(d['total']['ids'], d['total']['labels']))
-
+            if cohort:
+                dataset_name = path.split('/')[1] 
+                ids = select_cohort(ids, cohort, dataset_name)
         super().__init__(
             path, ids, self.ID_COLUMN, columns=None, as_pandas=True)
 
@@ -326,7 +327,7 @@ class MIMICDemo(SplittedDataset):
 class MIMIC(SplittedDataset):
     """MIMIC dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None):
         print(f'Using data fold {fold}...')
         super().__init__(
             f'datasets/mimic/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
@@ -335,7 +336,8 @@ class MIMIC(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            transform=transform
+            transform=transform,
+            cohort=cohort
         )
         #normalize = Normalize(
         #    'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold),
@@ -412,7 +414,7 @@ class EICU(SplittedDataset):
 class AUMC(SplittedDataset):
     """AUMC dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None):
         super().__init__(
             f'datasets/aumc/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/aumc/data/parquet/features_small',
@@ -421,7 +423,8 @@ class AUMC(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            transform=transform
+            transform=transform,
+            cohort=cohort
         )
         #normalize = Normalize(
         #    'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold),
