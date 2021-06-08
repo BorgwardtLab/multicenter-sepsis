@@ -35,7 +35,7 @@ parquet-tools = "*"
 simplejson = "*"
 wandb = "*"
 networkx = "*"
-shap = "*"
+shap = {editable = true, ref = "variable-length-nan", git = "https://github.com/BorgwardtLab/shap"}
 
 [requires]
 python_version = "3.7"
