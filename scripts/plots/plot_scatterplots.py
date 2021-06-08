@@ -361,7 +361,7 @@ if __name__ == '__main__':
     # write raw scatter data out:
     plot_df = pd.concat(plot_df_list)
     agg_df = pd.concat(agg_df_list)
-   
+ 
     for df,name in zip([plot_df, agg_df], 
         ['scatter_raw_data.csv', 'scatter_agg_data.csv']): 
         df.to_csv(
