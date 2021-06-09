@@ -11,6 +11,6 @@ for RUN in 'sfxdno1a' 'sz1aa1n9' 'm6fsnuk9' 'hacl0kfp' 'pr9pa8oa' 'f905hzcm' '9r
       --mem-per-cpu 8G                                    \
       --job-name "mcsepsis-shapley-$RUN-$ITERATION"       \
       --output "mcsepsis-shapley-$RUN-$ITERATION-%j.out"  \
-      --wrap "python -m src.torch.shap_analysis_wandb sepsis/mc-sepsis/runs/$RUN --n-samples 10 --n-samples-background 10 --output results/shapley/${RUN}_${ITERATION}.pkl"
+      --wrap "python -m src.torch.shap_analysis_wandb sepsis/mc-sepsis/runs/$RUN --n-samples 500 --n-samples-background 200 --output results/shapley/${RUN}_${ITERATION}.pkl"
   done
 done
