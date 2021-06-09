@@ -268,13 +268,13 @@ def run_shap_analysis(
     )
     indices = np.where(lengths >= min_length)[0]
     subset = Subset(dataset, indices)
-    sampler = iter(SubsetRandomSampler(indices))
+    sampler = iter(SubsetRandomSampler(range(len(subset))))
 
     data = [
         subset[i] for i in list(
             map(
                 lambda x: next(sampler),
-                range(min(n_samples_data, len(indices)))
+                range(min(n_samples_data, len(subset)))
             )
         )
     ]
