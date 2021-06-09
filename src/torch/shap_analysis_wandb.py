@@ -7,6 +7,7 @@ import numpy as np
 import torch
 
 from torch.utils.data import Subset
+from torch.utils.data import SubsetRandomSampler
 
 from src.torch.eval_model import compute_md5hash, device
 from src.torch.torch_utils import ComposeTransformations
@@ -247,44 +248,59 @@ def run_shap_analysis(
     dataset,
     hours_before_end=0,
     min_length=5,
+    n_samples_data=50,
     n_samples_background=200,
-    max_examples=300,
 ):
     """Run shap analysis on a model dataset pair.
 
     Parameters
     ----------
+    n_samples_data : int
+        Number of samples to use from the data set. The data set will be
+        subsampled.
     n_samples_background : int
         Number of samples to be used as the background for Shapley value
         calculations.
     """
-    # Get instance with at least min_length datapoints.
-    lengths = np.array(list(map(lambda instance: len(instance['labels']), dataset)))
+    # Get instance with at least `min_length` datapoints.
+    lengths = np.array(
+        list(map(lambda instance: len(instance['labels']), dataset))
+    )
     indices = np.where(lengths >= min_length)[0]
     subset = Subset(dataset, indices)
-    first_batch = [subset[i] for i in range(min(max_examples, len(subset)))]
-    first_batch = variable_length_collate_nan_padding(first_batch)
-    print(first_batch.keys())
+    sampler = iter(SubsetRandomSampler(indices))
+
+    data = [
+        subset[i] for i in list(
+            map(
+                lambda x: next(sampler),
+                range(min(n_samples_data, len(indices)))
+            )
+        )
+    ]
+    data = variable_length_collate_nan_padding(data)
+
+    print('Data keys:', data.keys())
 
     def get_model_inputs(batch):
         return [batch['ts'].to(device)]
 
-    print(lengths[:min(max_examples, len(subset))])
-    sample_dataset = get_model_inputs(first_batch)
+    sample_dataset = get_model_inputs(data)
     wrapped_model = ModelWrapper(model, hours_before_end=hours_before_end)
-    explainer = shap.GradientExplainer(wrapped_model, sample_dataset, batch_size=50)
-
-    # TODO: make configurable?
-    n_examples = max_examples
+    explainer = shap.GradientExplainer(
+        wrapped_model,
+        sample_dataset,
+    )
 
     shap_values = explainer.shap_values(
-        [sample_dataset[0][:n_examples]], n_samples_background)
+        [sample_dataset[0]], n_samples_background)
 
     out = {
         'shap_values': shap_values,
-        'input': first_batch['ts'][:n_examples],
-        'lengths': first_batch['lengths'][:n_examples],
-        'labels': first_batch['labels'][:n_examples],
+        'id': data['id'],
+        'input': data['ts'],
+        'lengths': data['lengths'],
+        'labels': data['labels'],
         # 'times': first_batch['time'],
         'feature_names': get_feature_names(dataset)
     }
@@ -303,19 +319,17 @@ if __name__ == '__main__':
         help='Number of samples to use for the Shapley value computation.'
     )
 
+    parser.add_argument(
+        '-n', '--n-samples',
+        type=int,
+        default=50,
+        help='Number of samples to include in data set for Shapley value '
+             'computation.'
+    )
+
     parser.add_argument('--hours_before_end', type=int, default=0, help="Number of hours prior to the end of stay to look at for feature importance estimation.")
     parser.add_argument('--min_length', type=int, default=5, help="Minimal length of instance in order to be used for background.")
-    parser.add_argument('--max_examples', type=int, default=50, help="Number of instances from dataset to use as background.")
 
-    # parser.add_argument(
-    #     '--dataset', required=True, type=str, choices=src.torch.datasets.__all__,
-    # )
-    # parser.add_argument(
-    #     '--split',
-    #     default='validation',
-    #     choices=['train', 'validation', 'test'],
-    #     type=str
-    # )
     parser.add_argument('--output', type=str, required=True, help='Output path to store pickle with shap values.')
     params = parser.parse_args()
 
@@ -324,9 +338,9 @@ if __name__ == '__main__':
     shap_values = run_shap_analysis(
         model, dataset,
         hours_before_end=params.hours_before_end,
+        n_samples_data=params.n_samples,
         n_samples_background=params.n_samples_background,
         min_length=params.min_length,
-        max_examples=params.max_examples
     )
 
     import pickle
