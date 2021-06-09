@@ -246,11 +246,18 @@ def run_shap_analysis(
     model,
     dataset,
     hours_before_end=0,
-    n_samples=200,
     min_length=5,
+    n_samples_background=200,
     max_examples=300,
 ):
-    """Run shap analysis on a model dataset pair."""
+    """Run shap analysis on a model dataset pair.
+
+    Parameters
+    ----------
+    n_samples_background : int
+        Number of samples to be used as the background for Shapley value
+        calculations.
+    """
     # Get instance with at least min_length datapoints.
     lengths = np.array(list(map(lambda instance: len(instance['labels']), dataset)))
     indices = np.where(lengths >= min_length)[0]
@@ -271,7 +278,7 @@ def run_shap_analysis(
     n_examples = max_examples
 
     shap_values = explainer.shap_values(
-        [sample_dataset[0][:n_examples]], n_samples)
+        [sample_dataset[0][:n_examples]], n_samples_background)
 
     out = {
         'shap_values': shap_values,
@@ -289,7 +296,13 @@ if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
     parser.add_argument('wandb_run', type=str)
-    parser.add_argument('--n_samples', type=int, default=200, help="Number of samples to use for the shap computation.")
+    parser.add_argument(
+        '-b', '--n-samples-background',
+        type=int,
+        default=200,
+        help='Number of samples to use for the Shapley value computation.'
+    )
+
     parser.add_argument('--hours_before_end', type=int, default=0, help="Number of hours prior to the end of stay to look at for feature importance estimation.")
     parser.add_argument('--min_length', type=int, default=5, help="Minimal length of instance in order to be used for background.")
     parser.add_argument('--max_examples', type=int, default=50, help="Number of instances from dataset to use as background.")
@@ -307,12 +320,15 @@ if __name__ == '__main__':
     params = parser.parse_args()
 
     model, dataset = get_model_and_dataset(params.wandb_run)
+
     shap_values = run_shap_analysis(
-        model, dataset, hours_before_end=params.hours_before_end,
-        n_samples=params.n_samples, min_length=params.min_length,
-        max_examples=params.max_examples)
-    # print(shap_values)
+        model, dataset,
+        hours_before_end=params.hours_before_end,
+        n_samples_background=params.n_samples_background,
+        min_length=params.min_length,
+        max_examples=params.max_examples
+    )
+
     import pickle
     with open(params.output, 'wb') as f:
         pickle.dump(shap_values, f)
-
