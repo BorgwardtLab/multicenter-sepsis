@@ -5,6 +5,8 @@ import pickle
 import shap
 
 import numpy as np
+import pandas as pd
+
 import matplotlib.pyplot as plt
 
 
@@ -45,11 +47,16 @@ if __name__ == '__main__':
         important_indices = np.arange(0, len(feature_names))
         selected_features = feature_names
 
+    # ignore positional encoding
+    important_indices += 10
+
     # Tensor has shape `n_samples, max_length, n_features`, where
     # `max_length` denotes the maximum length of a time series in
     # the batch.
     shap_values = data['shap_values']
     shap_values = shap_values[:, :, important_indices]
+    features = data['input'].numpy()
+    features = features[:, :, important_indices]
 
     # We need to pool all valid Shapley values over all time steps,
     # pretending that they are individual samples.
@@ -57,18 +64,37 @@ if __name__ == '__main__':
     # This is the straightforward way of doing it. Don't judge.
 
     shap_values_pooled = []
+    features_pooled = []
 
-    for index, values in enumerate(shap_values):
+    for index, (values, features_) in enumerate(zip(shap_values, features)):
         length = lengths[index]
         values = values[:length, :]
+        features_ = features_[:length, :]
 
-        values = values[~np.isnan(values).all(axis=1), :]
+        # Need to store mask for subsequent calculations. This is
+        # required because we must only select features for which
+        # the Shapley value is defined.
+        mask = ~np.isnan(values).all(axis=1)
+
+        values = values[mask, :]
+        features_ = features_[mask, :]
+
         shap_values_pooled.append(values)
+        features_pooled.append(features_)
 
     shap_values_pooled = np.vstack(shap_values_pooled)
+    features_pooled = np.vstack(features_pooled)
+
+    # Optional filtering and merging over the columns, as specified by
+    # the user. This permits us to map features to their corresponding
+    # variables.
+    
+    # HIC SVNT LEONES
+    #df = pd.DataFrame(shap_values_pooled, columns=selected_features)
 
     shap.summary_plot(
         shap_values_pooled,
+        features=features_pooled,
         feature_names=selected_features,
         plot_type='dot',
         show=False,
@@ -76,6 +102,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig('/tmp/shap_dot.png')
 
+    plt.show()
     plt.cla()
 
     shap.summary_plot(
