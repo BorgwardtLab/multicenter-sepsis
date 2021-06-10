@@ -182,17 +182,14 @@ def get_feature_names(dataset):
 class ModelWrapper(torch.nn.Module):
     """Wrapper class for compatibility with shap analysis."""
 
-    def __init__(self, model, hours_before_end=0):
+    def __init__(self, model):
         """Wrap a model to only return output at the end of the stay.
 
         Args:
             model: Model to wrap
-            hours_before_end: Number of hours before the end of the stay at
-                which we should extract the output.
         """
         super().__init__()
         self.model = model
-        self.hours_before_end = hours_before_end
 
     def forward(self, x, lengths=None, statics=None):
         """Perform forward pass through model."""
@@ -240,7 +237,9 @@ class ModelWrapper(torch.nn.Module):
             x = torch.where(torch.isnan(x), torch.zeros_like(x), x)
 
         out = self.model(x, lengths=lengths, statics=statics)
-        index = lengths - self.hours_before_end - 1
+
+        # Pick *largest* prediction score along each time series.
+        index = out.argmax(1)
         assert torch.all(index >= 0)
         return out[torch.arange(out.shape[0]), index]
 
@@ -248,7 +247,6 @@ class ModelWrapper(torch.nn.Module):
 def run_shap_analysis(
     model,
     dataset,
-    hours_before_end=0,
     min_length=5,
     n_samples_data=50,
     n_samples_background=200,
@@ -288,7 +286,7 @@ def run_shap_analysis(
         return [batch['ts'].to(device)]
 
     sample_dataset = get_model_inputs(data)
-    wrapped_model = ModelWrapper(model, hours_before_end=hours_before_end)
+    wrapped_model = ModelWrapper(model)
     explainer = shap.GradientExplainer(
         wrapped_model,
         sample_dataset,
@@ -342,8 +340,12 @@ if __name__ == '__main__':
         help='Output path to store pickle with shap values.'
     )
 
-    parser.add_argument('--hours_before_end', type=int, default=0, help="Number of hours prior to the end of stay to look at for feature importance estimation.")
-    parser.add_argument('--min_length', type=int, default=5, help="Minimal length of instance in order to be used for background.")
+    parser.add_argument(
+        '--min_length',
+        type=int,
+        default=24,
+        help='Minimal length of instance in order to be used for background.'
+    )
 
     params = parser.parse_args()
 
@@ -357,7 +359,6 @@ if __name__ == '__main__':
 
     shap_values = run_shap_analysis(
         model, dataset,
-        hours_before_end=params.hours_before_end,
         n_samples_data=params.n_samples,
         n_samples_background=params.n_samples_background,
         min_length=params.min_length,
