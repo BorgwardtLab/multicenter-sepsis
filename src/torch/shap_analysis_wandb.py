@@ -191,7 +191,7 @@ class ModelWrapper(torch.nn.Module):
         super().__init__()
         self.model = model
 
-    def forward(self, x, lengths=None, statics=None):
+    def forward(self, x, lengths=None, statics=None, return_index=False):
         """Perform forward pass through model."""
         if lengths is None:
             # Assume we use nan to pad values. This helps when using shap for
@@ -241,7 +241,13 @@ class ModelWrapper(torch.nn.Module):
         # Pick *largest* prediction score along each time series.
         index = out.argmax(1)
         assert torch.all(index >= 0)
-        return out[torch.arange(out.shape[0]), index]
+
+        out = out[torch.arange(out.shape[0]), index]
+
+        if return_index:
+            return out, index
+        else:
+            return out
 
 
 def run_shap_analysis(
@@ -295,10 +301,13 @@ def run_shap_analysis(
     shap_values = explainer.shap_values(
         [sample_dataset[0]], n_samples_background)
 
+    _, index = wrapped_model(sample_dataset[0], return_index=True)
+
     out = {
         'shap_values': shap_values,
         'id': data['id'],
         'input': data['ts'],
+        'prediction_index': index,
         'lengths': data['lengths'],
         'labels': data['labels'],
         # 'times': first_batch['time'],
