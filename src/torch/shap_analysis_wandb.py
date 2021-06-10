@@ -1,10 +1,13 @@
 """Script to load trained model and run shape analysis."""
 
-import json
 import tempfile
-import wandb
-import numpy as np
+import os
 import torch
+import sys
+import wandb
+import warnings
+
+import numpy as np
 
 from torch.utils.data import Subset
 from torch.utils.data import SubsetRandomSampler
@@ -15,7 +18,6 @@ import src.torch.datasets
 import src.torch.models
 
 import shap
-import warnings
 
 wandb_api = wandb.Api()
 
@@ -327,11 +329,29 @@ if __name__ == '__main__':
              'computation.'
     )
 
+    parser.add_argument(
+        '-f', '--force',
+        action='store_true',
+        help='If set, overwrites results.'
+    )
+
+    parser.add_argument(
+        '-o', '--output',
+        type=str,
+        required=True,
+        help='Output path to store pickle with shap values.'
+    )
+
     parser.add_argument('--hours_before_end', type=int, default=0, help="Number of hours prior to the end of stay to look at for feature importance estimation.")
     parser.add_argument('--min_length', type=int, default=5, help="Minimal length of instance in order to be used for background.")
 
-    parser.add_argument('--output', type=str, required=True, help='Output path to store pickle with shap values.')
     params = parser.parse_args()
+
+    if os.path.exists(params.output) and not params.force:
+        warnings.warn(
+            f'Refusing to overwrite "{params.output}" without `--force`.'
+        )
+        sys.exit(-1)
 
     model, dataset = get_model_and_dataset(params.wandb_run)
 
