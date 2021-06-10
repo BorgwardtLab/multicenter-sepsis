@@ -239,7 +239,7 @@ class ModelWrapper(torch.nn.Module):
         out = self.model(x, lengths=lengths, statics=statics)
 
         # Pick *largest* prediction score along each time series.
-        index = out.argmax(1)
+        index = out.argmax(1).squeeze()
         assert torch.all(index >= 0)
 
         out = out[torch.arange(out.shape[0]), index]
@@ -352,7 +352,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--min_length',
         type=int,
-        default=24,
+        default=0,
         help='Minimal length of instance in order to be used for background.'
     )
 
