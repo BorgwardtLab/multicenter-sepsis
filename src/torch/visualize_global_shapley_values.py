@@ -1,13 +1,31 @@
 """Visualisation of global Shapley values."""
 
 import argparse
+import io
 import pickle
 import shap
+import torch
 
 import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
+
+
+class PickledTorch(pickle.Unpickler):
+    """Unpickler for `torch` objects.
+
+    Simple wrapper for `torch` objects that need to be serialised to
+    a CPU instead of a GPU. Permits the analysis of such files, even
+    if CUDA is not present.
+    """
+
+    def find_class(self, module, name):
+        """Return class for handling functions of a certain type."""
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
+        else:
+            return super().find_class(module, name)
 
 
 if __name__ == '__main__':
@@ -29,7 +47,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     with open(args.input, 'rb') as f:
-        data = pickle.load(f)
+        data = PickledTorch(f).load()
 
     feature_names = data['feature_names']
     lengths = data['lengths'].numpy()
