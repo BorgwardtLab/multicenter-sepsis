@@ -32,8 +32,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        '--input',
-        default='./dump/shapley/shap_test.pkl',
+        'FILE',
         type=str,
         help='Input file. Must contain Shapley values.',
     )
@@ -46,7 +45,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    with open(args.input, 'rb') as f:
+    with open(args.FILE, 'rb') as f:
         data = PickledTorch(f).load()
 
     feature_names = data['feature_names']
