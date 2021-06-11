@@ -107,7 +107,8 @@ if __name__ == '__main__':
     # variables.
     
     # HIC SVNT LEONES
-    #df = pd.DataFrame(shap_values_pooled, columns=selected_features)
+    df = pd.DataFrame(shap_values_pooled, columns=selected_features)
+    print(df)
 
     shap.summary_plot(
         shap_values_pooled,
