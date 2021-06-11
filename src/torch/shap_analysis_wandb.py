@@ -205,8 +205,9 @@ class ModelWrapper(torch.nn.Module):
         super().__init__()
         self.model = model
 
-    def forward(self, x, lengths=None, statics=None, return_index=False):
+    def forward(self, x, lengths=None, statics=None, return_indices=False):
         """Perform forward pass through model."""
+        mask = None
         if lengths is None:
             # Assume we use nan to pad values. This helps when using shap for
             # explanations as it manipulates the input and automatically adds
@@ -247,18 +248,31 @@ class ModelWrapper(torch.nn.Module):
                     'lengths of data. You should be using PyTorch 1.6.0.'
                 )
 
-            # Remove the nan values again prior to model input
-            x = torch.where(torch.isnan(x), torch.zeros_like(x), x)
+            # Remove the nan values again prior to model input. We will
+            # re-use the mask later on (if it exists) to remove all
+            # predictions that go beyond the length.
+            mask = torch.isnan(x)
+            x = torch.where(mask, torch.zeros_like(x), x)
+
+        assert mask is not None
 
         out = self.model(x, lengths=lengths, statics=statics)
+
+        # Remove all predictions *after* the length of the time series,
+        # thus ensuring that we do not ask for explanations at the wrong
+        # places.
+        out = torch.where(
+            mask.any(2).unsqueeze(-1),
+            torch.full_like(out, fill_value=np.NaN),
+            out
+        )
 
         # Pick *largest* prediction score along each time series.
         index = out.argmax(1).squeeze()
         assert torch.all(index >= 0)
-
         out = out[torch.arange(out.shape[0]), index]
 
-        if return_index:
+        if return_indices:
             return out, index
         else:
             return out
