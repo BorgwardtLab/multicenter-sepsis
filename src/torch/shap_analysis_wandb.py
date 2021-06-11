@@ -24,8 +24,20 @@ wandb_api = wandb.Api()
 
 # Shap evaluation perturbs the inputs, thus we cannot rely on the length
 # argument.  Instead use Nan padding and reconstruct length in model.
-def variable_length_collate_nan_padding(batch):
-    """Combine multiple instances of irregular lengths into a batch."""
+def variable_length_collate_nan_padding(batch, lengths=None):
+    """Combine multiple instances of irregular lengths into a batch.
+
+    Parameters
+    ----------
+    batch
+        Input batch
+
+    lengths : `torch.tensor`, optional
+        If provided, will take the place of the pre-defined lengths in
+        the batch. This can be used to perform post-hoc masking, which
+        we require after finding the maximum prediction score index of
+        each sample.
+    """
     # This converts the batch from [{'a': 1, 'b': 2}, ..] format to
     # {'a': [1], 'b': [2]}
     transposed_items = {
@@ -35,7 +47,9 @@ def variable_length_collate_nan_padding(batch):
 
     transposed_items['id'] = np.array(transposed_items['id'])
 
-    lengths = np.array(list(map(len, transposed_items['labels'])))
+    if lengths is None:
+        lengths = np.array(list(map(len, transposed_items['labels'])))
+
     transposed_items['lengths'] = lengths
     max_len = max(lengths)
 
