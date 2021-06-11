@@ -263,7 +263,7 @@ class ModelWrapper(torch.nn.Module):
         # places.
         out = torch.where(
             mask.any(2).unsqueeze(-1),
-            torch.full_like(out, fill_value=np.NaN),
+            torch.zeros_like(out),
             out
         )
 
