@@ -315,6 +315,7 @@ def run_shap_analysis(
     data = variable_length_collate_nan_padding(data)
 
     print('Data keys:', data.keys())
+    print('Lengths:', data['lengths'])
 
     def get_model_inputs(batch):
         return [batch['ts'].to(device)]
@@ -326,16 +327,24 @@ def run_shap_analysis(
         sample_dataset,
     )
 
+    # Get the index at which the maximum prediction happens. This will
+    # enable us to mask the time series afterwards.
+    _, indices = wrapped_model(sample_dataset[0], return_indices=True)
+    indices = indices.cpu().numpy()
+
+    # Re-pad the time series with the detected lengths to ensure that we
+    # are not trying to explain *future* time steps with old information
+    # from past time points.
+    for sample, index in zip(sample_dataset[0], indices):
+        sample[index + 1:, :] = np.nan
+
     shap_values = explainer.shap_values(
         [sample_dataset[0]], n_samples_background)
-
-    _, index = wrapped_model(sample_dataset[0], return_index=True)
 
     out = {
         'shap_values': shap_values,
         'id': data['id'],
         'input': data['ts'],
-        'prediction_index': index,
         'lengths': data['lengths'],
         'labels': data['labels'],
         # 'times': first_batch['time'],
