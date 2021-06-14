@@ -2,6 +2,7 @@
 
 import argparse
 import io
+import os
 import pickle
 import shap
 import torch
@@ -10,6 +11,8 @@ import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
+
+from src.torch.shap_utils import get_model_and_dataset
 
 
 class PickledTorch(pickle.Unpickler):
@@ -26,6 +29,15 @@ class PickledTorch(pickle.Unpickler):
             return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
         else:
             return super().find_class(module, name)
+
+
+def get_run_id(filename):
+    """Extract run ID from filename."""
+    run_id = os.path.basename(filename)
+    run_id = os.path.splitext(run_id)[0]
+    run_id = run_id[:8]
+    run_id = f'sepsis/mc-sepsis/runs/{run_id}'
+    return run_id
 
 
 if __name__ == '__main__':
@@ -47,6 +59,18 @@ if __name__ == '__main__':
 
     with open(args.FILE, 'rb') as f:
         data = PickledTorch(f).load()
+
+    _, _, out = get_model_and_dataset(
+        get_run_id(args.FILE), return_out=True
+    )
+
+    dataset_name = out['model_params']['dataset']
+    model_name = out['model']
+
+    assert model_name == 'AttentionModel', RuntimeError(
+        'Shapley analysis is currently only supported for the '
+        'AttentionModel class.'
+    )
 
     feature_names = data['feature_names']
     lengths = data['lengths'].numpy()
