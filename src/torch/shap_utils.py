@@ -47,7 +47,7 @@ def extract_model_information(run_path, tmp):
     }
 
 
-def get_model_and_dataset(run_id):
+def get_model_and_dataset(run_id, return_out=False):
     """Get model and dataset from finished wandb run."""
     with tempfile.TemporaryDirectory() as tmp:
         # Download checkpoint to temporary directory
@@ -65,4 +65,7 @@ def get_model_and_dataset(run_id):
         **out['dataset_kwargs']
     )
 
-    return model, dataset
+    if return_out:
+        return model, dataset, out
+    else:
+        return model, dataset
