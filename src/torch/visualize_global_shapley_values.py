@@ -84,7 +84,7 @@ def get_aggregation_function(name):
     """Return aggregation function."""
     if name == 'absmax':
         def absmax(x):
-            max(x.min(), x.max(), key=abs)
+            return max(x.min(), x.max(), key=abs)
         return absmax
     elif name == 'max':
         return np.max
