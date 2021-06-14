@@ -80,6 +80,22 @@ def pool(shapley_values, feature_values):
     return shapley_values_pooled, feature_values_pooled
 
 
+def get_aggregation_function(name):
+    """Return aggregation function."""
+    if name == 'absmax':
+        def absmax(x):
+            max(x.min(), x.max(), key=abs)
+        return absmax
+    elif name == 'max':
+        return np.max
+    elif name == 'min':
+        return np.min
+    elif name == 'mean':
+        return np.mean
+    elif name == 'median':
+        return np.median
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -93,6 +109,21 @@ if __name__ == '__main__':
         '-i', '--ignore-indicators-and-counts',
         action='store_true',
         help='If set, ignores indicator and count features.'
+    )
+
+    parser.add_argument(
+        '-c', '--collapse-features',
+        action='store_true',
+        help='If set, use only variables, collapsing features according '
+             'to the aggregation function.'
+    )
+
+    parser.add_argument(
+        '-a', '--aggregation-function',
+        choices=['absmax', 'max', 'mean', 'median', 'min'],
+        default='max',
+        help='Aggregation function to use when features are collapsed to '
+             'variables.'
     )
 
     args = parser.parse_args()
@@ -144,28 +175,6 @@ if __name__ == '__main__':
         features
     )
 
-    # Optional filtering and merging over the columns, as specified by
-    # the user. This permits us to map features to their corresponding
-    # variables.
-
-    # HIC SVNT LEONES
-    df = pd.DataFrame(shap_values_pooled, columns=selected_features)
-
-    def feature_to_var(column):
-        """Rename feature name to variable name."""
-        column = column.replace('_count', '')
-        column = column.replace('_raw', '')
-        column = column.replace('_indicator', '')
-        column = column.replace('_derived', '')
-        return column
-
-    aggregation_fn = np.max
-
-    df = df.rename(feature_to_var, axis=1)
-    df = df.groupby(level=0, axis=1).apply(
-        lambda x: x.apply(aggregation_fn, axis=1)
-    )
-    
     shap.summary_plot(
         shap_values_pooled,
         features=features_pooled,
@@ -177,6 +186,34 @@ if __name__ == '__main__':
     plt.savefig('/tmp/shap_dot.png')
 
     plt.cla()
+
+    # Optional filtering and merging over the columns, as specified by
+    # the user. This permits us to map features to their corresponding
+    # variables.
+    if args.collapse_features:
+        df = pd.DataFrame(shap_values_pooled, columns=selected_features)
+
+        def feature_to_var(column):
+            """Rename feature name to variable name."""
+            column = column.replace('_count', '')
+            column = column.replace('_raw', '')
+            column = column.replace('_indicator', '')
+            column = column.replace('_derived', '')
+            return column
+
+        aggregation_fn = get_aggregation_function(args.aggregation_function)
+
+        print(
+            f'Collapsing features to variables using '
+            f'{args.aggregation_function}...'
+        )
+
+        df = df.rename(feature_to_var, axis=1)
+        df = df.groupby(level=0, axis=1).apply(
+            lambda x: x.apply(aggregation_fn, axis=1)
+        )
+
+        shap_values_pooled = df.to_numpy()
 
     shap.summary_plot(
         shap_values_pooled,
