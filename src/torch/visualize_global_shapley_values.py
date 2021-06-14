@@ -40,6 +40,46 @@ def get_run_id(filename):
     return run_id
 
 
+def pool(shapley_values, feature_values):
+    """Pool Shapley values and feature values.
+
+    This function performs the pooling step required for Shapley values
+    and feature values. Each time step of a time series will be treated
+    as its own sample instance.
+
+    Returns
+    -------
+    Tuple of pooled Shapely values and feature values.
+    """
+    # This is the straightforward way of doing it. Please don't judge,
+    # or, if you do, don't judge too much :)
+    shapley_values_pooled = []
+    feature_values_pooled = []
+
+    for index, (s_values, f_values) in enumerate(
+        zip(shapley_values, feature_values)
+    ):
+        length = lengths[index]
+        s_values = s_values[:length, :]
+        f_values = f_values[:length, :]
+
+        # Need to store mask for subsequent calculations. This is
+        # required because we must only select features for which
+        # the Shapley value is defined!
+        mask = ~np.isnan(s_values).all(axis=1)
+
+        s_values = s_values[mask, :]
+        f_values = f_values[mask, :]
+
+        shapley_values_pooled.append(s_values)
+        feature_values_pooled.append(f_values)
+
+    shapley_values_pooled = np.vstack(shapley_values_pooled)
+    feature_values_pooled = np.vstack(feature_values_pooled)
+
+    return shapley_values_pooled, feature_values_pooled
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -99,32 +139,10 @@ if __name__ == '__main__':
     features = data['input'].numpy()
     features = features[:, :, important_indices]
 
-    # We need to pool all valid Shapley values over all time steps,
-    # pretending that they are individual samples.
-    #
-    # This is the straightforward way of doing it. Don't judge.
-
-    shap_values_pooled = []
-    features_pooled = []
-
-    for index, (values, features_) in enumerate(zip(shap_values, features)):
-        length = lengths[index]
-        values = values[:length, :]
-        features_ = features_[:length, :]
-
-        # Need to store mask for subsequent calculations. This is
-        # required because we must only select features for which
-        # the Shapley value is defined.
-        mask = ~np.isnan(values).all(axis=1)
-
-        values = values[mask, :]
-        features_ = features_[mask, :]
-
-        shap_values_pooled.append(values)
-        features_pooled.append(features_)
-
-    shap_values_pooled = np.vstack(shap_values_pooled)
-    features_pooled = np.vstack(features_pooled)
+    shap_values_pooled, features_pooled = pool(
+        shap_values,
+        features
+    )
 
     # Optional filtering and merging over the columns, as specified by
     # the user. This permits us to map features to their corresponding
@@ -147,7 +165,7 @@ if __name__ == '__main__':
     df = df.groupby(level=0, axis=1).apply(
         lambda x: x.apply(aggregation_fn, axis=1)
     )
-
+    
     shap.summary_plot(
         shap_values_pooled,
         features=features_pooled,
