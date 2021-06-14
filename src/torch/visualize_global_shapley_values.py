@@ -129,7 +129,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     with open(args.FILE, 'rb') as f:
-        data = PickledTorch(f).load()
+        data = pickle.load(f)
 
     _, _, out = get_model_and_dataset(
         get_run_id(args.FILE), return_out=True
@@ -214,6 +214,7 @@ if __name__ == '__main__':
         )
 
         shap_values_pooled = df.to_numpy()
+        selected_features = df.columns
 
     shap.summary_plot(
         shap_values_pooled,
