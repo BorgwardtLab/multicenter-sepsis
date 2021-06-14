@@ -129,10 +129,24 @@ if __name__ == '__main__':
     # Optional filtering and merging over the columns, as specified by
     # the user. This permits us to map features to their corresponding
     # variables.
-    
+
     # HIC SVNT LEONES
     df = pd.DataFrame(shap_values_pooled, columns=selected_features)
-    print(df)
+
+    def feature_to_var(column):
+        """Rename feature name to variable name."""
+        column = column.replace('_count', '')
+        column = column.replace('_raw', '')
+        column = column.replace('_indicator', '')
+        column = column.replace('_derived', '')
+        return column
+
+    aggregation_fn = np.max
+
+    df = df.rename(feature_to_var, axis=1)
+    df = df.groupby(level=0, axis=1).apply(
+        lambda x: x.apply(aggregation_fn, axis=1)
+    )
 
     shap.summary_plot(
         shap_values_pooled,
@@ -144,7 +158,6 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig('/tmp/shap_dot.png')
 
-    plt.show()
     plt.cla()
 
     shap.summary_plot(
@@ -155,5 +168,3 @@ if __name__ == '__main__':
     )
     plt.tight_layout()
     plt.savefig('/tmp/shap_bar.png')
-
-    plt.show()
