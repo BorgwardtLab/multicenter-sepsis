@@ -96,6 +96,18 @@ def get_aggregation_function(name):
         return np.median
 
 
+def make_explanation(shapley_values, feature_values, feature_names):
+    """Wrap Shapley values in an `Explanation` object."""
+    return shap.Explanation(
+        # TODO: does this base value make sense? We could always get the
+        # model outputs by updating the analysis.
+        base_values=0.0,
+        values=shapley_values,
+        data=feature_values,
+        feature_names=feature_names,
+    )
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -186,6 +198,20 @@ if __name__ == '__main__':
     plt.savefig('/tmp/shap_dot.png')
 
     plt.cla()
+
+    shap.plots.waterfall(
+        make_explanation(
+            shap_values_pooled[0],
+            features_pooled[0],
+            selected_features,
+        ),
+        show=False,
+    )
+    plt.tight_layout()
+    plt.savefig('/tmp/shap_waterfall.png')
+
+    plt.cla()
+
 
     # Optional filtering and merging over the columns, as specified by
     # the user. This permits us to map features to their corresponding
