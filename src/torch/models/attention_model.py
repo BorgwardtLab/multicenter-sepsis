@@ -182,12 +182,12 @@ class AttentionModel(BaseModel):
 
     def forward(self, x, lengths, statics=None):
         """Apply attention model to input x."""
-        offset = 0 if statics is None else 1
+        offset = 0 if statics is None or self.hparams.ignore_statics else 1
         # Invert mask as multi head attention ignores values which are true
-        mask = length_to_mask(lengths, offset=offset)
+        mask = length_to_mask(lengths, offset=offset, max_len=x.shape[1])
         future_mask = get_subsequent_mask(x, offset=offset)
         x = self.layers[0](x)
-        if statics is not None:
+        if statics is not None and not self.hparams.ignore_statics:
             # prepend statics embedding
             embed_statics = self.statics_embedding(statics).unsqueeze(1)
             x = torch.cat([embed_statics, x], dim=1)
