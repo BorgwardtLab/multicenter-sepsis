@@ -29,7 +29,9 @@ def format_dataset(name):
         'MIMIC': 'mimic',
         'Hirid': 'hirid',
         'EICU': 'eicu',
-        'AUMC': 'aumc'
+        'AUMC': 'aumc',
+        'Physionet2019': 'physionet2019',
+        'pooled': 'pooled'
     }
     if name in data_mapping.keys():
         return data_mapping[name]
@@ -152,7 +154,7 @@ def extract_onset_index(x):
     return result
 
 
-def first_alarm_eval(y_true, y_pred, times):
+def first_alarm_eval(y_true, y_pred, times, thres_percentage):
     """Extract and evaluate prediction and label of first alarm."""
     labels = get_patient_labels(y_true)
     case_mask = labels.astype(bool)
@@ -161,6 +163,10 @@ def first_alarm_eval(y_true, y_pred, times):
     alarm_times = extract_first_alarm(times, indices=pred_indices)
     onset_times = extract_first_alarm(times, indices=onset_indices)
     delta = onset_times[case_mask] - alarm_times[case_mask]
+
+    if np.isnan(delta).sum() == len(delta):
+        print(f'No earliness information at {100*thres_percentage} % level of the score thresholds. ')
+
     # determine proportion of TPs caught earlier than n hours before onset:
     windows = np.arange(11)
     r = {
@@ -207,7 +213,7 @@ def utility_score_wrapper(lam=1, **kwargs):
     return wrapped_func
 
 
-def evaluate_threshold(data, labels, shifted_labels, times, thres, measures):
+def evaluate_threshold(data, labels, shifted_labels, times, thres, thres_percentage, measures):
     """Evaluate threshold-based and patient-based measures.
 
     Parameters
@@ -256,7 +262,7 @@ def evaluate_threshold(data, labels, shifted_labels, times, thres, measures):
         results[name] = func(shifted_labels, predictions)
 
     for name, func in pat_measures.items():
-        output_dict = func(labels, predictions, times)
+        output_dict = func(labels, predictions, times, thres_percentage)
         results.update(output_dict)
 
     return results
@@ -279,24 +285,24 @@ def main(args):
     eval_dataset = d['dataset_eval']
     cost = args.cost
 
-    if isinstance(eval_dataset, list):  # the R jsons had lists of str
-        eval_dataset = eval_dataset[0]
+    #if isinstance(eval_dataset, list):  # the R jsons had lists of str
+    #    eval_dataset = eval_dataset[0]
     eval_dataset = format_dataset(eval_dataset)
 
-    # handle (and sort) R formatted json:
-    if isinstance(d['ids'][0], str):
-        # times are sorted wrong:
-        times = d['times']
-        ids = [int(i) for i in d['ids']]
-        perm = np.argsort(ids)
-        times = np.asarray(times)
-        # properly sorted times (consistent with scores, labels)
-        times_p = list(times[perm])
-        d['times'] = times_p
-        # also reformat labels to ints:
-        labels = d['labels']
-        labels = [[int(x) for x in pat] for pat in labels]
-        d['labels'] = labels
+    ## handle (and sort) R formatted json:
+    #if isinstance(d['ids'][0], str):
+    #    # times are sorted wrong:
+    #    times = d['times']
+    #    ids = [int(i) for i in d['ids']]
+    #    perm = np.argsort(ids)
+    #    times = np.asarray(times)
+    #    # properly sorted times (consistent with scores, labels)
+    #    times_p = list(times[perm])
+    #    d['times'] = times_p
+    #    # also reformat labels to ints:
+    #    labels = d['labels']
+    #    labels = [[int(x) for x in pat] for pat in labels]
+    #    d['labels'] = labels
 
     for rep in np.arange(5):  # 5
         if cost > 0:
@@ -340,8 +346,8 @@ def main(args):
     # Check whether label propagation is available in the data or not.
     # If it is available we perform it for all time-based measures.
     shift = 0
-    if 'label_propagation' in d['model_params']:
-        shift = d['model_params']['label_propagation']
+    if 'label_propagation' in d.keys():
+        shift = d['label_propagation']
         print(f'Using `label_propagation = {shift}` to shift labels')
 
     shifted_labels = [
@@ -364,9 +370,10 @@ def main(args):
             shifted_labels,
             times,
             thres,
+            i/n_steps,
             measures
         )
-        for thres in thresholds
+        for i, thres in enumerate(thresholds)
     )
 
     for thres, current in zip(thresholds, result_list):
