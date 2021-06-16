@@ -231,6 +231,8 @@ def make_plots(
         out_dir, 'shapley_' + prefix + dataset_name
     )
 
+    plt.title(dataset_name)
+
     for plot in ['bar', 'dot']:
         shap.summary_plot(
             shap_values,
