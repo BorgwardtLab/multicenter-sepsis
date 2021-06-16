@@ -198,18 +198,6 @@ if __name__ == '__main__':
     plt.savefig('/tmp/shap_dot.png')
     plt.cla()
 
-    shap.plots.waterfall(
-        make_explanation(
-            shap_values_pooled[0],
-            features_pooled[0],
-            selected_features,
-        ),
-        show=False,
-    )
-    plt.tight_layout()
-    plt.savefig('/tmp/shap_waterfall.png')
-    plt.cla()
-
     # TODO: no support for multiple samples yet
     #
     #shap.plots.force(
