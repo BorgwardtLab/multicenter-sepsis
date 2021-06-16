@@ -40,7 +40,7 @@ def get_run_id(filename):
     return run_id
 
 
-def pool(shapley_values, feature_values):
+def pool(lengths, shapley_values, feature_values):
     """Pool Shapley values and feature values.
 
     This function performs the pooling step required for Shapley values
@@ -108,43 +108,28 @@ def make_explanation(shapley_values, feature_values, feature_names):
     )
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+def process_file(filename, ignore_indicators_and_counts=False):
+    """Process file.
 
-    parser.add_argument(
-        'FILE',
-        type=str,
-        help='Input file. Must contain Shapley values.',
-    )
+    Parameters
+    ----------
+    filename : str
+        Input filename.
 
-    parser.add_argument(
-        '-i', '--ignore-indicators-and-counts',
-        action='store_true',
-        help='If set, ignores indicator and count features.'
-    )
+    ignore_indicators_and_counts : bool, optional
+        If set, ignores indicator and count features, thus reducing the
+        number of features considered.
 
-    parser.add_argument(
-        '-c', '--collapse-features',
-        action='store_true',
-        help='If set, use only variables, collapsing features according '
-             'to the aggregation function.'
-    )
-
-    parser.add_argument(
-        '-a', '--aggregation-function',
-        choices=['absmax', 'max', 'mean', 'median', 'min'],
-        default='max',
-        help='Aggregation function to use when features are collapsed to '
-             'variables.'
-    )
-
-    args = parser.parse_args()
-
-    with open(args.FILE, 'rb') as f:
+    Returns
+    -------
+    Tuple of pooled Shapley values, features, feature names, and data
+    set name.
+    """
+    with open(filename, 'rb') as f:
         data = pickle.load(f)
 
     _, _, out = get_model_and_dataset(
-        get_run_id(args.FILE), return_out=True
+        get_run_id(filename), return_out=True
     )
 
     dataset_name = out['model_params']['dataset']
@@ -183,26 +168,86 @@ if __name__ == '__main__':
     features = features[:, :, important_indices]
 
     shap_values_pooled, features_pooled = pool(
+        lengths,
         shap_values,
-        features
+        features,
     )
 
-    shap.summary_plot(
-        shap_values_pooled,
-        features=features_pooled,
-        feature_names=selected_features,
-        plot_type='dot',
-        show=False,
+    return (shap_values_pooled,
+            features_pooled,
+            selected_features,
+            dataset_name)
+
+
+def make_plots(
+    shap_values,
+    feature_values,
+    feature_names,
+    dataset_name,
+    collapse_features=False,
+    aggregation_function='max',
+    prefix='',
+    out_dir=None,
+):
+    """Create all possible plots.
+
+    Parameters
+    ----------
+    shap_values : np.array of size (n, m)
+        Shapley values to visualise.
+
+    feature_values : np.array of size (n, m)
+        The feature values corresponding to the Shapley values, i.e. the
+        raw values giving rise to a certain Shapley value.
+
+    feature_names : list of str
+        Names to use for the features.
+
+    dataset_name : str
+        Name of the data set for which the visualisations are being
+        prepared. Will be used to generate filenames.
+
+    collapse_features : bool, optional
+        If set, collapse features into their corresponding variables,
+        and aggregate their respective values.
+
+    aggregation_function : str, optional
+        Sets aggregation function for feature collapse operation. Will
+        only be used if `collapse_features == True`.
+
+    prefix : str, optional
+        If set, adds a prefix to all filenames. Typically, this prefix
+        can come from the run that was used to create the Shapley
+        values. Will be ignored if not set.
+
+    out_dir : str or `None`
+        Output directory for creating visualisations. If set to `None`,
+        will default to temporary directory.
+    """
+    if out_dir is None:
+        out_dir = '/tmp'
+
+    filename_prefix = os.path.join(
+        out_dir, 'shapley_' + prefix + dataset_name
     )
-    plt.tight_layout()
-    plt.savefig('/tmp/shap_dot.png')
-    plt.cla()
+
+    for plot in ['bar', 'dot']:
+        shap.summary_plot(
+            shap_values,
+            features=feature_values,
+            feature_names=feature_names,
+            plot_type=plot,
+            show=False,
+        )
+        plt.tight_layout()
+        plt.savefig(filename_prefix + f'_{plot}.png', dpi=300)
+        plt.cla()
 
     # Optional filtering and merging over the columns, as specified by
     # the user. This permits us to map features to their corresponding
     # variables.
-    if args.collapse_features:
-        df = pd.DataFrame(shap_values_pooled, columns=selected_features)
+    if collapse_features:
+        df = pd.DataFrame(shap_values, columns=feature_names)
 
         def feature_to_var(column):
             """Rename feature name to variable name."""
@@ -212,11 +257,11 @@ if __name__ == '__main__':
             column = column.replace('_derived', '')
             return column
 
-        aggregation_fn = get_aggregation_function(args.aggregation_function)
+        aggregation_fn = get_aggregation_function(aggregation_function)
 
         print(
             f'Collapsing features to variables using '
-            f'{args.aggregation_function}...'
+            f'{aggregation_function}...'
         )
 
         df = df.rename(feature_to_var, axis=1)
@@ -224,14 +269,59 @@ if __name__ == '__main__':
             lambda x: x.apply(aggregation_fn, axis=1)
         )
 
-        shap_values_pooled = df.to_numpy()
-        selected_features = df.columns
+        shap_values = df.to_numpy()
+        feature_names = df.columns
 
-    shap.summary_plot(
-        shap_values_pooled,
-        feature_names=selected_features,
-        plot_type='bar',
-        show=False,
+        shap.summary_plot(
+            shap_values,
+            feature_names=feature_names,
+            plot_type='bar',
+            show=False,
+        )
+        plt.tight_layout()
+        plt.savefig(filename_prefix + '_variables_bar.png', dpi=300)
+        plt.cla()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        'FILE',
+        type=str,
+        help='Input file. Must contain Shapley values.',
     )
-    plt.tight_layout()
-    plt.savefig('/tmp/shap_bar.png')
+
+    parser.add_argument(
+        '-i', '--ignore-indicators-and-counts',
+        action='store_true',
+        help='If set, ignores indicator and count features.'
+    )
+
+    parser.add_argument(
+        '-c', '--collapse-features',
+        action='store_true',
+        help='If set, use only variables, collapsing features according '
+             'to the aggregation function.'
+    )
+
+    parser.add_argument(
+        '-a', '--aggregation-function',
+        choices=['absmax', 'max', 'mean', 'median', 'min'],
+        default='max',
+        help='Aggregation function to use when features are collapsed to '
+             'variables.'
+    )
+
+    args = parser.parse_args()
+
+    shap_values, feature_values, feature_names, dataset_name = process_file(
+        args.FILE, args.ignore_indicators_and_counts
+    )
+
+    make_plots(
+        shap_values, feature_values, feature_names,
+        dataset_name,
+        collapse_features=args.collapse_features,
+        aggregation_function=args.aggregation_function,
+    )
