@@ -243,7 +243,7 @@ def make_plots(
         )
         plt.tight_layout()
         plt.savefig(filename_prefix + f'_{plot}.png', dpi=300)
-        plt.cla()
+        plt.clf()
 
     # Optional filtering and merging over the columns, as specified by
     # the user. This permits us to map features to their corresponding
@@ -282,7 +282,7 @@ def make_plots(
         )
         plt.tight_layout()
         plt.savefig(filename_prefix + '_variables_bar.png', dpi=300)
-        plt.cla()
+        plt.clf()
 
 
 if __name__ == '__main__':
