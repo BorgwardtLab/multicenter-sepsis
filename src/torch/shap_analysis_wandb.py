@@ -1,6 +1,5 @@
 """Script to load trained model and run shape analysis."""
 
-import tempfile
 import os
 import torch
 import sys
