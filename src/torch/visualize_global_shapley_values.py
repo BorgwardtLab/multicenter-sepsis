@@ -40,6 +40,74 @@ def get_run_id(filename):
     return run_id
 
 
+def pool(shapley_values, feature_values):
+    """Pool Shapley values and feature values.
+
+    This function performs the pooling step required for Shapley values
+    and feature values. Each time step of a time series will be treated
+    as its own sample instance.
+
+    Returns
+    -------
+    Tuple of pooled Shapely values and feature values.
+    """
+    # This is the straightforward way of doing it. Please don't judge,
+    # or, if you do, don't judge too much :)
+    shapley_values_pooled = []
+    feature_values_pooled = []
+
+    for index, (s_values, f_values) in enumerate(
+        zip(shapley_values, feature_values)
+    ):
+        length = lengths[index]
+        s_values = s_values[:length, :]
+        f_values = f_values[:length, :]
+
+        # Need to store mask for subsequent calculations. This is
+        # required because we must only select features for which
+        # the Shapley value is defined!
+        mask = ~np.isnan(s_values).all(axis=1)
+
+        s_values = s_values[mask, :]
+        f_values = f_values[mask, :]
+
+        shapley_values_pooled.append(s_values)
+        feature_values_pooled.append(f_values)
+
+    shapley_values_pooled = np.vstack(shapley_values_pooled)
+    feature_values_pooled = np.vstack(feature_values_pooled)
+
+    return shapley_values_pooled, feature_values_pooled
+
+
+def get_aggregation_function(name):
+    """Return aggregation function."""
+    if name == 'absmax':
+        def absmax(x):
+            return max(x.min(), x.max(), key=abs)
+        return absmax
+    elif name == 'max':
+        return np.max
+    elif name == 'min':
+        return np.min
+    elif name == 'mean':
+        return np.mean
+    elif name == 'median':
+        return np.median
+
+
+def make_explanation(shapley_values, feature_values, feature_names):
+    """Wrap Shapley values in an `Explanation` object."""
+    return shap.Explanation(
+        # TODO: does this base value make sense? We could always get the
+        # model outputs by updating the analysis.
+        base_values=0.0,
+        values=shapley_values,
+        data=feature_values,
+        feature_names=feature_names,
+    )
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -55,10 +123,25 @@ if __name__ == '__main__':
         help='If set, ignores indicator and count features.'
     )
 
+    parser.add_argument(
+        '-c', '--collapse-features',
+        action='store_true',
+        help='If set, use only variables, collapsing features according '
+             'to the aggregation function.'
+    )
+
+    parser.add_argument(
+        '-a', '--aggregation-function',
+        choices=['absmax', 'max', 'mean', 'median', 'min'],
+        default='max',
+        help='Aggregation function to use when features are collapsed to '
+             'variables.'
+    )
+
     args = parser.parse_args()
 
     with open(args.FILE, 'rb') as f:
-        data = PickledTorch(f).load()
+        data = pickle.load(f)
 
     _, _, out = get_model_and_dataset(
         get_run_id(args.FILE), return_out=True
@@ -99,40 +182,10 @@ if __name__ == '__main__':
     features = data['input'].numpy()
     features = features[:, :, important_indices]
 
-    # We need to pool all valid Shapley values over all time steps,
-    # pretending that they are individual samples.
-    #
-    # This is the straightforward way of doing it. Don't judge.
-
-    shap_values_pooled = []
-    features_pooled = []
-
-    for index, (values, features_) in enumerate(zip(shap_values, features)):
-        length = lengths[index]
-        values = values[:length, :]
-        features_ = features_[:length, :]
-
-        # Need to store mask for subsequent calculations. This is
-        # required because we must only select features for which
-        # the Shapley value is defined.
-        mask = ~np.isnan(values).all(axis=1)
-
-        values = values[mask, :]
-        features_ = features_[mask, :]
-
-        shap_values_pooled.append(values)
-        features_pooled.append(features_)
-
-    shap_values_pooled = np.vstack(shap_values_pooled)
-    features_pooled = np.vstack(features_pooled)
-
-    # Optional filtering and merging over the columns, as specified by
-    # the user. This permits us to map features to their corresponding
-    # variables.
-    
-    # HIC SVNT LEONES
-    df = pd.DataFrame(shap_values_pooled, columns=selected_features)
-    print(df)
+    shap_values_pooled, features_pooled = pool(
+        shap_values,
+        features
+    )
 
     shap.summary_plot(
         shap_values_pooled,
@@ -143,9 +196,63 @@ if __name__ == '__main__':
     )
     plt.tight_layout()
     plt.savefig('/tmp/shap_dot.png')
-
-    plt.show()
     plt.cla()
+
+    shap.plots.waterfall(
+        make_explanation(
+            shap_values_pooled[0],
+            features_pooled[0],
+            selected_features,
+        ),
+        show=False,
+    )
+    plt.tight_layout()
+    plt.savefig('/tmp/shap_waterfall.png')
+    plt.cla()
+
+    # TODO: no support for multiple samples yet
+    #
+    #shap.plots.force(
+    #    base_value=0.0,
+    #    # TODO: make this adjustable?
+    #    shap_values=shap_values_pooled[:100],
+    #    features=features_pooled[:100],
+    #    matplotlib=True,
+    #    feature_names=selected_features,
+    #    show=False,
+    #)
+    #plt.tight_layout()
+    #plt.savefig('/tmp/shap_force.png')
+    #plt.cla()
+
+    # Optional filtering and merging over the columns, as specified by
+    # the user. This permits us to map features to their corresponding
+    # variables.
+    if args.collapse_features:
+        df = pd.DataFrame(shap_values_pooled, columns=selected_features)
+
+        def feature_to_var(column):
+            """Rename feature name to variable name."""
+            column = column.replace('_count', '')
+            column = column.replace('_raw', '')
+            column = column.replace('_indicator', '')
+            column = column.replace('_derived', '')
+            return column
+
+        aggregation_fn = get_aggregation_function(args.aggregation_function)
+
+        print(
+            f'Collapsing features to variables using '
+            f'{args.aggregation_function}...'
+        )
+
+        df = df.rename(feature_to_var, axis=1)
+        df = df.groupby(level=0, axis=1).apply(
+            lambda x: x.apply(aggregation_fn, axis=1)
+        )
+
+        shap_values_pooled = df.to_numpy()
+        selected_features = df.columns
 
     shap.summary_plot(
         shap_values_pooled,
@@ -155,5 +262,3 @@ if __name__ == '__main__':
     )
     plt.tight_layout()
     plt.savefig('/tmp/shap_bar.png')
-
-    plt.show()
