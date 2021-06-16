@@ -290,8 +290,9 @@ if __name__ == '__main__':
 
     parser.add_argument(
         'FILE',
+        nargs='+',
         type=str,
-        help='Input file. Must contain Shapley values.',
+        help='Input file(s)`. Must contain Shapley values.',
     )
 
     parser.add_argument(
@@ -317,12 +318,33 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    shap_values, feature_values, feature_names, dataset_name = process_file(
-        args.FILE, args.ignore_indicators_and_counts
+    all_shap_values = []
+    all_feature_values = []
+    all_datasets = []
+
+    for filename in args.FILE:
+        shap_values, feature_values, feature_names, dataset_name = \
+            process_file(
+                filename, args.ignore_indicators_and_counts
+            )
+
+        all_shap_values.append(shap_values)
+        all_feature_values.append(feature_values)
+        all_datasets.append(dataset_name)
+
+    all_shap_values = np.vstack(all_shap_values)
+    all_feature_values = np.vstack(all_feature_values)
+
+    print(f'Analysing Shapley values of shape {all_shap_values.shape}')
+
+    assert len(np.unique(all_datasets)) == 1, RuntimeError(
+        'Runs must not originate from different data sets.'
     )
 
     make_plots(
-        shap_values, feature_values, feature_names,
+        all_shap_values,
+        all_feature_values,
+        feature_names,
         dataset_name,
         collapse_features=args.collapse_features,
         aggregation_function=args.aggregation_function,
