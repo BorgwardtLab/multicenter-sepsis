@@ -341,11 +341,17 @@ if __name__ == '__main__':
         'Runs must not originate from different data sets.'
     )
 
+    prefix = os.path.basename(args.FILE[0])
+    prefix = prefix.split('_')[0] + '_'
+
+    print(f'Collating runs with prefix = {prefix}...')
+
     make_plots(
         all_shap_values,
         all_feature_values,
         feature_names,
         dataset_name,
+        prefix=prefix,
         collapse_features=args.collapse_features,
         aggregation_function=args.aggregation_function,
     )
