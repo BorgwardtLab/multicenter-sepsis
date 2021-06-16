@@ -13,6 +13,7 @@ This will create plots in `tmp`.
 """
 
 import argparse
+from collections import defaultdict
 import os
 
 import matplotlib.pyplot as plt
@@ -100,7 +101,8 @@ def make_scatterplot(
     point_alpha,
     line_alpha,
     prev,
-    aggregation='macro', 
+    aggregation='macro',
+    data_names = None,
 ):
     """Create model-based scatterplot from joint data frame."""
     # Will contain a single data frame to plot. This is slightly more
@@ -139,6 +141,8 @@ def make_scatterplot(
             )
 
     plot_df = pd.concat(plot_df)
+    # plot_df['x'] = plot_df['x'] * -1
+
     # if macro aggregation, average over subsamples:
     if use_subsamples & (aggregation == 'macro'):
         print('Averaging out the subsamples..') 
@@ -176,16 +180,19 @@ def make_scatterplot(
             linewidth=0.5
         )
     ax = plt.gca()
+    ax.invert_xaxis()
     ax.legend(loc='lower right', fontsize=7,  ncol=3)  #
     #g.legend(loc='upper right', fontsize=7)
  
-    g.set_ylabel(f'{ylabel} @ {recall_threshold:.2f}R')
+    g.set_ylabel(f'Precision @ {int(100*recall_threshold)}% Recall')
     g.set_ylim((0.0, 0.75))
-    g.set_xlabel(xlabel)
+    g.set_xlabel('Median earliness (hours before onset)')
 
     # Summarise each model by one glyph, following the same colour map
     # that `seaborn` uses.
     palette = sns.color_palette()
+
+    agg = defaultdict(list)
 
     for index, (model, df_) in enumerate(plot_df.groupby('model')):
         x_mean = df_['x'].mean()
@@ -220,6 +227,18 @@ def make_scatterplot(
             s=10
         )
 
+        # gather raw data for writing out:
+        agg['model'].append(model)
+        agg['x_mean'].append(x_mean)
+        agg['x_std'].append(x_sdev)
+        agg['y_mean'].append(y_mean)
+        agg['y_std'].append(y_sdev)
+
+    agg_df = pd.DataFrame(agg)
+    for _df in [plot_df, agg_df]:
+        for key, name in zip(['train_dataset','eval_dataset'], data_names):
+            _df[key] = name
+    return plot_df, agg_df
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -275,7 +294,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     df = pd.read_csv(args.FILE)
-
+    plot_df_list = []
+    agg_df_list = []
     for (source, target), df_ in df.groupby(['dataset_train', 'dataset_eval']):
 
         fig, ax = plt.subplots(figsize=(4, 4)) #6,4
@@ -301,15 +321,18 @@ if __name__ == '__main__':
         
         plt.title(f'Train: {source}, Eval: {target}')
 
-        make_scatterplot(
+        plot_df_curr, agg_df_curr = make_scatterplot(
             df_,
             ax,
             args.recall_threshold,
             args.level,
             point_alpha=args.point_alpha,
             line_alpha=args.line_alpha,
-            prev=prev
+            prev=prev,
+            data_names = [source, target],
         )
+        plot_df_list.append(plot_df_curr)
+        agg_df_list.append(agg_df_curr) 
 
         plt.tight_layout()
 
@@ -334,3 +357,19 @@ if __name__ == '__main__':
             plt.show()
 
         plt.close()
+
+    # write raw scatter data out:
+    plot_df = pd.concat(plot_df_list)
+    agg_df = pd.concat(agg_df_list)
+    summary = agg_df.query("train_dataset == eval_dataset & train_dataset != 'physionet2019'").mean()
+    print(f'Pat eval summary:', summary) 
+    for df,name in zip([plot_df, agg_df], 
+        ['scatter_raw_data.csv', 'scatter_agg_data.csv']):
+        
+        df.to_csv(
+            os.path.join(args.output_directory,
+                name
+            ),
+            index=False 
+        )
+    

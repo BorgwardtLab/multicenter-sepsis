@@ -36,6 +36,7 @@ simplejson = "*"
 wandb = "*"
 networkx = "*"
 shap = {editable = true, ref = "variable-length-nan", git = "https://github.com/BorgwardtLab/shap"}
+joblib = "*"
 
 [requires]
 python_version = "3.7"

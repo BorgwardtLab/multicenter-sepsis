@@ -40,7 +40,7 @@ def extract_model_information(run_path, tmp):
     }
 
 
-def main(run_id, dataset, split, output):
+def main(run_id, dataset, split, output, cohort):
     """Main function to evaluate a model."""
     with tempfile.TemporaryDirectory() as tmp:
         # Download checkpoint to temporary directory
@@ -54,6 +54,9 @@ def main(run_id, dataset, split, output):
             out['model_path'],
             dataset=dataset
         )
+    if cohort:
+        # overwrite or set new key in dataset_kwargs:
+        out['dataset_kwargs']['cohort'] = cohort 
     model.to(device)
     eval_results = online_eval(
         model, dataset_cls, split, check_matching_unmasked=True, **out['dataset_kwargs'])
@@ -83,6 +86,8 @@ if __name__ == '__main__':
         type=str
     )
     parser.add_argument('--output', type=str, default=None)
+    parser.add_argument('--cohort', type=str, default=None, 
+        help='overwrites the dataset_kwargs to set cohort [surg, med]') #TODO: update this script to overwrite dataset_kwargs!
     params = parser.parse_args()
 
     main(
@@ -90,6 +95,7 @@ if __name__ == '__main__':
         params.dataset,
         params.split,
         params.output,
+        params.cohort
     )
 
 

@@ -3,14 +3,15 @@ input_dir=$1 # path to hyperparameter search results e.g. hypersearch10_regressi
 #output_dir=$2 #intermediate results are written folders of this name
 
 base_dir=results
-split=validation
+split=test
 eval_dir=${base_dir}/evaluation_${split}
 
-train_datasets=(aumc hirid mimic eicu) #aumc eicu) #aumc #mimic
-eval_datasets=(aumc hirid mimic eicu) #aumc #mimic
+train_datasets=(physionet2019) # eicu aumc hirid mimic) #eicu) 
+eval_datasets=(eicu aumc hirid mimic) #(aumc hirid mimic eicu)
 method=$2 #(lgbm sofa qsofa sirs mews news)) #lgbm sofa
 task=classification 
 feature_set=middle #large
+variable_set=physionet #full
 cost=5 #lambda cost
 n_iter=50 #50 iterations of hypersearch used
 earliness=median
@@ -32,7 +33,7 @@ done
     for rep in {0..4}; do #{0..4}
         for train_dataset in ${train_datasets[@]}; do
             for eval_dataset in ${eval_datasets[@]}; do
-                output_name=${method}_${train_dataset}_${eval_dataset}_${task}_${feature_set}_cost_${cost}_${n_iter}_iter_rep_${rep} 
+                output_name=${method}_${train_dataset}_${eval_dataset}_${task}_${feature_set}_cost_${cost}_${n_iter}_iter_rep_${rep}_${variable_set}_set 
                 # here we write out the predictions as json
                 pred_file=${pred_path}/${output_name}.json
                 #pred_file=$pred_dir/${method}_${train_dataset}_${eval_dataset}.json
@@ -52,7 +53,8 @@ done
                     --cost $cost \
                     --repetition_model \
                     --rep $rep \
-                    --split $split
+                    --split $split \
+                    --variable_set $variable_set
                
                 # Subsampling 10 times at harmonized prevalence 
                 python src/evaluation/subsampling.py \
