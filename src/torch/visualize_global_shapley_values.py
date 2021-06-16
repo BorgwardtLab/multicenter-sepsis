@@ -198,21 +198,6 @@ if __name__ == '__main__':
     plt.savefig('/tmp/shap_dot.png')
     plt.cla()
 
-    # TODO: no support for multiple samples yet
-    #
-    #shap.plots.force(
-    #    base_value=0.0,
-    #    # TODO: make this adjustable?
-    #    shap_values=shap_values_pooled[:100],
-    #    features=features_pooled[:100],
-    #    matplotlib=True,
-    #    feature_names=selected_features,
-    #    show=False,
-    #)
-    #plt.tight_layout()
-    #plt.savefig('/tmp/shap_force.png')
-    #plt.cla()
-
     # Optional filtering and merging over the columns, as specified by
     # the user. This permits us to map features to their corresponding
     # variables.
