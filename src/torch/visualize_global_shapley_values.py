@@ -40,12 +40,27 @@ def get_run_id(filename):
     return run_id
 
 
-def pool(lengths, shapley_values, feature_values):
+def pool(lengths, shapley_values, feature_values, hours_before=None):
     """Pool Shapley values and feature values.
 
     This function performs the pooling step required for Shapley values
     and feature values. Each time step of a time series will be treated
     as its own sample instance.
+
+    Parameters
+    ----------
+    lengths:
+        Vector of lengths.
+
+    shapley_values:
+        Shapley values.
+
+    feature_values:
+        Feature values.
+
+    hours_before : int or `None`, optional
+        If not `None`, only uses (at most) the last `hours_before`
+        observations when reporting the Shapley values.
 
     Returns
     -------
@@ -60,8 +75,18 @@ def pool(lengths, shapley_values, feature_values):
         zip(shapley_values, feature_values)
     ):
         length = lengths[index]
-        s_values = s_values[:length, :]
-        f_values = f_values[:length, :]
+
+        # Check whether we can remove everything but the last hours
+        # before the maximum prediction score.
+        if hours_before is not None:
+            if length >= hours_before:
+                s_values = s_values[length - hours_before:length, :]
+                f_values = f_values[length - hours_before:length, :]
+
+        # Just take *everything*.
+        else:
+            s_values = s_values[:length, :]
+            f_values = f_values[:length, :]
 
         # Need to store mask for subsequent calculations. This is
         # required because we must only select features for which
@@ -108,7 +133,11 @@ def make_explanation(shapley_values, feature_values, feature_names):
     )
 
 
-def process_file(filename, ignore_indicators_and_counts=False):
+def process_file(
+    filename,
+    ignore_indicators_and_counts=False,
+    hours_before=None,
+):
     """Process file.
 
     Parameters
@@ -119,6 +148,10 @@ def process_file(filename, ignore_indicators_and_counts=False):
     ignore_indicators_and_counts : bool, optional
         If set, ignores indicator and count features, thus reducing the
         number of features considered.
+
+    hours_before : int or `None`, optional
+        If not `None`, only uses (at most) the last `hours_before`
+        observations when reporting the Shapley values.
 
     Returns
     -------
@@ -171,6 +204,7 @@ def process_file(filename, ignore_indicators_and_counts=False):
         lengths,
         shap_values,
         features,
+        hours_before,
     )
 
     return (shap_values_pooled,
@@ -315,6 +349,13 @@ if __name__ == '__main__':
              'variables.'
     )
 
+    parser.add_argument(
+        '-H', '--hours-before',
+        type=int,
+        help='Uses only values of at most `H` hours before the maximum '
+             'prediction score.'
+    )
+
     args = parser.parse_args()
 
     all_shap_values = []
@@ -324,7 +365,9 @@ if __name__ == '__main__':
     for filename in args.FILE:
         shap_values, feature_values, feature_names, dataset_name = \
             process_file(
-                filename, args.ignore_indicators_and_counts
+                filename,
+                args.ignore_indicators_and_counts,
+                args.hours_before,
             )
 
         all_shap_values.append(shap_values)
@@ -344,6 +387,11 @@ if __name__ == '__main__':
     prefix = prefix.split('_')[0] + '_'
 
     print(f'Collating runs with prefix = {prefix}...')
+
+    # Ensure that we track how we generated the plots in case we shift
+    # our predictions.
+    if args.hours_before is not None:
+        prefix += f'{args.hours_before}h_'
 
     make_plots(
         all_shap_values,
