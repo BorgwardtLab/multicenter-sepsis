@@ -133,13 +133,3 @@ if __name__ == '__main__':
     ])
 
     calculate_ranks(all_shap_values, feature_names, 'pooled', prefix)
-
-    raise 'heck'
-
- 
-    df = pd.DataFrame(all_shap_values, columns=feature_names)
-    df = df.abs()
-    df = df.mean(axis='rows')
-    df = df.sort_values(ascending=False)
-
-    print(df)
