@@ -1,11 +1,28 @@
 """Ranking of Shapley values over different runs."""
 
 import argparse
+import collections
 
 import numpy as np
 import pandas as pd
 
 from src.torch.shap_utils import get_pooled_shapley_values
+
+
+def calculate_ranks(shapley_values, feature_names, name):
+    """Calculate ranks of features and store them in a file."""
+    df = pd.DataFrame(shapley_values, columns=feature_names)
+    df = df.abs()
+    df = df.mean(axis='rows')
+    df = df.sort_values(ascending=False)
+
+    df.index.name = 'feature'
+    df.name = 'mean'
+    df.to_csv(f'/tmp/shapley_mean_{name}.csv', index=True)
+
+    df = df.rank(ascending=False)
+    df.name = 'rank'
+    df.to_csv(f'/tmp/shapley_ranking_{name}.csv', index=True)
 
 
 if __name__ == '__main__':
@@ -63,6 +80,9 @@ if __name__ == '__main__':
     if args.last:
         args.hours_before = 1
 
+    # Will store all Shapley values corresponding to a single data set.
+    dataset_to_shapley = collections.defaultdict(list)
+
     for filename in args.FILE:
         shap_values, feature_values, feature_names, dataset_name = \
             get_pooled_shapley_values(
@@ -71,9 +91,23 @@ if __name__ == '__main__':
                 args.hours_before
             )
 
-        all_shap_values.append(shap_values)
-        all_feature_values.append(feature_values)
-        all_datasets.append(dataset_name)
+        dataset_to_shapley[dataset_name].append(
+            (shap_values, feature_values)
+        )
+
+    # 'Flatten' Shapley values so that we only have one set of them per
+    # data set.
+    for dataset_name in dataset_to_shapley:
+        values = dataset_to_shapley[dataset_name]
+
+        s = np.vstack([s for s, _ in values])
+        f = np.vstack([f for _, f in values])
+
+        dataset_to_shapley[dataset_name] = (s, f)
+
+        calculate_ranks(s, feature_names, dataset_name)
+
+    raise 'heck'
 
     all_shap_values = np.vstack(all_shap_values)
     all_feature_values = np.vstack(all_feature_values)
