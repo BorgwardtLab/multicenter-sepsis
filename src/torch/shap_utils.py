@@ -5,6 +5,7 @@ import tempfile
 import wandb
 
 import numpy as np
+import pandas as pd
 
 from src.torch.eval_model import compute_md5hash
 from src.torch.eval_model import device
@@ -162,3 +163,54 @@ def get_aggregation_function(name):
         return np.mean
     elif name == 'median':
         return np.median
+
+
+def collapse_and_aggregate(
+    shap_values,
+    feature_names,
+    aggregation_function
+):
+    """Collapse Shapley values over variables instead of features.
+
+    Parameters
+    ----------
+    shap_values:
+        Shapley values.
+
+    feature_names:
+        Feature names (needs to be compatible with the last dimension of
+        the Shapley values).
+
+    aggregation_function : str
+        The name of an aggregation function.
+
+    Returns
+    -------
+    Tuple of data frame (containing collapsed and aggregated values),
+    the Shapley values, and the corresponding feature names.
+    """
+    df = pd.DataFrame(shap_values, columns=feature_names)
+
+    def feature_to_var(column):
+        """Rename feature name to variable name."""
+        column = column.replace('_count', '')
+        column = column.replace('_raw', '')
+        column = column.replace('_indicator', '')
+        return column
+
+    aggregation_fn = get_aggregation_function(aggregation_function)
+
+    print(
+        f'Collapsing features to variables using '
+        f'{aggregation_function}...'
+    )
+
+    df = df.rename(feature_to_var, axis=1)
+    df = df.groupby(level=0, axis=1).apply(
+        lambda x: x.apply(aggregation_fn, axis=1)
+    )
+
+    shap_values = df.to_numpy()
+    feature_names = df.columns
+
+    return df, shap_values, feature_names
