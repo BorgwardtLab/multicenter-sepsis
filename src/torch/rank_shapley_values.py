@@ -20,7 +20,7 @@ def calculate_ranks(shapley_values, feature_names, name):
     df.name = 'mean'
     df.to_csv(f'/tmp/shapley_mean_{name}.csv', index=True)
 
-    df = df.rank(ascending=False)
+    df = df.rank(ascending=False, method='max')
     df.name = 'rank'
     df.to_csv(f'/tmp/shapley_ranking_{name}.csv', index=True)
 
