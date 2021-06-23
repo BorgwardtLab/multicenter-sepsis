@@ -1,5 +1,6 @@
 """Utility functions for interacting with Shapley values."""
 
+import pickle
 import os
 import tempfile
 import wandb
@@ -163,6 +164,90 @@ def get_aggregation_function(name):
         return np.mean
     elif name == 'median':
         return np.median
+
+
+def get_pooled_shapley_values(
+    filename,
+    ignore_indicators_and_counts=False,
+    hours_before=None,
+):
+    """Process file and return pooled Shapley values.
+
+    Parameters
+    ----------
+    filename : str
+        Input filename.
+
+    ignore_indicators_and_counts : bool, optional
+        If set, ignores indicator and count features, thus reducing the
+        number of features considered.
+
+    hours_before : int or `None`, optional
+        If not `None`, only uses (at most) the last `hours_before`
+        observations when reporting the Shapley values.
+
+    Returns
+    -------
+    Tuple of pooled Shapley values, features, feature names, and data
+    set name.
+    """
+    with open(filename, 'rb') as f:
+        data = pickle.load(f)
+
+    _, _, out = get_model_and_dataset(
+        get_run_id(filename), return_out=True
+    )
+
+    dataset_name = out['model_params']['dataset']
+    model_name = out['model']
+
+    assert model_name == 'AttentionModel', RuntimeError(
+        'Shapley analysis is currently only supported for the '
+        'AttentionModel class.'
+    )
+
+    feature_names = data['feature_names']
+    lengths = data['lengths'].numpy()
+
+    if ignore_indicators_and_counts:
+        keep_features = [
+            True if not col.endswith('indicator') and not col.endswith('count')
+            else False
+            for col in feature_names
+        ]
+
+        important_indices = np.where(keep_features)[0]
+        selected_features = np.array(feature_names)[important_indices]
+    else:
+        important_indices = np.arange(0, len(feature_names))
+        selected_features = feature_names
+
+    # FIXME: ignore positional encoding
+    #
+    # This operation makes the remainder of the code incompatible with
+    # other models. We are stuck with the `AttentionModel` for the time
+    # being.
+    important_indices += 10
+
+    # Tensor has shape `n_samples, max_length, n_features`, where
+    # `max_length` denotes the maximum length of a time series in
+    # the batch.
+    shap_values = data['shap_values']
+    shap_values = shap_values[:, :, important_indices]
+    features = data['input'].numpy()
+    features = features[:, :, important_indices]
+
+    shap_values_pooled, features_pooled = pool(
+        lengths,
+        shap_values,
+        features,
+        hours_before,
+    )
+
+    return (shap_values_pooled,
+            features_pooled,
+            selected_features,
+            dataset_name)
 
 
 def collapse_and_aggregate(
