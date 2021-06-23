@@ -122,6 +122,7 @@ if __name__ == '__main__':
         axis='columns',
     ).mean(axis='columns')
 
+    df_mean_rank.name = 'rank'
     df_mean_rank.to_csv(f'/tmp/shapley_{prefix}mean_ranking.csv', index=True)
 
     # Pool Shapley values across all data sets. This permits an analysis
