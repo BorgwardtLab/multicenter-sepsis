@@ -10,6 +10,7 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
+from src.torch.shap_utils import get_aggregation_function
 from src.torch.shap_utils import get_pooled_shapley_values
 
 
@@ -198,4 +199,8 @@ if __name__ == '__main__':
         prefix += f'{args.hours_before}h_'
 
     df = pd.DataFrame(all_shap_values, columns=feature_names)
+    df = df.abs()
+    df = df.mean(axis='rows')
+    df = df.sort_values(ascending=False)
+
     print(df)
