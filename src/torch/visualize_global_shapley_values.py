@@ -256,7 +256,6 @@ def make_plots(
             column = column.replace('_count', '')
             column = column.replace('_raw', '')
             column = column.replace('_indicator', '')
-            column = column.replace('_derived', '')
             return column
 
         aggregation_fn = get_aggregation_function(aggregation_function)
