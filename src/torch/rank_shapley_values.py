@@ -20,9 +20,11 @@ def calculate_ranks(shapley_values, feature_names, name):
     df.name = 'mean'
     df.to_csv(f'/tmp/shapley_mean_{name}.csv', index=True)
 
-    df = df.rank(ascending=False, method='max')
+    df = df.rank(ascending=False, method='min')
     df.name = 'rank'
     df.to_csv(f'/tmp/shapley_ranking_{name}.csv', index=True)
+
+    return df
 
 
 if __name__ == '__main__':
@@ -73,10 +75,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    all_shap_values = []
-    all_feature_values = []
-    all_datasets = []
-
+  
     if args.last:
         args.hours_before = 1
 
@@ -95,6 +94,8 @@ if __name__ == '__main__':
             (shap_values, feature_values)
         )
 
+    dataset_to_ranks = {}
+
     # 'Flatten' Shapley values so that we only have one set of them per
     # data set.
     for dataset_name in dataset_to_shapley:
@@ -104,15 +105,30 @@ if __name__ == '__main__':
         f = np.vstack([f for _, f in values])
 
         dataset_to_shapley[dataset_name] = (s, f)
+        ranks = calculate_ranks(s, feature_names, dataset_name)
 
-        calculate_ranks(s, feature_names, dataset_name)
+        # Store ranks so that we can calculate mean ranks across
+        # different data sets.
+        dataset_to_ranks[dataset_name] = ranks
+
+    df_mean_rank = pd.concat(
+        [ranks for ranks in dataset_to_ranks.values()],
+        axis='columns',
+    ).mean(axis='columns')
+
+    df_mean_rank.to_csv('/tmp/shapley_mean_ranking.csv', index=True)
+
+    # Pool Shapley values across all data sets. This permits an analysis
+    # of the overall ranking.
+    all_shap_values = np.vstack([
+        np.vstack(
+            [s for s, _ in values for values in dataset_to_shapley.items()]
+        )
+    ])
+
+    calculate_ranks(all_shap_values, feature_names, 'pooled')
 
     raise 'heck'
-
-    all_shap_values = np.vstack(all_shap_values)
-    all_feature_values = np.vstack(all_feature_values)
-
-    print(f'Analysing Shapley values of shape {all_shap_values.shape}')
 
     prefix = ''
 
