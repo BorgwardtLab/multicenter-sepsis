@@ -9,7 +9,7 @@ import pandas as pd
 from src.torch.shap_utils import get_pooled_shapley_values
 
 
-def calculate_ranks(shapley_values, feature_names, name):
+def calculate_ranks(shapley_values, feature_names, name, prefix):
     """Calculate ranks of features and store them in a file."""
     df = pd.DataFrame(shapley_values, columns=feature_names)
     df = df.abs()
@@ -18,11 +18,11 @@ def calculate_ranks(shapley_values, feature_names, name):
 
     df.index.name = 'feature'
     df.name = 'mean'
-    df.to_csv(f'/tmp/shapley_mean_{name}.csv', index=True)
+    df.to_csv(f'/tmp/shapley_{prefix}mean_{name}.csv', index=True)
 
     df = df.rank(ascending=False, method='min')
     df.name = 'rank'
-    df.to_csv(f'/tmp/shapley_ranking_{name}.csv', index=True)
+    df.to_csv(f'/tmp/shapley_{prefix}ranking_{name}.csv', index=True)
 
     return df
 
@@ -75,9 +75,15 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-  
     if args.last:
         args.hours_before = 1
+
+    prefix = ''
+
+    # Ensure that we track how we generated the rankings in case we
+    # shift our predictions.
+    if args.hours_before is not None:
+        prefix += f'{args.hours_before}h_'
 
     # Will store all Shapley values corresponding to a single data set.
     dataset_to_shapley = collections.defaultdict(list)
@@ -105,7 +111,7 @@ if __name__ == '__main__':
         f = np.vstack([f for _, f in values])
 
         dataset_to_shapley[dataset_name] = (s, f)
-        ranks = calculate_ranks(s, feature_names, dataset_name)
+        ranks = calculate_ranks(s, feature_names, dataset_name, prefix)
 
         # Store ranks so that we can calculate mean ranks across
         # different data sets.
@@ -116,7 +122,7 @@ if __name__ == '__main__':
         axis='columns',
     ).mean(axis='columns')
 
-    df_mean_rank.to_csv('/tmp/shapley_mean_ranking.csv', index=True)
+    df_mean_rank.to_csv(f'/tmp/shapley_{prefix}mean_ranking.csv', index=True)
 
     # Pool Shapley values across all data sets. This permits an analysis
     # of the overall ranking.
@@ -126,17 +132,11 @@ if __name__ == '__main__':
         )
     ])
 
-    calculate_ranks(all_shap_values, feature_names, 'pooled')
+    calculate_ranks(all_shap_values, feature_names, 'pooled', prefix)
 
     raise 'heck'
 
-    prefix = ''
-
-    # Ensure that we track how we generated the plots in case we shift
-    # our predictions.
-    if args.hours_before is not None:
-        prefix += f'{args.hours_before}h_'
-
+ 
     df = pd.DataFrame(all_shap_values, columns=feature_names)
     df = df.abs()
     df = df.mean(axis='rows')
