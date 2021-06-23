@@ -344,7 +344,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-a', '--aggregation-function',
         choices=['absmax', 'max', 'mean', 'median', 'min'],
-        default='max',
+        default='absmax',
         help='Aggregation function to use when features are collapsed to '
              'variables.'
     )
