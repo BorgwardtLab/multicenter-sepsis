@@ -1,99 +1,16 @@
 """Ranking of Shapley values over different runs."""
 
 import argparse
-import io
 import os
 import pickle
 import shap
-import torch
 
 import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
 
-from src.torch.shap_utils import get_model_and_dataset
-from src.torch.shap_utils import get_run_id
-
-
-def process_file(
-    filename,
-    ignore_indicators_and_counts=False,
-    hours_before=None,
-):
-    """Process file.
-
-    Parameters
-    ----------
-    filename : str
-        Input filename.
-
-    ignore_indicators_and_counts : bool, optional
-        If set, ignores indicator and count features, thus reducing the
-        number of features considered.
-
-    hours_before : int or `None`, optional
-        If not `None`, only uses (at most) the last `hours_before`
-        observations when reporting the Shapley values.
-
-    Returns
-    -------
-    Tuple of pooled Shapley values, features, feature names, and data
-    set name.
-    """
-    with open(filename, 'rb') as f:
-        data = pickle.load(f)
-
-    _, _, out = get_model_and_dataset(
-        get_run_id(filename), return_out=True
-    )
-
-    dataset_name = out['model_params']['dataset']
-    model_name = out['model']
-
-    assert model_name == 'AttentionModel', RuntimeError(
-        'Shapley analysis is currently only supported for the '
-        'AttentionModel class.'
-    )
-
-    feature_names = data['feature_names']
-    lengths = data['lengths'].numpy()
-
-    if args.ignore_indicators_and_counts:
-        keep_features = [
-            True if not col.endswith('indicator') and not col.endswith('count')
-            else False
-            for col in feature_names
-        ]
-
-        important_indices = np.where(keep_features)[0]
-        selected_features = np.array(feature_names)[important_indices]
-    else:
-        important_indices = np.arange(0, len(feature_names))
-        selected_features = feature_names
-
-    # ignore positional encoding
-    important_indices += 10
-
-    # Tensor has shape `n_samples, max_length, n_features`, where
-    # `max_length` denotes the maximum length of a time series in
-    # the batch.
-    shap_values = data['shap_values']
-    shap_values = shap_values[:, :, important_indices]
-    features = data['input'].numpy()
-    features = features[:, :, important_indices]
-
-    shap_values_pooled, features_pooled = pool(
-        lengths,
-        shap_values,
-        features,
-        hours_before,
-    )
-
-    return (shap_values_pooled,
-            features_pooled,
-            selected_features,
-            dataset_name)
+from src.torch.shap_utils import get_pooled_shapley_values
 
 
 def make_plots(
@@ -258,10 +175,10 @@ if __name__ == '__main__':
 
     for filename in args.FILE:
         shap_values, feature_values, feature_names, dataset_name = \
-            process_file(
+            get_pooled_shapley_values(
                 filename,
                 args.ignore_indicators_and_counts,
-                args.hours_before,
+                args.hours_before
             )
 
         all_shap_values.append(shap_values)
@@ -273,26 +190,12 @@ if __name__ == '__main__':
 
     print(f'Analysing Shapley values of shape {all_shap_values.shape}')
 
-    assert len(np.unique(all_datasets)) == 1, RuntimeError(
-        'Runs must not originate from different data sets.'
-    )
-
-    prefix = os.path.basename(args.FILE[0])
-    prefix = prefix.split('_')[0] + '_'
-
-    print(f'Collating runs with prefix = {prefix}...')
+    prefix = ''
 
     # Ensure that we track how we generated the plots in case we shift
     # our predictions.
     if args.hours_before is not None:
         prefix += f'{args.hours_before}h_'
 
-    make_plots(
-        all_shap_values,
-        all_feature_values,
-        feature_names,
-        dataset_name,
-        prefix=prefix,
-        collapse_features=args.collapse_features,
-        aggregation_function=args.aggregation_function,
-    )
+    df = pd.DataFrame(all_shap_values, columns=feature_names)
+    print(df)
