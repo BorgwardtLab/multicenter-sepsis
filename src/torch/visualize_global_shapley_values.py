@@ -356,11 +356,22 @@ if __name__ == '__main__':
              'prediction score.'
     )
 
+    parser.add_argument(
+        '-l', '--last',
+        action='store_true',
+        help='If set, uses only the last value, i.e. the one corresponding '
+             'to the maximum prediction score. This is equivalent to the   '
+             'setting of `-H 1`.'
+    )
+
     args = parser.parse_args()
 
     all_shap_values = []
     all_feature_values = []
     all_datasets = []
+
+    if args.last:
+        args.hours_before = 1
 
     for filename in args.FILE:
         shap_values, feature_values, feature_names, dataset_name = \
