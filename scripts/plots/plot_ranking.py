@@ -78,5 +78,6 @@ if __name__ == '__main__':
         kind='point',
         palette='husl'
     )
+    g.fig.axes[0].invert_yaxis()
 
     plt.show()
