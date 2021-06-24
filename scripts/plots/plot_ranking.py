@@ -7,6 +7,9 @@ import os
 
 import pandas as pd
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -55,3 +58,6 @@ if __name__ == '__main__':
 
     df = df.set_index('feature')
     df = df.sort_index(axis='columns')
+
+    sns.heatmap(df, linewidths=0.01, cmap='RdYlGn')
+    plt.show()
