@@ -59,5 +59,24 @@ if __name__ == '__main__':
     df = df.set_index('feature')
     df = df.sort_index(axis='columns')
 
-    sns.heatmap(df, linewidths=0.01, cmap='RdYlGn')
+    top_features = df.mean(axis='columns').sort_values().index[:20]
+    df = df.loc[top_features]
+
+    df = df.transpose()
+    df.index.name = 'hours'
+
+    df = df.reset_index().melt(
+        'hours',
+        var_name='feature', value_name='rank'
+    )
+
+    g = sns.catplot(
+        x='hours',
+        y='rank',
+        hue='feature',
+        data=df,
+        kind='point',
+        palette='husl'
+    )
+
     plt.show()
