@@ -27,8 +27,8 @@ def calculate_ranks(shapley_values, feature_names, name, prefix):
     return df
 
 
-def calculate_ranks_with_sdev(data_frames, name, prefix):
-    """Calculate ranks from data frames and store them in a file."""
+def calculate_mean_with_sdev(data_frames, name, prefix, rank=True):
+    """Calculate features/ranks from data frames and store them in a file."""
     # First, let's calculate ranks over each of the data frames
     # containing a number of Shapley values.
     for index, df in enumerate(data_frames):
@@ -36,8 +36,11 @@ def calculate_ranks_with_sdev(data_frames, name, prefix):
         df = df.mean(axis='rows')
         df = df.sort_values(ascending=False)
         df.index.name = 'feature'
-        df = df.rank(ascending=False, method='min')
-        df.name = 'rank'
+
+        if rank:
+            df = df.rank(ascending=False, method='min')
+            df.name = 'rank'
+
         df = df.sort_index(kind='mergesort')
 
         data_frames[index] = df
@@ -55,10 +58,17 @@ def calculate_ranks_with_sdev(data_frames, name, prefix):
 
     df = df[['mean', 'sdev']]
 
-    df.to_csv(
-        f'/tmp/shapley_{prefix}ranking_with_sdev_{name}.csv',
-        index=True
-    )
+    if rank:
+        df.to_csv(
+            f'/tmp/shapley_{prefix}ranking_with_sdev_{name}.csv',
+            index=True
+        )
+    else:
+        df.to_csv(
+            f'/tmp/shapley_{prefix}mean_with_sdev_{name}.csv',
+            index=True
+        )
+
     return df
 
 
@@ -143,7 +153,13 @@ if __name__ == '__main__':
             pd.DataFrame(s, columns=feature_names) for s, _ in values
         ]
 
-        calculate_ranks_with_sdev(data_frames, dataset_name, prefix)
+        calculate_mean_with_sdev(data_frames, dataset_name, prefix)
+        calculate_mean_with_sdev(
+            data_frames,
+            dataset_name,
+            prefix,
+            rank=False
+        )
 
     dataset_to_ranks = {}
 
