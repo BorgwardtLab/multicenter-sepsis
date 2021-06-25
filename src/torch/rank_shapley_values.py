@@ -27,6 +27,41 @@ def calculate_ranks(shapley_values, feature_names, name, prefix):
     return df
 
 
+def calculate_ranks_with_sdev(data_frames, name, prefix):
+    """Calculate ranks from data frames and store them in a file."""
+    # First, let's calculate ranks over each of the data frames
+    # containing a number of Shapley values.
+    for index, df in enumerate(data_frames):
+        df = df.abs()
+        df = df.mean(axis='rows')
+        df = df.sort_values(ascending=False)
+        df.index.name = 'feature'
+        df = df.rank(ascending=False, method='min')
+        df.name = 'rank'
+        df = df.sort_index(kind='mergesort')
+
+        data_frames[index] = df
+
+    # Now let's concatenate all these data frames and calculate a mean
+    # and a standard deviation over their ranks.
+
+    df = pd.concat(data_frames, axis='columns')
+
+    mean = df.mean(axis='columns')
+    sdev = df.std(axis='columns')
+
+    df['mean'] = mean
+    df['sdev'] = sdev
+
+    df = df[['mean', 'sdev']]
+
+    df.to_csv(
+        f'/tmp/shapley_{prefix}ranking_with_sdev_{name}.csv',
+        index=True
+    )
+    return df
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -99,6 +134,16 @@ if __name__ == '__main__':
         dataset_to_shapley[dataset_name].append(
             (shap_values, feature_values)
         )
+
+    # Calculate mean and standard deviation of ranks for each data set.
+    for dataset_name in dataset_to_shapley:
+        values = dataset_to_shapley[dataset_name]
+
+        data_frames = [
+            pd.DataFrame(s, columns=feature_names) for s, _ in values
+        ]
+
+        calculate_ranks_with_sdev(data_frames, dataset_name, prefix)
 
     dataset_to_ranks = {}
 
