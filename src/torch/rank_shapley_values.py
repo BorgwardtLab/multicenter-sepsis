@@ -2,6 +2,7 @@
 
 import argparse
 import collections
+import copy
 
 import numpy as np
 import pandas as pd
@@ -29,6 +30,9 @@ def calculate_ranks(shapley_values, feature_names, name, prefix):
 
 def calculate_mean_with_sdev(data_frames, name, prefix, rank=True):
     """Calculate features/ranks from data frames and store them in a file."""
+    # Pretty ugly, but it does the trick :)
+    data_frames = copy.copy(data_frames)
+
     # First, let's calculate ranks over each of the data frames
     # containing a number of Shapley values.
     for index, df in enumerate(data_frames):
@@ -154,7 +158,7 @@ if __name__ == '__main__':
         ]
 
         calculate_mean_with_sdev(data_frames, dataset_name, prefix)
-        calculate_mean_with_sdev(
+        df = calculate_mean_with_sdev(
             data_frames,
             dataset_name,
             prefix,
