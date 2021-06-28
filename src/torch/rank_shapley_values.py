@@ -186,8 +186,20 @@ if __name__ == '__main__':
         s = np.vstack([s for s, _ in values])
         f = np.vstack([f for _, f in values])
 
+        # Replace the previously-stored data sets with a single set of
+        # Shapley values and features. This will enable us to collate,
+        # albeit it over *variables* and not over features.
         dataset_to_shapley[dataset_name] = (s, f)
-        ranks = calculate_ranks(s, feature_names, dataset_name, prefix)
+
+        # Ranks of features/variables for this particular data set.
+        # Later on, we will calculate a mean and standard deviation.
+        ranks = calculate_ranks(
+            s,
+            feature_names,
+            dataset_name,
+            prefix,
+            store=False
+        )
 
         # Store ranks so that we can calculate mean ranks across
         # different data sets.
@@ -198,8 +210,18 @@ if __name__ == '__main__':
         axis='columns',
     ).mean(axis='columns')
 
-    df_mean_rank.name = 'rank'
-    df_mean_rank.to_csv(f'/tmp/shapley_{prefix}mean_ranking.csv', index=True)
+    df_mean_rank.name = 'mean_rank'
+
+    df_sdev_rank = pd.concat(
+        [ranks for ranks in dataset_to_ranks.values()],
+        axis='columns',
+    ).std(axis='columns')
+
+    df_sdev_rank.name = 'sdev_rank'
+
+    df = pd.concat([df_mean_rank, df_sdev_rank], axis=1)
+    df = df.fillna(0)
+    df.to_csv(f'/tmp/shapley_{prefix}mean_ranking.csv', index=True)
 
     # Pool Shapley values across all data sets. This permits an analysis
     # of the overall ranking.
