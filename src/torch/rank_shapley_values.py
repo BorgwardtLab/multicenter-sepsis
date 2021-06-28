@@ -193,38 +193,6 @@ if __name__ == '__main__':
         # albeit it over *variables* and not over features.
         dataset_to_shapley[dataset_name] = (s, f)
 
-        # Ranks of features/variables for this particular data set.
-        # Later on, we will calculate a mean and standard deviation.
-        ranks = calculate_ranks(
-            s,
-            feature_names,
-            dataset_name,
-            prefix,
-            store=False
-        )
-
-        # Store ranks so that we can calculate mean ranks across
-        # different data sets.
-        dataset_to_ranks[dataset_name] = ranks
-
-    df_mean_rank = pd.concat(
-        [ranks for ranks in dataset_to_ranks.values()],
-        axis='columns',
-    ).mean(axis='columns')
-
-    df_mean_rank.name = 'mean_rank'
-
-    df_sdev_rank = pd.concat(
-        [ranks for ranks in dataset_to_ranks.values()],
-        axis='columns',
-    ).std(axis='columns')
-
-    df_sdev_rank.name = 'sdev_rank'
-
-    df = pd.concat([df_mean_rank, df_sdev_rank], axis=1)
-    df = df.fillna(0)
-    df.to_csv(f'/tmp/shapley_{prefix}mean_ranking.csv', index=True)
-
     # Pool Shapley values across all data sets. This permits an analysis
     # of the overall ranking.
 
@@ -232,12 +200,6 @@ if __name__ == '__main__':
         pd.DataFrame(s, columns=feature_names)
         for s, _ in dataset_to_shapley.values()
     ]
-
-    #all_shap_values = np.vstack([
-    #    np.vstack(
-    #        [s for s, _ in values for values in dataset_to_shapley.items()]
-    #    )
-    #])
 
     calculate_mean_with_sdev(
         data_frames,
