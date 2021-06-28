@@ -7,7 +7,46 @@ import copy
 import numpy as np
 import pandas as pd
 
+import matplotlib.pyplot as plt
+
+from shap.plots.colors import blue_rgb
+
 from src.torch.shap_utils import get_pooled_shapley_values
+
+
+def make_plot(df, max_values=10):
+    """Create a bar plot from a set of Shapley values."""
+    fig, ax = plt.subplots()
+
+    df = df.fillna(0)
+    df = df.sort_values(by='mean', ascending=False)
+    df = df.iloc[:max_values]
+
+    ytick = range(max_values)
+
+    # Following the look and feel of the 'original' Shap bar plot by
+    # imitating its decorations.
+
+    ax.set_yticks(ytick)
+    ax.set_yticklabels(df.index)
+    ax.invert_yaxis()
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('none')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    ax.barh(
+        ytick,
+        df['mean'],
+        xerr=df['sdev'],
+        align='center',
+        color=blue_rgb,
+        edgecolor=(1, 1, 1, 0.8),
+    )
+
+    plt.xlabel('Mean absolute Shapley value')
+    plt.tight_layout()
+    plt.savefig('/tmp/shapley_bar.png')
 
 
 def calculate_mean_with_sdev(
@@ -43,7 +82,7 @@ def calculate_mean_with_sdev(
     df = pd.concat(data_frames, axis='columns')
 
     # If desired, collate mean absolute Shapley value over *variables*
-    # instead of features. 
+    # instead of features.
     if collate:
         def feature_to_var(column):
             """Rename feature name to variable name."""
@@ -182,10 +221,12 @@ if __name__ == '__main__':
         for s, _ in dataset_to_shapley.values()
     ]
 
-    calculate_mean_with_sdev(
+    df = calculate_mean_with_sdev(
         data_frames,
         'pooled',
         prefix,
         rank=False,     # Don't need the rank if we want to draw a bar plot
         collate=True,   # Collate over variables
     )
+
+    make_plot(df)
