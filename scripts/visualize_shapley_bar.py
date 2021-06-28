@@ -14,7 +14,7 @@ from shap.plots.colors import blue_rgb
 from src.torch.shap_utils import get_pooled_shapley_values
 
 
-def make_plot(df, max_values=10):
+def make_plot(df, max_values=20):
     """Create a bar plot from a set of Shapley values."""
     fig, ax = plt.subplots()
 
