@@ -90,6 +90,12 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        '-i', '--ignore-indicators-and-counts',
+        action='store_true',
+        help='If set, ignores indicator and count features.'
+    )
+
+    parser.add_argument(
         '-H', '--hours-before',
         type=int,
         help='Uses only values of at most `H` hours before the maximum '
