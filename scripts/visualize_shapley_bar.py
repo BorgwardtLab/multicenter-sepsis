@@ -35,6 +35,8 @@ def make_plot(df, max_values=10):
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
 
+    print(df)
+
     ax.barh(
         ytick,
         df['mean'],
