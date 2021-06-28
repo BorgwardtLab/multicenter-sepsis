@@ -1,4 +1,4 @@
-"""Ranking of Shapley values over different runs."""
+"""Ranking and visualising of Shapley values over different runs."""
 
 import argparse
 import collections
