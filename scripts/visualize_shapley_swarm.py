@@ -1,4 +1,4 @@
-"""Visualisation of global Shapley values."""
+"""Visualisation of Shapley values as a swarm plot."""
 
 import argparse
 import os
