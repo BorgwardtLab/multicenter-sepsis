@@ -69,11 +69,13 @@ def calculate_mean_with_sdev(data_frames, name, prefix, rank=True):
     if rank:
         df.to_csv(
             f'/tmp/shapley_{prefix}ranking_with_sdev_{name}.csv',
+            na_rep='0.0',
             index=True
         )
     else:
         df.to_csv(
             f'/tmp/shapley_{prefix}mean_with_sdev_{name}.csv',
+            na_rep='0.0',
             index=True
         )
 
@@ -225,10 +227,20 @@ if __name__ == '__main__':
 
     # Pool Shapley values across all data sets. This permits an analysis
     # of the overall ranking.
-    all_shap_values = np.vstack([
-        np.vstack(
-            [s for s, _ in values for values in dataset_to_shapley.items()]
-        )
-    ])
 
-    calculate_ranks(all_shap_values, feature_names, 'pooled', prefix)
+    data_frames = [
+        pd.DataFrame(s, columns=feature_names)
+        for s, _ in dataset_to_shapley.values()
+    ]
+
+    #all_shap_values = np.vstack([
+    #    np.vstack(
+    #        [s for s, _ in values for values in dataset_to_shapley.items()]
+    #    )
+    #])
+
+    calculate_mean_with_sdev(
+        data_frames,
+        'pooled',
+        prefix
+    )
