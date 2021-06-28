@@ -135,6 +135,8 @@ if __name__ == '__main__':
         prefix += f'{args.hours_before}h_'
 
     # Will store all Shapley values corresponding to a single data set.
+    # The idea behind this is to collect Shapley values from different
+    # repetitions on the same data.
     dataset_to_shapley = collections.defaultdict(list)
 
     for filename in args.FILE:
@@ -149,7 +151,9 @@ if __name__ == '__main__':
             (shap_values, feature_values)
         )
 
-    # Calculate mean and standard deviation of ranks for each data set.
+    # Having collected Shapley values for each data set, we may now
+    # perform an 'inner collation', i.e. we calculate mean and standard
+    # deviation of ranks for each data set indivudally..
     for dataset_name in dataset_to_shapley:
         values = dataset_to_shapley[dataset_name]
 
@@ -165,6 +169,9 @@ if __name__ == '__main__':
             rank=False
         )
 
+    # Prepare ranking and calculations *between* data sets, thus
+    # creating an 'external collation', i.e. the standard deviation
+    # refers to the variability across data sets.
     dataset_to_ranks = {}
 
     # 'Flatten' Shapley values so that we only have one set of them per
