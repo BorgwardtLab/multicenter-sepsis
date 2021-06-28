@@ -10,7 +10,13 @@ import pandas as pd
 from src.torch.shap_utils import get_pooled_shapley_values
 
 
-def calculate_mean_with_sdev(data_frames, name, prefix, rank=True):
+def calculate_mean_with_sdev(
+    data_frames,
+    name,
+    prefix,
+    rank=True,
+    collate=False,
+):
     """Calculate features/ranks from data frames and store them in a file."""
     # Pretty ugly, but it does the trick :)
     data_frames = copy.copy(data_frames)
@@ -35,6 +41,19 @@ def calculate_mean_with_sdev(data_frames, name, prefix, rank=True):
     # and a standard deviation over their ranks.
 
     df = pd.concat(data_frames, axis='columns')
+
+    # If desired, collate mean absolute Shapley value over *variables*
+    # instead of features. 
+    if collate:
+        def feature_to_var(column):
+            """Rename feature name to variable name."""
+            column = column.replace('_count', '')
+            column = column.replace('_raw', '')
+            column = column.replace('_indicator', '')
+            return column
+
+        df = df.rename(feature_to_var, axis=0)
+        df = df.groupby(level=0, axis=0).max()
 
     mean = df.mean(axis='columns')
     sdev = df.std(axis='columns')
@@ -173,7 +192,6 @@ if __name__ == '__main__':
 
     # Pool Shapley values across all data sets. This permits an analysis
     # of the overall ranking.
-
     data_frames = [
         pd.DataFrame(s, columns=feature_names)
         for s, _ in dataset_to_shapley.values()
@@ -182,5 +200,7 @@ if __name__ == '__main__':
     calculate_mean_with_sdev(
         data_frames,
         'pooled',
-        prefix
+        prefix,
+        rank=False,     # Don't need the rank if we want to draw a bar plot
+        collate=True,   # Collate over variables
     )
