@@ -130,13 +130,17 @@ class ColumnFilter:
              '_id',
              '_raw',
              '_time',
-             'height_static',
-             'weight_static',
-             'age_static',
-             #'female',
+             '_static'
+            ]
+        elif name == 'counts':
+            used_groups = [
+            '_id',
+            '_time',
+            '_count',
+            '_static' #statics currently can't be left out at this stage 
             ]
         else:
-            raise ValueError('No valid feature set name provied [large, small]') 
+            raise ValueError('No valid feature set name provied') 
         if groups:
             return used_groups 
         else:
