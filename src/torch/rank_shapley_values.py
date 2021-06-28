@@ -10,7 +10,7 @@ import pandas as pd
 from src.torch.shap_utils import get_pooled_shapley_values
 
 
-def calculate_ranks(shapley_values, feature_names, name, prefix):
+def calculate_ranks(shapley_values, feature_names, name, prefix, store=True):
     """Calculate ranks of features and store them in a file."""
     df = pd.DataFrame(shapley_values, columns=feature_names)
     df = df.abs()
@@ -19,11 +19,15 @@ def calculate_ranks(shapley_values, feature_names, name, prefix):
 
     df.index.name = 'feature'
     df.name = 'mean'
-    df.to_csv(f'/tmp/shapley_{prefix}mean_{name}.csv', index=True)
+
+    if store:
+        df.to_csv(f'/tmp/shapley_{prefix}mean_{name}.csv', index=True)
 
     df = df.rank(ascending=False, method='min')
     df.name = 'rank'
-    df.to_csv(f'/tmp/shapley_{prefix}ranking_{name}.csv', index=True)
+
+    if store:
+        df.to_csv(f'/tmp/shapley_{prefix}ranking_{name}.csv', index=True)
 
     return df
 
