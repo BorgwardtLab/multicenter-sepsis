@@ -7,12 +7,20 @@ import copy
 import numpy as np
 import pandas as pd
 
-import matplotlib
-import matplotlib.pyplot as plt
-
 from shap.plots.colors import blue_rgb
-
 from src.torch.shap_utils import get_pooled_shapley_values
+
+import matplotlib
+
+matplotlib.use('pgf')
+matplotlib.rcParams.update({
+    'pgf.texsystem': 'pdflatex',
+    'font.family': 'sans-serif',
+    'text.usetex': True,
+    'pgf.rcfonts': False,
+})
+
+import matplotlib.pyplot as plt
 
 
 def make_plot(df, max_values=20):
@@ -51,17 +59,9 @@ def make_plot(df, max_values=20):
 
     plt.xlabel('Mean absolute Shapley value')
     plt.tight_layout()
-    plt.savefig('/tmp/shapley_bar.png')
-
-    matplotlib.use('pgf')
-    matplotlib.rcParams.update({
-        'pgf.texsystem': 'pdflatex',
-        'font.family': 'sans-serif',
-        'text.usetex': True,
-        'pgf.rcfonts': False,
-    })
 
     plt.savefig('/tmp/shapley_bar.pgf')
+    plt.savefig('/tmp/shapley_bar.png', dpi=300)
 
 
 def calculate_mean_with_sdev(
