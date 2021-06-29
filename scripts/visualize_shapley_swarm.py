@@ -6,9 +6,19 @@ import shap
 
 import numpy as np
 
-import matplotlib.pyplot as plt
-
 from src.torch.shap_utils import get_pooled_shapley_values
+
+import matplotlib
+
+matplotlib.use('pgf')
+matplotlib.rcParams.update({
+    'pgf.texsystem': 'pdflatex',
+    'font.family': 'sans-serif',
+    'text.usetex': True,
+    'pgf.rcfonts': False,
+})
+
+import matplotlib.pyplot as plt
 
 
 def make_plots(
@@ -64,6 +74,7 @@ def make_plots(
             show=False,
         )
         plt.tight_layout()
+        plt.savefig(filename_prefix + f'_{plot}.pgf')
         plt.savefig(filename_prefix + f'_{plot}.png', dpi=300)
         plt.clf()
 
