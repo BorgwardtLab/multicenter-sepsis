@@ -7,6 +7,7 @@ import copy
 import numpy as np
 import pandas as pd
 
+import matplotlib
 import matplotlib.pyplot as plt
 
 from shap.plots.colors import blue_rgb
@@ -37,10 +38,12 @@ def make_plot(df, max_values=20):
 
     print(df)
 
+    error = [np.zeros_like(df['sdev'].values), df['sdev']]
+
     ax.barh(
         ytick,
         df['mean'],
-        xerr=df['sdev'],
+        xerr=error,
         align='center',
         color=blue_rgb,
         edgecolor=(1, 1, 1, 0.8),
@@ -49,6 +52,16 @@ def make_plot(df, max_values=20):
     plt.xlabel('Mean absolute Shapley value')
     plt.tight_layout()
     plt.savefig('/tmp/shapley_bar.png')
+
+    matplotlib.use('pgf')
+    matplotlib.rcParams.update({
+        'pgf.texsystem': 'pdflatex',
+        'font.family': 'sans-serif',
+        'text.usetex': True,
+        'pgf.rcfonts': False,
+    })
+
+    plt.savefig('/tmp/shapley_bar.pgf')
 
 
 def calculate_mean_with_sdev(
