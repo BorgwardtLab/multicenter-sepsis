@@ -141,7 +141,7 @@ def main(input_filename, split_filename, output_filename, n_workers, feature_set
                     DropColumns(suffix="_locf"),
                 )
             ]
-        )
+        ) 
     elif feature_set == 'middle':
         data_pipeline = Pipeline(
             [
@@ -190,8 +190,24 @@ def main(input_filename, split_filename, output_filename, n_workers, feature_set
                 ),
             ]
         )
+    elif feature_set == 'small_locf':
+        data_pipeline = Pipeline(
+            [
+                ("bool_to_float", BoolToFloat()),
+                ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
+                ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
+                (
+                    "calculate_target",
+                    CalculateUtilityScores(label=VM_DEFAULT("label")),
+                ),
+                (
+                    "filter_invalid_times",
+                    InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
+                )
+            ]
+        )
     else:
-        raise ValueError(f'{feature_set} is not among the valid feature_set: [small, middle, large]')
+        raise ValueError(f'{feature_set} is not among the valid feature_sets')
     data = data_pipeline.fit_transform(data)
 
     #lost = set(all_ids).difference(data.index.unique().compute())

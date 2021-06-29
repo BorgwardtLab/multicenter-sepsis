@@ -125,7 +125,7 @@ def load_and_transform_data(
     feature_path,
     split='train',
     rep=0,
-    feature_set='large',
+    feature_set='middle',
     variable_set='full',
     task='regression',
     baselines=False,
@@ -145,7 +145,7 @@ def load_and_transform_data(
     - feature_path: path to feature names json file 
     - split: [train, validation, test]
     - rep: reptition [0 to 4]
-    - feature_set: large or small (classic or deep models)
+    - feature_set: middle or small (classic or deep models)
     - variable_set: full or physionet (fewer variables)
     - task: regression or classification
     - baselines: flag, if set overrides feature and variable set
