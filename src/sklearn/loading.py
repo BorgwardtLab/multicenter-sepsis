@@ -165,7 +165,11 @@ def load_and_transform_data(
         cols = VM_DEFAULT.all_cat('baseline')
         cols.extend([VM_DEFAULT(x) for x in ['id', 'time']])
     else:
-        cols = feat_dict[variable_set][feature_set]['columns']
+        if feature_set in feat_dict[variable_set].keys(): 
+            cols = feat_dict[variable_set][feature_set]['columns']
+        else:
+            print(f'Custom feature set {feature_set} not among cached feature sets, computing it on the fly, but ONLY FOR THE FULL variable set!')
+             
     if task == 'regression':
         cols.extend([VM_DEFAULT(x) for x in ['label', 'utility']]) 
         # as we use label in lambda application
