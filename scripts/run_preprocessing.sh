@@ -60,14 +60,14 @@ splits=(train validation test)
 for dataset in ${datasets[@]}; do
     for rep in {0..4}; do 
         for split in ${splits[@]}; do 
-                    # caching for deep models:
-                    python -m src.sklearn.loading \
-                        --dataset $dataset \
-                        --dump_name features_small \
-                        --cache_path datasets/${dataset}/data/parquet \
-                        --split $split \
-                        --rep $rep \
-                        --cost $cost
+            # caching for deep models:
+            python -m src.sklearn.loading \
+                --dataset $dataset \
+                --dump_name features_small \
+                --cache_path datasets/${dataset}/data/parquet \
+                --split $split \
+                --rep $rep \
+                --cost $cost
         done
     done
 done
