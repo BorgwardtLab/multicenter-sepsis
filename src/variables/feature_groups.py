@@ -83,14 +83,29 @@ class ColumnFilter:
         ]
         return used_cols
 
-    def feature_set(self, name='large', groups=False):
+    def groups_to_columns_and_drop_cats(self, groups, drop_cats):
+        """concatenates groups_to_columns with a dropping of categories"""
+        used_cols = self.groups_to_columns(groups)
+        if drop_cats is not None:
+            used_cols = self.drop_categories(used_cols, drop_cats)
+        return used_cols
+ 
+    def drop_categories(self, cols):
+        return cols
+
+    def feature_set(self, name='large', groups=False, drop_cats=None):
         """
         Choose columns for large and small feature set
         - name: which feature set [large, small]
         - groups: return feature groups instead of all columns
+        - drop_cats: optional list of which variable categories to drop (vitals, ..)
+            as specified in the variable mapping VM_DEFAULT
         """
+         # 
         if name == 'large':
-            used_groups = self.groups.copy()
+            raise NotImplementedError("""For large feature_set, prepro pipeline must 
+                be run w/ large set and path at init set""")
+            #used_groups = self.groups.copy()
         elif name == 'middle':
             used_groups = self.groups.copy()
             drop_groups = ['_wavelet', '_signature']
@@ -98,6 +113,9 @@ class ColumnFilter:
                 if group in used_groups:
                     used_groups.remove(group)
         elif name == 'middle2':
+            raise NotImplementedError("""Currently this feature set expects large 
+                feature set as default, however this needs first to be run in preprocessing 
+                and specified as init path""")
             used_groups = self.groups.copy()
             drop_groups = ['_wavelet']
             for group in drop_groups:
@@ -112,19 +130,7 @@ class ColumnFilter:
              '_raw',
              '_time',
              '_static'
-             #'height',
-             #'weight',
-             #'age',
-             #'female',
             ]
-             #'_var',
-             #'_wavelet',
-             #'_signature', 
-             #'_locf',
-             #'_max',
-             #'_mean',
-             #'_median',
-             #'_min',
         elif name == 'raw':
             used_groups  = [ 
              '_id',
@@ -139,12 +145,51 @@ class ColumnFilter:
             '_count',
             '_static' #statics currently can't be left out at this stage 
             ]
+        elif name == 'locf':
+            used_groups = [
+            '_id',
+            '_time',
+            '_locf',
+            '_static' #statics currently can't be left out at this stage 
+            ]
+        elif name == 'raw_vitals':
+            used_groups  = [ 
+             '_id',
+             '_raw',
+             '_time',
+             '_static'
+            ]
+            drop_cats = ['chemistry', 'organs', 'hemo']
+        elif name == 'counts_vitals':
+            used_groups = [
+            '_id',
+            '_time',
+            '_count',
+            '_static' #statics currently can't be left out at this stage 
+            ]
+            drop_cats = ['chemistry', 'organs', 'hemo']
+        elif name == 'raw_labs':
+            used_groups  = [ 
+             '_id',
+             '_raw',
+             '_time',
+             '_static'
+            ]
+            drop_cats = ['vitals']
+        elif name == 'counts_labs':
+            used_groups = [
+            '_id',
+            '_time',
+            '_count',
+            '_static' #statics currently can't be left out at this stage 
+            ]
+            drop_cats = ['vitals']
         else:
             raise ValueError('No valid feature set name provied') 
         if groups:
             return used_groups 
         else:
-            return self.groups_to_columns(used_groups)
+            return self.groups_to_columns_and_drop_cats(used_groups, drop_cats)
     
     def get_physionet_prefixes(self):
         """
