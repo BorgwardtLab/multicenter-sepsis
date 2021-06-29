@@ -32,7 +32,8 @@ __all__ = [
     'Hirid',
     'EICU',
     'AUMC',
-    'MIMICDemoSubset'   
+    'MIMICDemoSubset' #the last two are merely for sanity checks
+    'MIMIC_LOCF' 
 ]
 
 
@@ -347,12 +348,6 @@ class MIMIC(SplittedDataset):
         self.lam = LoadLambda(
             lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}_cost_{cost}.json').lam 
         
-        #transforms = [
-        #    normalize,
-        #    apply_lam,
-        #    Impute(),
-        #]
-        #self.pd_transform = ComposeTransformations(transforms)
 
 class Hirid(SplittedDataset):
     """Hirid dataset."""
@@ -506,6 +501,25 @@ class MIMICDemoSubset(SplittedDataset):
             lambda_path =  f'config/lambdas/lambda_mimic_demo_rep_{fold}_cost_{cost}.json' ).lam 
         from src.torch.torch_utils import SelectColumnSubset
         self.pd_transform = SelectColumnSubset(k=2) 
+
+class MIMIC_LOCF(SplittedDataset):
+    """MIMIC dataset for sanity checking feature groups."""
+
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None):
+        print(f'Using data fold {fold}...')
+        super().__init__(
+            f'datasets/mimic/data/parquet/features_locf_cache/{split}_{fold}_cost_{cost}.parquet',
+            'config/splits/splits_mimic.json',
+            split,
+            feature_set,
+            only_physionet_features=only_physionet_features,
+            fold=fold,
+            transform=transform,
+            cohort=cohort
+        )
+        self.lam = LoadLambda(
+            lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}_cost_{cost}.json').lam 
+        
 
 
 if __name__ == '__main__':

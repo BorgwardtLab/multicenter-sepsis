@@ -6,7 +6,7 @@ import numpy as np
 import json
 import pathlib
 from .mapping import VariableMapping
-from src.sklearn.loading import SplitInfo, ParquetLoader
+from src.sklearn.loading_utils import SplitInfo, ParquetLoader
 
 VM_CONFIG_PATH = str(
     pathlib.Path(__file__).parent.parent.parent.joinpath(

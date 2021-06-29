@@ -190,7 +190,7 @@ def main(input_filename, split_filename, output_filename, n_workers, feature_set
                 ),
             ]
         )
-    elif feature_set == 'small_locf':
+    elif feature_set == 'locf':
         data_pipeline = Pipeline(
             [
                 ("bool_to_float", BoolToFloat()),

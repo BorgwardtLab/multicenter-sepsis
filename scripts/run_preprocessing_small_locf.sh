@@ -10,20 +10,20 @@ export DASK_DISTRIBUTED__COMM__RETRY__COUNT=30
 export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT="180s" #45s
 datasets=(mimic_demo mimic) #aumc hirid eicu physionet2019)  #mimic_demo mimic aumc physionet2019 hirid eicu) #mimic_demo mimic 
 cost=5
-feature_sets=(small_locf)
+feature_sets=(locf)
 for dataset in ${datasets[@]}; do
 
     echo ">>> Processing $dataset ..."
     split_file=config/splits/splits_${dataset}.json
     for feature_set in ${feature_sets[@]}; do
         features=datasets/${dataset}/data/parquet/features_${feature_set}
-        rm -r $features 
-        #echo ">>> Extracting features ..." 
-        python -m src.preprocessing.extract_features datasets/downloads/${dataset}-${version}.parquet \
-            --split-file $split_file \
-            --output $features \
-            --n-workers=20 \
-            --feature_set=$feature_set 
+        #rm -r $features 
+        ##echo ">>> Extracting features ..." 
+        #python -m src.preprocessing.extract_features datasets/downloads/${dataset}-${version}.parquet \
+        #    --split-file $split_file \
+        #    --output $features \
+        #    --n-workers=20 \
+        #    --feature_set=$feature_set 
     done
     #for rep in {0..4}; do 
     #    normalizer_file=config/normalizer/normalizer_${dataset}_rep_${rep}.json
@@ -63,11 +63,12 @@ for dataset in ${datasets[@]}; do
             # caching for deep models:
             python -m src.sklearn.loading \
                 --dataset $dataset \
-                --dump_name features_small_locf \
+                --dump_name features_locf \
                 --cache_path datasets/${dataset}/data/parquet \
                 --split $split \
                 --rep $rep \
-                --cost $cost
+                --cost $cost \
+                --feature_set $feature_set   
         done
     done
 done

@@ -12,7 +12,7 @@ from dask.distributed import Client, progress
 import dask.diagnostics as ddi
 import pyarrow.parquet as pq
 
-from src.sklearn.loading import SplitInfo, ParquetLoader
+from src.sklearn.loading_utils import SplitInfo, ParquetLoader
 from src.preprocessing.extract_features import \
     ( get_rows_per_patient, compute_divisions ) 
 from src.preprocessing.transforms import Normalizer
