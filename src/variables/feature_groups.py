@@ -23,7 +23,7 @@ class ColumnFilter:
             - small vs large feature set
     """
     def __init__(self, 
-                 path=f'datasets/mimic_demo/data/parquet/features'
+                 path=f'datasets/mimic_demo/data/parquet/features_middle'
                 ):
         """
         Arguments:
