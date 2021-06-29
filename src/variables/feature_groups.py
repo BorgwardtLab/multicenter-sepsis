@@ -83,23 +83,42 @@ class ColumnFilter:
         ]
         return used_cols
 
-    def groups_to_columns_and_drop_cats(self, groups, drop_cats):
-        """concatenates groups_to_columns with a dropping of categories"""
+    def groups_to_columns_and_drop_cats(self, groups, drop_cats, suffices):
+        """concatenates groups_to_columns with a dropping of categories for given suffices"""
         used_cols = self.groups_to_columns(groups)
         if drop_cats is not None:
-            used_cols = self.drop_categories(used_cols, drop_cats)
+            used_cols = self.drop_categories(used_cols, drop_cats, suffices)
         return used_cols
  
-    def drop_categories(self, cols):
+    def drop_categories(self, cols, drop_cats, suffices=['_raw']):
+        """ drop variables of given suffices belonging to categories in drop_cats"""
+        def drop_per_suffix(cols, drop_cats, suffix):
+            drop_vars = [] #which variables do we want to drop
+            for cat in drop_cats:
+                drop_vars += VM_DEFAULT.all_cat(cat)
+            for col in cols:
+                if col.endswith(suffix):
+                    if any([col.split('_')[0] in drop_vars]):
+                        # this is more robust than 'startswith()' as variables may contain
+                        # other var names at the start
+                        cols.remove(col)
+            return cols
+ 
+        all_cats = ['vitals', 'chemistry', 'organs', 'hemo'] # all cats we consider here for dropping
+        assert all([x in all_cats for x in drop_cats])
+        for suffix in suffices:
+            cols = drop_per_suffix(cols, drop_cats, suffix)
+
         return cols
 
-    def feature_set(self, name='large', groups=False, drop_cats=None):
+    def feature_set(self, name='large', groups=False, drop_cats=None, suffices=None):
         """
         Choose columns for large and small feature set
         - name: which feature set [large, small]
         - groups: return feature groups instead of all columns
         - drop_cats: optional list of which variable categories to drop (vitals, ..)
             as specified in the variable mapping VM_DEFAULT
+        - suffices: optional list of suffices to apply the drop_cats step to (raw, counts) etc
         """
          # 
         if name == 'large':
@@ -160,6 +179,7 @@ class ColumnFilter:
              '_static'
             ]
             drop_cats = ['chemistry', 'organs', 'hemo']
+            suffices = ['_raw']
         elif name == 'counts_vitals':
             used_groups = [
             '_id',
@@ -168,6 +188,7 @@ class ColumnFilter:
             '_static' #statics currently can't be left out at this stage 
             ]
             drop_cats = ['chemistry', 'organs', 'hemo']
+            suffices = ['_count']
         elif name == 'raw_labs':
             used_groups  = [ 
              '_id',
@@ -176,6 +197,7 @@ class ColumnFilter:
              '_static'
             ]
             drop_cats = ['vitals']
+            suffices = ['_raw']
         elif name == 'counts_labs':
             used_groups = [
             '_id',
@@ -184,6 +206,7 @@ class ColumnFilter:
             '_static' #statics currently can't be left out at this stage 
             ]
             drop_cats = ['vitals']
+            suffices = ['_count']
         else:
             raise ValueError('No valid feature set name provied') 
         if groups:
