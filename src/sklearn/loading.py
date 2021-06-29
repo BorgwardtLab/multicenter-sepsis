@@ -168,7 +168,13 @@ def load_and_transform_data(
         if feature_set in feat_dict[variable_set].keys(): 
             cols = feat_dict[variable_set][feature_set]['columns']
         else:
-            print(f'Custom feature set {feature_set} not among cached feature sets, computing it on the fly, but ONLY FOR THE FULL variable set!')
+            print(f'Custom feature set {feature_set} not among cached feature sets, computing it on the fly!')
+            cf = ColumnFilter()
+            cols = cf.feature_set(name=feature_set, groups=False)
+            if variable_set == 'physionet':
+                # reduce columns:
+                cols = cf.physionet_set(feature_set=feature_set)
+            from IPython import embed;embed() 
              
     if task == 'regression':
         cols.extend([VM_DEFAULT(x) for x in ['label', 'utility']]) 
