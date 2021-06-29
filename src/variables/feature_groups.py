@@ -92,16 +92,20 @@ class ColumnFilter:
  
     def drop_categories(self, cols, drop_cats, suffices=['_raw']):
         """ drop variables of given suffices belonging to categories in drop_cats"""
+
         def drop_per_suffix(cols, drop_cats, suffix):
             drop_vars = [] #which variables do we want to drop
             for cat in drop_cats:
                 drop_vars += VM_DEFAULT.all_cat(cat)
+            drop_cols = []
             for col in cols:
                 if col.endswith(suffix):
                     if any([col.split('_')[0] in drop_vars]):
                         # this is more robust than 'startswith()' as variables may contain
                         # other var names at the start
-                        cols.remove(col)
+                        drop_cols.append(col)
+            for col in drop_cols:
+                cols.remove(col) 
             return cols
  
         all_cats = ['vitals', 'chemistry', 'organs', 'hemo'] # all cats we consider here for dropping
@@ -212,7 +216,7 @@ class ColumnFilter:
         if groups:
             return used_groups 
         else:
-            return self.groups_to_columns_and_drop_cats(used_groups, drop_cats)
+            return self.groups_to_columns_and_drop_cats(used_groups, drop_cats, suffices)
     
     def get_physionet_prefixes(self):
         """
