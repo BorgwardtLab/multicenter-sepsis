@@ -248,5 +248,46 @@
         }
       ]
     }
+  },
+  "ethnicity": {
+    "description": "Ethnicity",
+    "category": "Misc.",
+    "levels": ["Caucasian", "Asian", "African American", "Hispanic", "Other"],
+    "class": "fct_cncpt",
+    "target": "id_tbl",
+    "sources": {
+      "mimic_demo": [
+        {
+          "table": "admissions",
+          "val_var": "ethnicity",
+          "class": "col_itm",
+          "callback": "eth_mim_callback"
+        }
+      ],
+      "mimic": [
+        {
+          "table": "admissions",
+          "val_var": "ethnicity",
+          "class": "col_itm",
+          "callback": "eth_mim_callback"
+        }
+      ],
+      "eicu_demo": [
+        {
+          "table": "patient",
+          "val_var": "ethnicity",
+          "class": "col_itm",
+          "callback": "eth_eicu_cb"
+        }
+      ],
+      "eicu": [
+        {
+          "table": "patient",
+          "val_var": "ethnicity",
+          "class": "col_itm",
+          "callback": "eth_eicu_cb"
+        }
+      ]
+    }
   }
 }

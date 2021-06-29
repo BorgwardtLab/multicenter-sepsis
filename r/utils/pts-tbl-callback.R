@@ -229,3 +229,44 @@ is_si_callback <- function(..., interval) {
   unique(x)
 
 }
+
+eth_mim_callback <- function(x, val_var, env) {
+  
+  groups <- list(
+    Caucasian = c("WHITE", "WHITE - BRAZILIAN", "WHITE - EASTERN EUROPEAN", 
+                  "WHITE - OTHER EUROPEAN", 
+                  "WHITE - RUSSIAN"),
+    Asian = c("ASIAN", "ASIAN - ASIAN INDIAN", "ASIAN - CAMBODIAN", "ASIAN - CHINESE", 
+              "ASIAN - FILIPINO", "ASIAN - JAPANESE", "ASIAN - KOREAN", "ASIAN - OTHER", 
+              "ASIAN - THAI", "ASIAN - VIETNAMESE"),
+    Hispanic = c("HISPANIC/LATINO - CENTRAL AMERICAN (OTHER)", 
+                 "HISPANIC/LATINO - COLOMBIAN", 
+                 "HISPANIC/LATINO - CUBAN", "HISPANIC/LATINO - DOMINICAN", 
+                 "HISPANIC/LATINO - GUATEMALAN", 
+                 "HISPANIC/LATINO - HONDURAN", "HISPANIC/LATINO - MEXICAN", 
+                 "HISPANIC/LATINO - PUERTO RICAN", 
+                 "HISPANIC/LATINO - SALVADORAN", "HISPANIC OR LATINO"),
+    `African American` = c("BLACK/AFRICAN AMERICAN"),
+    Other = c("AMERICAN INDIAN/ALASKA NATIVE FEDERALLY RECOGNIZED TRIBE",
+              "UNABLE TO OBTAIN", "UNKNOWN/NOT SPECIFIED", "MIDDLE EASTERN", 
+              "MULTI RACE ETHNICITY", 
+              "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER", "OTHER", 
+              "PATIENT DECLINED TO ANSWER", 
+              "PORTUGUESE", "SOUTH AMERICAN",
+              "AMERICAN INDIAN/ALASKA NATIVE", 
+              "AMERICAN INDIAN/ALASKA NATIVE FEDERALLY RECOGNIZED TRIBE",
+              "CARIBBEAN ISLAND", "BLACK/AFRICAN", "BLACK/CAPE VERDEAN", "BLACK/HAITIAN")
+  )
+  map <- unlist(groups)
+  names(map) <- rep(names(groups), times = lapply(groups, length))
+  
+  x[, ethnicity := names(map)[match(ethnicity, map)]]
+  
+}
+
+eth_eicu_cb <- function(x, val_var, env) {
+  
+  x[ethnicity %in% c("Native American", "Other/Unknown"), ethnicity := "Other"]
+  
+}
+
