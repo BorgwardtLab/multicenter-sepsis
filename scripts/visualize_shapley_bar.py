@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 
 from shap.plots.colors import blue_rgb
+
+from src.torch.shap_utils import feature_to_name
 from src.torch.shap_utils import get_pooled_shapley_values
 
 import matplotlib
@@ -188,6 +190,8 @@ if __name__ == '__main__':
                 args.ignore_indicators_and_counts,
                 args.hours_before
             )
+
+        feature_names = list(map(feature_to_name, feature_names))
 
         dataset_to_shapley[dataset_name].append(
             (shap_values, feature_values)
