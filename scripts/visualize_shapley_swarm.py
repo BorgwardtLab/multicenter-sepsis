@@ -22,6 +22,18 @@ matplotlib.rcParams.update({
 import matplotlib.pyplot as plt
 
 
+def make_explanation(shapley_values, feature_values, feature_names):
+    """Wrap Shapley values in an `Explanation` object."""
+    return shap.Explanation(
+        # TODO: does this base value make sense? We could always get the
+        # model outputs by updating the analysis.
+        base_values=0.0,
+        values=shapley_values,
+        data=feature_values,
+        feature_names=feature_names,
+    )
+
+
 def make_plots(
     shap_values,
     feature_values,
@@ -77,6 +89,24 @@ def make_plots(
         plt.tight_layout()
         plt.savefig(filename_prefix + f'_{plot}.pgf', dpi=300)
         plt.savefig(filename_prefix + f'_{plot}.png', dpi=300)
+        plt.clf()
+
+    for variable, abbr in [('heart rate (raw)', 'hr'),
+                           ('mean arterial pressure (raw)', 'map'),
+                           ('temperature (raw)', 'temp')]:
+        index = feature_names.index(variable)
+
+        shapleys = make_explanation(
+            shap_values[:, index],
+            feature_values[:, index],
+            feature_names[index]
+        )
+
+        shap.plots.scatter(shapleys)
+
+        plt.tight_layout()
+        plt.savefig(filename_prefix + f'_scatter_{abbr}.pgf', dpi=300)
+        plt.savefig(filename_prefix + f'_scatter_{abbr}.png', dpi=300)
         plt.clf()
 
 
