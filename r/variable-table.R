@@ -53,8 +53,12 @@ res$description <- kableExtra::linebreak(
 colnames(res) <- c("Name", "Description", "MI-III", "eICU", "HiRID",
                    "AUMC", "Emory")
 
-kableExtra::kbl(res, "latex", booktabs = TRUE, longtable = TRUE, escape = FALSE,
-  caption = "Variables used for sepsis prediction.", label = "variables")
+tbl <- kableExtra::kbl(res, "latex", booktabs = TRUE, longtable = TRUE,
+  escape = FALSE, caption = "Variables used for sepsis prediction.",
+  label = "variables"
+)
+tbl <- kableExtra::kable_styling(tbl, latex_options = "repeat_header")
+tbl
 
 vars <- read_var_json()
 vars <- vars[is_true(vars$category == "baseline"), ]
@@ -97,11 +101,10 @@ colnames(res) <- c("", "", "Name", "Description", "MI-III", "eICU", "HiRID",
                    "AUMC")
 rownames(res) <- NULL
 
-kableExtra::collapse_rows(
-  kableExtra::kbl(
-    res, "latex", booktabs = TRUE, longtable = TRUE, escape = FALSE,
-    caption = "Variables used for baseline scores", label = "baselines"
-  ),
-  1:2,
-  row_group_label_position = "stack"
+tbl <- kableExtra::kbl(
+  res, "latex", booktabs = TRUE, longtable = TRUE, escape = FALSE,
+  caption = "Variables used for baseline scores", label = "baselines"
 )
+tbl <- kableExtra::collapse_rows(tbl, 1:2, row_group_label_position = "stack")
+tbl <- kableExtra::kable_styling(tbl, latex_options = "repeat_header")
+tbl
