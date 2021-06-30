@@ -18,7 +18,7 @@ import src.torch.models
 wandb_api = wandb.Api()
 
 
-def feature_to_name(name):
+def feature_to_name(feature):
     """Map feature abbreviation to 'nicer' name."""
     abbreviation_to_name = {
         'age': 'patient age',
@@ -85,6 +85,21 @@ def feature_to_name(name):
         'wbc': 'white blood cell count',
         'weight': 'patient weight',
     }
+
+    tokens = feature.split('_', maxsplit=1)
+    base = tokens[0]
+    category = tokens[-1]
+
+    # Ensure that we are not splitting something that we should not be
+    # splitting in the first place.
+    if category not in ['count', 'indicator', 'raw']:
+        base = feature
+        category = ''
+    else:
+        category = f'({category})'
+
+    name = abbreviation_to_name.get(base, base)
+    return name + ' ' + category
 
 
 def get_run_id(filename):
