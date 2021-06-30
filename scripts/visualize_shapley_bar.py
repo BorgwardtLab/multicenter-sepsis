@@ -62,7 +62,7 @@ def make_plot(df, max_values=20):
     plt.xlabel('Mean absolute Shapley value')
     plt.tight_layout()
 
-    plt.savefig('/tmp/shapley_bar.pgf')
+    plt.savefig('/tmp/shapley_bar.pgf', dpi=300)
     plt.savefig('/tmp/shapley_bar.png', dpi=300)
 
 
