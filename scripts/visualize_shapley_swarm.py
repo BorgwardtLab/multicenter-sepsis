@@ -6,6 +6,7 @@ import shap
 
 import numpy as np
 
+from src.torch.shap_utils import feature_to_name
 from src.torch.shap_utils import get_pooled_shapley_values
 
 import matplotlib
@@ -74,7 +75,7 @@ def make_plots(
             show=False,
         )
         plt.tight_layout()
-        plt.savefig(filename_prefix + f'_{plot}.pgf')
+        plt.savefig(filename_prefix + f'_{plot}.pgf', dpi=300)
         plt.savefig(filename_prefix + f'_{plot}.png', dpi=300)
         plt.clf()
 
@@ -126,6 +127,8 @@ if __name__ == '__main__':
                 args.ignore_indicators_and_counts,
                 args.hours_before,
             )
+
+        feature_names = list(map(feature_to_name, feature_names))
 
         all_shap_values.append(shap_values)
         all_feature_values.append(feature_values)
