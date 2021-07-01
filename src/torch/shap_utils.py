@@ -93,7 +93,7 @@ def feature_to_name(feature):
 
     # Ensure that we are not splitting something that we should not be
     # splitting in the first place.
-    if category not in ['count', 'indicator', 'raw']:
+    if category not in ['count', 'derived', 'indicator', 'raw']:
         base = feature
         category = ''
     else:
