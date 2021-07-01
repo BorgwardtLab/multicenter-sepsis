@@ -100,6 +100,13 @@ def feature_to_name(feature):
         category = f'({category})'
 
     name = abbreviation_to_name.get(base, base)
+    name = name.capitalize()
+
+    # Local adjustments that I do not want to perform manually all the
+    # time.
+    if name == 'SOFAdeterioration':
+        name = 'SOFA deterioration'
+
     return name + ' ' + category
 
 
