@@ -1,5 +1,6 @@
 """Utility functions for interacting with Shapley values."""
 
+import json
 import pickle
 import os
 import tempfile
@@ -270,6 +271,11 @@ def get_pooled_shapley_values(
         If not `None`, only uses (at most) the last `hours_before`
         observations when reporting the Shapley values.
 
+    return_normalised_features : bool, optional
+        If set, returns normalised features, corresponding to the
+        values the model saw. If set to `False`, will calculate
+        the original (i.e. measured) values.
+
     Returns
     -------
     Tuple of pooled Shapley values, features, feature names, and data
@@ -320,6 +326,29 @@ def get_pooled_shapley_values(
     shap_values = shap_values[:, :, important_indices]
     features = data['input'].numpy()
     features = features[:, :, important_indices]
+
+    if not return_normalised_features:
+        name = dataset_name.lower()
+        rep = out['rep']
+        filename = f'normalizer_{name}_rep_{rep}.json'
+
+        with open(f'./config/normalizer/{filename}') as f:
+            normaliser = json.load(f)
+            means = normaliser['means']
+            sdevs = normaliser['stds']
+
+            means = np.asarray(
+                [means.get(name, 0.0) for name in feature_names]
+            ).astype(float)
+            sdevs = np.asarray(
+                [sdevs.get(name, 1.0) for name in feature_names]
+            ).astype(float)
+
+            means[np.isnan(means)] = 0.0
+            means[np.isnan(sdevs)] = 1.0
+
+            features = features * sdevs
+            features = features + means
 
     shap_values_pooled, features_pooled = pool(
         lengths,
