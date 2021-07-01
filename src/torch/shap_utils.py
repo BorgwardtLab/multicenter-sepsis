@@ -255,6 +255,7 @@ def get_pooled_shapley_values(
     filename,
     ignore_indicators_and_counts=False,
     hours_before=None,
+    return_normalised_features=True,
 ):
     """Process file and return pooled Shapley values.
 
