@@ -91,9 +91,9 @@ def make_plots(
         plt.savefig(filename_prefix + f'_{plot}.png', dpi=300)
         plt.clf()
 
-    for variable, abbr in [('heart rate (raw)', 'hr'),
-                           ('mean arterial pressure (raw)', 'map'),
-                           ('temperature (raw)', 'temp')]:
+    for variable, abbr in [('Heart rate (raw)', 'hr'),
+                           ('Mean arterial pressure (raw)', 'map'),
+                           ('Temperature (raw)', 'temp')]:
         index = feature_names.index(variable)
 
         shapleys = make_explanation(
@@ -156,6 +156,10 @@ if __name__ == '__main__':
                 filename,
                 args.ignore_indicators_and_counts,
                 args.hours_before,
+                # Since we want to use scatter plots, we should use the
+                # 'raw' or 'original' feature scales. Else, the scales
+                # of the plots will look weird.
+                return_normalised_features=False
             )
 
         feature_names = list(map(feature_to_name, feature_names))
