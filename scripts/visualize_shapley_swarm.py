@@ -102,7 +102,7 @@ def make_plots(
             feature_names[index]
         )
 
-        shap.plots.scatter(shapleys)
+        shap.plots.scatter(shapleys, hist=False)
 
         plt.tight_layout()
         plt.savefig(filename_prefix + f'_scatter_{abbr}.pgf', dpi=300)
