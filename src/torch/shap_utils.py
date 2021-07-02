@@ -346,10 +346,10 @@ def get_pooled_shapley_values(
             sdevs = normaliser['stds']
 
             means = np.asarray(
-                [means.get(name, 0.0) for name in feature_names]
+                [means.get(name, 0.0) for name in selected_features]
             ).astype(float)
             sdevs = np.asarray(
-                [sdevs.get(name, 1.0) for name in feature_names]
+                [sdevs.get(name, 1.0) for name in selected_features]
             ).astype(float)
 
             means[np.isnan(means)] = 0.0
