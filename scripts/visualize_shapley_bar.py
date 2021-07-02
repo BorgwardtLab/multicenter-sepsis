@@ -191,7 +191,11 @@ if __name__ == '__main__':
                 args.hours_before
             )
 
-        feature_names = list(map(feature_to_name, feature_names))
+        # These are the 'pretty' variants of the feature names, which we
+        # only use for representing individual scenarios.
+        feature_names_pretty = list(
+            map(feature_to_name, feature_names)
+        )
 
         dataset_to_shapley[dataset_name].append(
             (shap_values, feature_values)
@@ -204,7 +208,7 @@ if __name__ == '__main__':
         values = dataset_to_shapley[dataset_name]
 
         data_frames = [
-            pd.DataFrame(s, columns=feature_names) for s, _ in values
+            pd.DataFrame(s, columns=feature_names_pretty) for s, _ in values
         ]
 
         calculate_mean_with_sdev(data_frames, dataset_name, prefix)
@@ -247,5 +251,8 @@ if __name__ == '__main__':
         rank=False,     # Don't need the rank if we want to draw a bar plot
         collate=True,   # Collate over variables
     )
+
+    # Pretty-print the remaining *variables* (no features any more)
+    df.index = list(map(feature_to_name, df.index.values))
 
     make_plot(df)
