@@ -25,7 +25,7 @@ matplotlib.rcParams.update({
 import matplotlib.pyplot as plt
 
 
-def make_plot(df, max_values=20):
+def make_plot(df, max_values=20, prefix=''):
     """Create a bar plot from a set of Shapley values."""
     fig, ax = plt.subplots()
 
@@ -62,8 +62,8 @@ def make_plot(df, max_values=20):
     plt.xlabel('Mean absolute Shapley value')
     plt.tight_layout()
 
-    plt.savefig('/tmp/shapley_bar.pgf', dpi=300)
-    plt.savefig('/tmp/shapley_bar.png', dpi=300)
+    plt.savefig(f'/tmp/shapley_{prefix}bar.pgf', dpi=300)
+    plt.savefig(f'/tmp/shapley_{prefix}bar.png', dpi=300)
 
 
 def calculate_mean_with_sdev(
@@ -178,6 +178,10 @@ if __name__ == '__main__':
     if args.hours_before is not None:
         prefix += f'{args.hours_before}h_'
 
+    # Ditto for dropped indicators and count variables.
+    if args.ignore_indicators_and_counts:
+        prefix += 'raw_'
+
     # Will store all Shapley values corresponding to a single data set.
     # The idea behind this is to collect Shapley values from different
     # repetitions on the same data.
@@ -255,4 +259,4 @@ if __name__ == '__main__':
     # Pretty-print the remaining *variables* (no features any more)
     df.index = list(map(feature_to_name, df.index.values))
 
-    make_plot(df)
+    make_plot(df, prefix=prefix)

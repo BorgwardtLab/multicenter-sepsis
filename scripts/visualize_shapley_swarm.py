@@ -187,6 +187,10 @@ if __name__ == '__main__':
     if args.hours_before is not None:
         prefix += f'{args.hours_before}h_'
 
+    # Ditto for dropped indicators and count variables.
+    if args.ignore_indicators_and_counts:
+        prefix += 'raw_'
+
     make_plots(
         all_shap_values,
         all_feature_values,
