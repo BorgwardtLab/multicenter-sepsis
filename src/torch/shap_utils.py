@@ -100,7 +100,7 @@ def feature_to_name(feature):
         category = f'({category})'
 
     name = abbreviation_to_name.get(base, base)
-    name = name.capitalize()
+    name = name[0].upper() + name[1:]
 
     # Local adjustments that I do not want to perform manually all the
     # time.
