@@ -71,6 +71,7 @@ def feature_to_name(feature):
         'phos': 'phosphate',
         'plt': 'platelet count',
         'po2': 'O2 partial pressure',
+        'po2/fio2': 'PaO2/FiO2',
         'pt': 'prothrombine time',
         'ptt': 'partial thromboplastin time',
         'rbc': 'red blood cell count',
@@ -307,9 +308,13 @@ def get_pooled_shapley_values(
     feature_names = data['feature_names']
     lengths = data['lengths'].numpy()
 
+    # TODO: we might want to rename this now since it ignores
+    # effectively everything *but* the raw features.
     if ignore_indicators_and_counts:
         keep_features = [
-            True if not col.endswith('indicator') and not col.endswith('count')
+            True if not col.endswith('indicator') and
+            not col.endswith('count') and
+            not col.endswith('derived')
             else False
             for col in feature_names
         ]
