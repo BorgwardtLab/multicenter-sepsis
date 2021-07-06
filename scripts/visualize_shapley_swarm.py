@@ -92,9 +92,16 @@ def make_plots(
         plt.savefig(filename_prefix + f'_{plot}.png', dpi=300)
         plt.clf()
 
-    for variable, abbr in [('Heart rate (raw)', 'hr'),
-                           ('Mean arterial pressure (raw)', 'map'),
-                           ('Temperature (raw)', 'temp')]:
+    variables = [('Heart rate (raw)', 'hr'),
+                 ('Mean arterial pressure (raw)', 'map'),
+                 ('Temperature (raw)', 'temp')]
+
+    if args.ignore_indicators_and_counts:
+        variables = [('Heart rate', 'hr'),
+                     ('Mean arterial pressure', 'map'),
+                     ('Temperature', 'temp')]
+
+    for variable, abbr in variables:
         index = feature_names.index(variable)
 
         shapleys = make_explanation(
@@ -165,7 +172,14 @@ if __name__ == '__main__':
                 return_normalised_features=False
             )
 
-        feature_names = list(map(feature_to_name, feature_names))
+        # If we ignore *all* categories anyway, there's no need to spell
+        # them out when mapping features to their names.
+        ignore_category = args.ignore_indicators_and_counts
+
+        feature_names = list(map(
+            lambda x: feature_to_name(x, ignore_category=ignore_category),
+            feature_names)
+        )
 
         all_shap_values.append(shap_values)
         all_feature_values.append(feature_values)

@@ -19,7 +19,7 @@ import src.torch.models
 wandb_api = wandb.Api()
 
 
-def feature_to_name(feature):
+def feature_to_name(feature, ignore_category=False):
     """Map feature abbreviation to 'nicer' name."""
     abbreviation_to_name = {
         'age': 'patient age',
@@ -108,7 +108,10 @@ def feature_to_name(feature):
     if name == 'SOFAdeterioration':
         name = 'SOFA deterioration'
 
-    return name + ' ' + category
+    if ignore_category:
+        return name
+    else:
+        return name + ' ' + category
 
 
 def get_run_id(filename):
