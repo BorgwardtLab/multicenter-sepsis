@@ -346,25 +346,26 @@ def get_pooled_shapley_values(
     if not return_normalised_features:
         name = dataset_name.lower()
         rep = out['rep']
-        filename = f'normalizer_{name}_rep_{rep}.json'
+        filename = f'./config/normalizer/normalizer_{name}_rep_{rep}.json'
 
-        with open(f'./config/normalizer/{filename}') as f:
-            normaliser = json.load(f)
-            means = normaliser['means']
-            sdevs = normaliser['stds']
+        if os.path.exists(filename):
+            with open(filename) as f:
+                normaliser = json.load(f)
+                means = normaliser['means']
+                sdevs = normaliser['stds']
 
-            means = np.asarray(
-                [means.get(name, 0.0) for name in selected_features]
-            ).astype(float)
-            sdevs = np.asarray(
-                [sdevs.get(name, 1.0) for name in selected_features]
-            ).astype(float)
+                means = np.asarray(
+                    [means.get(name, 0.0) for name in selected_features]
+                ).astype(float)
+                sdevs = np.asarray(
+                    [sdevs.get(name, 1.0) for name in selected_features]
+                ).astype(float)
 
-            means[np.isnan(means)] = 0.0
-            means[np.isnan(sdevs)] = 1.0
+                means[np.isnan(means)] = 0.0
+                means[np.isnan(sdevs)] = 1.0
 
-            features = features * sdevs
-            features = features + means
+                features = features * sdevs
+                features = features + means
 
     shap_values_pooled, features_pooled = pool(
         lengths,
