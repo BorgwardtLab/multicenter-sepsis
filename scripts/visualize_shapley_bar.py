@@ -18,8 +18,9 @@ matplotlib.use('pgf')
 matplotlib.rcParams.update({
     'pgf.texsystem': 'pdflatex',
     'font.family': 'sans-serif',
+    'font.size': 16,
     'text.usetex': True,
-    'pgf.rcfonts': False,
+    'pgf.rcfonts': True,
 })
 
 import matplotlib.pyplot as plt
@@ -61,6 +62,8 @@ def make_plot(df, max_values=20, prefix=''):
 
     plt.xlabel('Mean absolute Shapley value')
     plt.tight_layout()
+
+    plt.gcf().set_size_inches(6.5, 8)
 
     plt.savefig(f'/tmp/shapley_{prefix}bar.pgf', dpi=300)
     plt.savefig(f'/tmp/shapley_{prefix}bar.png', dpi=300)
