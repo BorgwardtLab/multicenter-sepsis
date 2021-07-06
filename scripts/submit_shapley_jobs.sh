@@ -2,7 +2,7 @@
 #
 # Submits jobs for calculating Shapley features.
 
-for RUN in 'sfxdno1a' 'sz1aa1n9' 'm6fsnuk9' 'hacl0kfp' 'pr9pa8oa' 'f905hzcm' '9rqxww43' 'nwjs5ahk' 'vzitu3r2' 'j76ft4wm' 'ypj1pfcq' 'r6otacys' '0zcdmr2b' 'gjtf48im' 'pa6c95qv' 'xd0mpktn' '4ky293gb' 'hhjb0oz0' 'vx8vbt08' 'lvrvcwuc'; do
+for RUN in 'ea9w4y5t' 'sfxdno1a' 'sz1aa1n9' 'm6fsnuk9' 'hacl0kfp' 'pr9pa8oa' 'f905hzcm' '9rqxww43' 'nwjs5ahk' 'vzitu3r2' 'j76ft4wm' 'ypj1pfcq' 'r6otacys' '0zcdmr2b' 'gjtf48im' 'pa6c95qv' 'xd0mpktn' '4ky293gb' 'hhjb0oz0' 'vx8vbt08' 'lvrvcwuc'; do
   for ITERATION in `seq 5`; do
     echo $RUN-$ITERATION...
     sbatch -p gpu                                         \
