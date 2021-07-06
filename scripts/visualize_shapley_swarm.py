@@ -15,8 +15,9 @@ matplotlib.use('pgf')
 matplotlib.rcParams.update({
     'pgf.texsystem': 'pdflatex',
     'font.family': 'sans-serif',
+    'font.size': 16,
     'text.usetex': True,
-    'pgf.rcfonts': False,
+    'pgf.rcfonts': True,
 })
 
 import matplotlib.pyplot as plt
@@ -103,6 +104,8 @@ def make_plots(
         )
 
         shap.plots.scatter(shapleys, hist=False)
+
+        plt.gcf().set_size_inches(4, 2)
 
         plt.tight_layout()
         plt.savefig(filename_prefix + f'_scatter_{abbr}.pgf', dpi=300)

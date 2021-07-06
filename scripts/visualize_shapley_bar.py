@@ -63,7 +63,7 @@ def make_plot(df, max_values=20, prefix=''):
     plt.xlabel('Mean absolute Shapley value')
     plt.tight_layout()
 
-    plt.gcf().set_size_inches(6.5, 8)
+    plt.gcf().set_size_inches(7.0, 6)
 
     plt.savefig(f'/tmp/shapley_{prefix}bar.pgf', dpi=300)
     plt.savefig(f'/tmp/shapley_{prefix}bar.png', dpi=300)
