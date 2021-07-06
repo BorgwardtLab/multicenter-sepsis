@@ -23,7 +23,7 @@ def model_map(name):
     # harmonize str length; adjust as we see fit
     return name.ljust(6, ' ')
 
-def raw_to_csv(metrics, csv_path):
+def raw_to_csv(metrics, csv_path, auc_mean, auc_std):
     """ write raw roc values to csv"""
     cols = [col for col in metrics.columns if not 'rep' in col]
     out = {}
@@ -35,6 +35,8 @@ def raw_to_csv(metrics, csv_path):
         out[col + '_mean'] = mu
         out[col + '_std'] = sig
     df = pd.DataFrame(out)
+    df['auc_mean'] = auc_mean
+    df['auc_std'] = auc_std
     df.to_csv(csv_path, index=False)
     
 def main():
@@ -130,7 +132,7 @@ def main():
             
             # write raw roc data to csv:
             csv_path = os.path.join(output_path, f'raw_roc_data_{model}_{train_dataset}_{eval_dataset}.csv')
-            raw_to_csv(metrics, csv_path) 
+            raw_to_csv(metrics, csv_path, auc_mean, auc_std) 
 
             summary_df = pd.DataFrame(
                 {

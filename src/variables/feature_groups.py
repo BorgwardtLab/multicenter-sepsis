@@ -6,7 +6,7 @@ import numpy as np
 import json
 import pathlib
 from .mapping import VariableMapping
-from src.sklearn.loading import SplitInfo, ParquetLoader
+from src.sklearn.loading_utils import SplitInfo, ParquetLoader
 
 VM_CONFIG_PATH = str(
     pathlib.Path(__file__).parent.parent.parent.joinpath(
@@ -23,7 +23,7 @@ class ColumnFilter:
             - small vs large feature set
     """
     def __init__(self, 
-                 path=f'datasets/mimic_demo/data/parquet/features'
+                 path=f'datasets/mimic_demo/data/parquet/features_middle'
                 ):
         """
         Arguments:
@@ -83,14 +83,52 @@ class ColumnFilter:
         ]
         return used_cols
 
-    def feature_set(self, name='large', groups=False):
+    def groups_to_columns_and_drop_cats(self, groups, drop_cats, suffices):
+        """concatenates groups_to_columns with a dropping of categories for given suffices"""
+        used_cols = self.groups_to_columns(groups)
+        if drop_cats is not None:
+            used_cols = self.drop_categories(used_cols, drop_cats, suffices)
+        return used_cols
+ 
+    def drop_categories(self, cols, drop_cats, suffices=['_raw']):
+        """ drop variables of given suffices belonging to categories in drop_cats"""
+
+        def drop_per_suffix(cols, drop_cats, suffix):
+            drop_vars = [] #which variables do we want to drop
+            for cat in drop_cats:
+                drop_vars += VM_DEFAULT.all_cat(cat)
+            drop_cols = []
+            for col in cols:
+                if col.endswith(suffix):
+                    if any([col.split('_')[0] in drop_vars]):
+                        # this is more robust than 'startswith()' as variables may contain
+                        # other var names at the start
+                        drop_cols.append(col)
+            for col in drop_cols:
+                cols.remove(col) 
+            return cols
+ 
+        all_cats = ['vitals', 'chemistry', 'organs', 'hemo'] # all cats we consider here for dropping
+        assert all([x in all_cats for x in drop_cats])
+        for suffix in suffices:
+            cols = drop_per_suffix(cols, drop_cats, suffix)
+
+        return cols
+
+    def feature_set(self, name='large', groups=False, drop_cats=None, suffices=None):
         """
         Choose columns for large and small feature set
         - name: which feature set [large, small]
         - groups: return feature groups instead of all columns
+        - drop_cats: optional list of which variable categories to drop (vitals, ..)
+            as specified in the variable mapping VM_DEFAULT
+        - suffices: optional list of suffices to apply the drop_cats step to (raw, counts) etc
         """
+         # 
         if name == 'large':
-            used_groups = self.groups.copy()
+            raise NotImplementedError("""For large feature_set, prepro pipeline must 
+                be run w/ large set and path at init set""")
+            #used_groups = self.groups.copy()
         elif name == 'middle':
             used_groups = self.groups.copy()
             drop_groups = ['_wavelet', '_signature']
@@ -98,6 +136,9 @@ class ColumnFilter:
                 if group in used_groups:
                     used_groups.remove(group)
         elif name == 'middle2':
+            raise NotImplementedError("""Currently this feature set expects large 
+                feature set as default, however this needs first to be run in preprocessing 
+                and specified as init path""")
             used_groups = self.groups.copy()
             drop_groups = ['_wavelet']
             for group in drop_groups:
@@ -112,35 +153,70 @@ class ColumnFilter:
              '_raw',
              '_time',
              '_static'
-             #'height',
-             #'weight',
-             #'age',
-             #'female',
             ]
-             #'_var',
-             #'_wavelet',
-             #'_signature', 
-             #'_locf',
-             #'_max',
-             #'_mean',
-             #'_median',
-             #'_min',
         elif name == 'raw':
             used_groups  = [ 
              '_id',
              '_raw',
              '_time',
-             'height_static',
-             'weight_static',
-             'age_static',
-             #'female',
+             '_static'
             ]
+        elif name == 'counts':
+            used_groups = [
+            '_id',
+            '_time',
+            '_count',
+            '_static' #statics currently can't be left out at this stage 
+            ]
+        elif name == 'locf':
+            used_groups = [
+            '_id',
+            '_time',
+            '_locf',
+            '_static' #statics currently can't be left out at this stage 
+            ]
+        elif name == 'raw_vitals':
+            used_groups  = [ 
+             '_id',
+             '_raw',
+             '_time',
+             '_static'
+            ]
+            drop_cats = ['chemistry', 'organs', 'hemo']
+            suffices = ['_raw']
+        elif name == 'counts_vitals':
+            used_groups = [
+            '_id',
+            '_time',
+            '_count',
+            '_static' #statics currently can't be left out at this stage 
+            ]
+            drop_cats = ['chemistry', 'organs', 'hemo']
+            suffices = ['_count']
+        elif name == 'raw_labs':
+            used_groups  = [ 
+             '_id',
+             '_raw',
+             '_time',
+             '_static'
+            ]
+            drop_cats = ['vitals']
+            suffices = ['_raw']
+        elif name == 'counts_labs':
+            used_groups = [
+            '_id',
+            '_time',
+            '_count',
+            '_static' #statics currently can't be left out at this stage 
+            ]
+            drop_cats = ['vitals']
+            suffices = ['_count']
         else:
-            raise ValueError('No valid feature set name provied [large, small]') 
+            raise ValueError('No valid feature set name provied') 
         if groups:
             return used_groups 
         else:
-            return self.groups_to_columns(used_groups)
+            return self.groups_to_columns_and_drop_cats(used_groups, drop_cats, suffices)
     
     def get_physionet_prefixes(self):
         """

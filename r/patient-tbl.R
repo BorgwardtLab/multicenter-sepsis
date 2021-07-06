@@ -35,6 +35,10 @@ vars <- list(
     concept = "adm",
     callback = tab_design
   ),
+  ethnicity = list(
+    concept = "ethnicity",
+    callback = tab_design
+  ),
   death = list(
     concept = "death",
     callback = percent_fun
@@ -99,7 +103,7 @@ pts_source_sum <- function(source, patient_ids) {
   for (var in names(vars)) {
     x <- vars[[var]]
 
-    if (var %in% c("DM", "CPD", "CRF", "LD", "Cancer") &
+    if (var %in% c("DM", "CPD", "CRF", "LD", "Cancer", "ethnicity") &
         source %in% c("eicu_demo", "hirid", "aumc")) next
     if (var %in% c("admission") & source %in% c("hirid")) next
 

@@ -194,11 +194,8 @@ if __name__ == '__main__':
                         help='inactive argument, used for debugging (enabling grid repetitions)')
     parser.add_argument('--only_physionet_features', type=bool, default=False,
                         help='boolean indicator if physionet variable set should be used')
-
-    # parser.add_argument(
-    #     '--feature-set', default='all',
-    #     help='which feature set should be used: [all, challenge], where challenge refers to the subset as derived from physionet challenge variables'
-    # )
+    parser.add_argument('--feature_set', default=None,
+                        help='which feature set should be used: [middle, small,..]')
 
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
@@ -224,6 +221,9 @@ if __name__ == '__main__':
         'fold': hparams.rep, #`rep` naming to conform with shallow models                                        
         'only_physionet_features': hparams.only_physionet_features
     }
+    if hparams.feature_set is not None:
+        hparams.dataset_kwargs['feature_set'] = hparams.feature_set
+
     #if hparams.hyperparam_draws > 0:
     #    for hyperparam_draw in hparams.trials(hparams.hyperparam_draws):
     #        print(hyperparam_draw)

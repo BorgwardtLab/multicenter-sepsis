@@ -6,9 +6,19 @@ import torch
 from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning.loggers import TensorBoardLogger
 import pandas as pd
+from pathlib import Path
 
 from src.evaluation.sklearn_utils import (nanany, NotOnsetLabelError)
 from src.evaluation import shift_onset_label
+from src.variables.mapping import VariableMapping
+
+VM_CONFIG_PATH = str(
+    Path(__file__).parent.parent.parent.joinpath(
+        'config/variables.json'
+    )
+)
+VM_DEFAULT = VariableMapping(VM_CONFIG_PATH)
+
 
 class TbWithBestValueLogger(TensorBoardLogger):
     """Tensorboard logger which also tracks the best value of metrics."""
@@ -360,6 +370,28 @@ class ComposeTransformations():
         return out
 
 
+class SelectColumnSubset():
+    """select only subset of columns for testing purposes."""
+
+    ID_COLUMN = VM_DEFAULT('id')
+    TIME_COLUMN = VM_DEFAULT('time')
+    STATIC_COLUMNS = VM_DEFAULT.all_cat('static')
+    LABEL_COLUMN = VM_DEFAULT('label')
+    UTILITY_COLUMN = VM_DEFAULT('utility')
+
+    def __init__(self, k=10):
+        """keep first k time series columns."""
+        self.k = k
+
+    def __call__(self, df):
+        drop_cols = [self.TIME_COLUMN, self.LABEL_COLUMN, self.ID_COLUMN,
+            self.UTILITY_COLUMN] + self.STATIC_COLUMNS
+        ts_cols = [col for col in df.columns if col not in drop_cols]
+        # we keep the first k ts_cols:
+        ts_drop_cols = ts_cols[self.k:]  
+        return df.drop(
+            columns=ts_drop_cols)
+ 
 
 def select_cohort(ids, cohort, dataset_name,
         cohort_file='datasets/additional/admission.json'):
@@ -369,4 +401,3 @@ def select_cohort(ids, cohort, dataset_name,
     out = [i for i in ids if i in d[dataset_name][cohort]]
     print(f'>>> Cohort: Selecting {len(out)} {cohort} stays from a total of {len(ids)}.')
     return out
-
