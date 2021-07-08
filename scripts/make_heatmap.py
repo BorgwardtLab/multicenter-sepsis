@@ -14,7 +14,7 @@ from src.evaluation.patient_evaluation import format_dataset
 
 def dataset_naming(name):
     name = format_dataset(name)
-    d = {'mimic': 'MIMIC',
+    d = {'mimic': 'MIMIC-III',
          'eicu': 'eICU',
          'hirid': 'HiRID',
          'aumc':  'AUMC',
@@ -104,7 +104,7 @@ if __name__ == '__main__':
             df[dataset][dataset] = np.nan
 
     annotation_format = '.0{:d}f'.format(args.digits)
-    g = sns.heatmap(df, fmt=annotation_format, cmap='Blues', annot=True, vmin=0.6, vmax=1.0, linewidth=2, linecolor='w')
+    g = sns.heatmap(df, fmt=annotation_format, cmap='Blues', annot=True, vmin=0.5, vmax=1.0, linewidth=2, linecolor='w')
 
     #g.set_xticklabels(g.get_xticklabels(), rotation=45, horizontalalignment='right')
     g.set_yticklabels(g.get_yticklabels(), rotation=45, horizontalalignment='right')
