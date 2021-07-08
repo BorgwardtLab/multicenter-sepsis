@@ -155,7 +155,7 @@ def main():
                     # model_map(model) + rf' AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}')
                 
                 # write raw roc data to csv:
-                csv_path = os.path.join(output_path, f'raw_roc_data_{model}_{train_dataset}_{eval_dataset}.csv')
+                csv_path = os.path.join(output_path, f'raw_roc_data_{model}_{train_dataset}_{eval_dataset}_{feature_set}.csv')
                 raw_to_csv(metrics, csv_path, auc_mean, auc_std) 
 
                 summary_df = pd.DataFrame(

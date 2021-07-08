@@ -161,7 +161,7 @@ def main(args):
             target_prev
         )  
      
-        out_file = os.path.join(in_path, f'subsamples_{dataset}.json') 
+        out_file = os.path.join(out_path, f'subsamples_{dataset}.json') 
         with open(out_file, 'w') as f:
             json.dump(d, f, indent=4)
 

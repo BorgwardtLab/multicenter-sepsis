@@ -32,7 +32,7 @@ __all__ = [
     'Hirid',
     'EICU',
     'AUMC',
-    'MIMICDemoSubset' #the last two are merely for sanity checks
+    'MIMICDemoSubset', #the last two are merely for sanity checks
     'MIMIC_LOCF' 
 ]
 
