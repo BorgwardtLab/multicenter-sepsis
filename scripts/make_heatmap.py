@@ -14,7 +14,7 @@ from src.evaluation.patient_evaluation import format_dataset
 
 def dataset_naming(name):
     name = format_dataset(name)
-    d = {'mimic': 'MIMIC',
+    d = {'mimic': 'MIMIC-III',
          'eicu': 'eICU',
          'hirid': 'HiRID',
          'aumc':  'AUMC',
@@ -57,14 +57,15 @@ if __name__ == '__main__':
         '--pooled_path',
         help='to add additional row of pooled predictions'
     )
+    parser.add_argument('--digits', type=int, default=2, help='Number of digits after decimal.')
 
     args = parser.parse_args()
     path = args.INPUT
     df = pd.read_csv(path)
     df = df.query('model == @args.model')
-   
+
     pooled_path = args.pooled_path
-    if pooled_path is not None: 
+    if pooled_path is not None:
         pooled = pd.read_csv(pooled_path)
         pooled = pooled.query('model == @args.model')
         df = pd.concat([df,pooled])
@@ -102,9 +103,11 @@ if __name__ == '__main__':
         for dataset in df.columns:
             df[dataset][dataset] = np.nan
 
-    g = sns.heatmap(df, cmap='Blues', annot=True, vmin=0.6, vmax=1.0, linewidth=2, linecolor='w')
+    annotation_format = '.0{:d}f'.format(args.digits)
+    g = sns.heatmap(df, fmt=annotation_format, cmap='Blues', annot=True, vmin=0.5, vmax=1.0, linewidth=2, linecolor='w')
+
     #g.set_xticklabels(g.get_xticklabels(), rotation=45, horizontalalignment='right')
-    g.set_yticklabels(g.get_yticklabels(), rotation=45, horizontalalignment='right')    
+    g.set_yticklabels(g.get_yticklabels(), rotation=45, horizontalalignment='right')
 
     plt.tick_params(
         axis='both',
