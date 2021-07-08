@@ -572,5 +572,19 @@
     "type": ["logical"],
     "name": ["abx"],
     "category": ["extra"]
+  },
+  {
+    "concept": ["vent_ind"],
+    "challenge": {},
+    "type": ["logical"],
+    "name": ["ventialtion"],
+    "category": ["extra"]
+  },
+  {
+    "concept": ["vaso_ind"],
+    "challenge": {},
+    "type": ["logical"],
+    "name": ["vasopressors"],
+    "category": ["extra"]
   }
 ]
