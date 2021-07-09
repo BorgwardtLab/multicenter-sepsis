@@ -151,6 +151,15 @@ if __name__ == '__main__':
              'setting of `-H 1`.'
     )
 
+    parser.add_argument(
+        '--label',
+        default=None,
+        type=int,
+        choices=[0, 1],
+        help='If set, restrict analysis to a specific label, permitting '
+             'individual plots for cases and controls, respectively.'
+    )
+
     args = parser.parse_args()
 
     all_shap_values = []
@@ -169,7 +178,8 @@ if __name__ == '__main__':
                 # Since we want to use scatter plots, we should use the
                 # 'raw' or 'original' feature scales. Else, the scales
                 # of the plots will look weird.
-                return_normalised_features=False
+                return_normalised_features=False,
+                label=args.label,
             )
 
         # If we ignore *all* categories anyway, there's no need to spell
@@ -207,6 +217,13 @@ if __name__ == '__main__':
     # Ditto for dropped indicators and count variables.
     if args.ignore_indicators_and_counts:
         prefix += 'raw_'
+
+    # Ditto for label selection
+    if args.label is not None:
+        if args.label == 1:
+            prefix += 'cases_'
+        else:
+            prefix += 'controls_'
 
     make_plots(
         all_shap_values,
