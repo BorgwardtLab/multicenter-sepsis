@@ -2,6 +2,70 @@
 
 In this repo, we gather pipelining code for a multicenter sepsis prediction effort.
 
+## Data setup
+
+In order to set up the datasets, the R package `ricu` (available via CRAN) is required alongside access credentials for [PhysioNet](https://physionet.org) and a download token for [AmsterdamUMCdb](https://amsterdammedicaldatascience.nl/#amsterdamumcdb). This information can then be made available to `ricu` by setting the environment variables `RICU_PHYSIONET_USER`, `RICU_PHYSIONET_PASS` and `RICU_AUMC_TOKEN`.
+
+```r
+install.packages("ricu")
+Sys.setenv(
+    RICU_PHYSIONET_USER = "my-username",
+    RICU_PHYSIONET_PASS = "my-password",
+    RICU_AUMC_TOKEN = "my-token"
+)
+```
+
+Then, by sourcing the files in `r/utils`, which will require further R packages to be installed (see `r/utils/zzz-demps.R`), the function `export_data()` becomes available. This roughly loads data corresponding to the specification in `config/features.json`, on an hourly grid, performs some patient filtering and concludes with some missingness imputation/feature augmentation steps. The script under `r/scripts/create_dataset.R` can be used to carry out these steps.
+
+```r
+install.packages(
+    c("here", "arrow", "bigmemory", "jsonlite", "data.table", "readr",
+      "optparse", "assertthat", "cli", "memuse", "dplyr",
+      "biglasso", "ranger", "qs", "lightgbm", "cowplot", "roll")
+)
+
+invisible(
+  lapply(list.files(here::here("r", "utils"), full.names = TRUE), source)
+)
+
+for (x in c("mimic", "eicu", "hirid", "aumc")) {
+
+  if (!is_data_avail(x)) {
+    msg("setting up `{x}`\n")
+    setup_src_data(x)
+  }
+
+  msg("exporting data for `{x}`\n")
+  export_data(x)
+}
+```
+
+In order to preprocess the [PhysioNet 2019 challenge dataset](https://physionet.org/content/challenge-2019/1.0.0/), the downloaded data can be unpacked, followed by running `export_data()` as
+
+```r
+physio_dir <- data_path("physionet2019")
+download.file(
+    paste("https://archive.physionet.org/users/shared/challenge-2019",
+          "training_setB.zip", sep = "/"),
+    file.path(physio_dir, "training_setB.zip")
+)
+unzip(file.path(physio_dir, "training_setB.zip"), exdir = physio_dir)
+export_data("physionet2019", data_dir = physio_dir)
+```
+
+If `export_data()` is called with a default argument of `data_path("export")` for `dest_dir`, this will create one parquet file per data source under `data-export`. This procedure can also be run using the PhysioNet demo datasets for debugging and to make sure it runs through:
+
+```r
+install.packages(
+  c("mimic.demo", "eicu.demo"),
+  repos = "https://eth-mds.github.io/physionet-demo"
+)
+
+for (x in c("mimic_demo", "eicu_demo")) {
+  export_data(x)
+}
+```
+
 ## Python pipeline:  
 To set up python libraries run:  
 ```>pipenv install```  
@@ -96,20 +160,3 @@ To create plots with the pooled predictions, run:
 ```>python scripts/plots/plot_roc.py --input_path results/evaluation_test/prediction_pooled_subsampled/max/plots/result_data_subsampled.csv```  
 And heatmap incl. pooled preds:  
 ```>python -m scripts.make_heatmap results/evaluation_test/plots/roc_summary_subsampled.csv --pooled_path results/evaluation_test/prediction_pooled_subsampled/max/plots/roc_summary_subsampled.csv```  
-
-## R-code pipeline
-This was used for creating the harmonized raw datasets.
-
-To set up a dataset, run the Rscript in `r/bin` for example as
-
-```r
-.r/bin/create_dataset.R -s "mimic_demo"
-```
-
-This requires the packages `optparse` and `ricu` with can be installed as
-
-```r
-install.packages(c("optparse", "devtools"))
-devtools::install_github("septic-tank/ricu")
-```
-
