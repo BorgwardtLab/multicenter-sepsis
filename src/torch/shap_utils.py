@@ -267,6 +267,7 @@ def get_pooled_shapley_values(
     ignore_indicators_and_counts=False,
     hours_before=None,
     return_normalised_features=True,
+    label=None,
 ):
     """Process file and return pooled Shapley values.
 
@@ -287,6 +288,10 @@ def get_pooled_shapley_values(
         If set, returns normalised features, corresponding to the
         values the model saw. If set to `False`, will calculate
         the original (i.e. measured) values.
+
+    label : int or `None`, optional
+        If set, only returns Shapley values corresponding to samples
+        with the specific label.
 
     Returns
     -------
@@ -310,6 +315,7 @@ def get_pooled_shapley_values(
 
     feature_names = data['feature_names']
     lengths = data['lengths'].numpy()
+    labels = data['labels'].numpy()
 
     # TODO: we might want to rename this now since it ignores
     # effectively everything *but* the raw features.
@@ -343,28 +349,37 @@ def get_pooled_shapley_values(
     features = data['input'].numpy()
     features = features[:, :, important_indices]
 
+    # Restrict all outputs to a single label only. We achieve this by
+    # simply setting everything to NaN.
+    if label is not None:
+        mask = labels != label
+
+        shap_values[mask] = np.nan
+        features[mask] = np.nan
+
     if not return_normalised_features:
         name = dataset_name.lower()
         rep = out['rep']
-        filename = f'normalizer_{name}_rep_{rep}.json'
+        filename = f'./config/normalizer/normalizer_{name}_rep_{rep}.json'
 
-        with open(f'./config/normalizer/{filename}') as f:
-            normaliser = json.load(f)
-            means = normaliser['means']
-            sdevs = normaliser['stds']
+        if os.path.exists(filename):
+            with open(filename) as f:
+                normaliser = json.load(f)
+                means = normaliser['means']
+                sdevs = normaliser['stds']
 
-            means = np.asarray(
-                [means.get(name, 0.0) for name in selected_features]
-            ).astype(float)
-            sdevs = np.asarray(
-                [sdevs.get(name, 1.0) for name in selected_features]
-            ).astype(float)
+                means = np.asarray(
+                    [means.get(name, 0.0) for name in selected_features]
+                ).astype(float)
+                sdevs = np.asarray(
+                    [sdevs.get(name, 1.0) for name in selected_features]
+                ).astype(float)
 
-            means[np.isnan(means)] = 0.0
-            means[np.isnan(sdevs)] = 1.0
+                means[np.isnan(means)] = 0.0
+                means[np.isnan(sdevs)] = 1.0
 
-            features = features * sdevs
-            features = features + means
+                features = features * sdevs
+                features = features + means
 
     shap_values_pooled, features_pooled = pool(
         lengths,
