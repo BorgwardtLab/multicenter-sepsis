@@ -4,7 +4,7 @@ invisible(
 )
 
 add_tail <- function(x) {
-  rbind(x, tail(x, n = 1L)[, data_vars(x) := NA][, stay_time := mins(1860L)])
+  rbind(x, tail(x, n = 1L)[, data_vars(x) := NA][, stay_time := hours(31L)])
 }
 
 filter_time <- function(x) {
@@ -24,17 +24,11 @@ rm_x_axis <- function(x) {
 
 load_dat <- function(feat, ...) {
 
-  min <- load_concepts(feat, ..., interval = mins(1L))
-  hrs <- load_concepts(feat, ..., interval = mins(60L))
-  hrs <- change_interval(hrs, mins(1L))
-
-  min <- rename_cols(min, "min", data_vars(min))
-  hrs <- rename_cols(hrs, "hrs", data_vars(hrs))
-
-  res <- merge(min, hrs, all = TRUE)
-  res <- rename_cols(res, "stay_time", index_var(min))
+  res <- load_concepts(feat, ...)
+  res <- rename_cols(res, c("stay_time", "meas"),
+                     c(index_var(res), data_var(res)))
   res <- filter_time(res)
-  res <- replace_na(add_tail(res), type = "locf", vars = "hrs")
+  res <- replace_na(add_tail(res), type = "locf", vars = "meas")
 
   stats <- read_colstats(src, cols = paste0(feat, "_raw"))
 
@@ -46,67 +40,96 @@ load_dat <- function(feat, ...) {
 
 src <- "aumc"
 
-dat <- read_res(train_src = src, test_src = src, feat_set = "locf",
-                predictor = "lgbm", prefix = "cube")
+# dat <- read_res(train_src = src, test_src = src, feat_set = "locf",
+#                 predictor = "lgbm", prefix = "cube")
+
+# dat <- jsonlite::read_json(file.path(data_path("res"),
+#                                      "predictions_5330.json"))
+# dat <- lapply(dat, function(x) {
+#   x <- lapply(x, unlist)
+#   l <- lengths(x)
+#   x[l == 1] <- lapply(x[l == 1], rep, max(lengths(x)))
+#   data.table::as.data.table(x)
+# })
+# dat <- data.table::rbindlist(dat)
+# dat <- dat[times >= -12 & times < 31 & dataset_train == "EICU",
+#            c("times", "prob_scores")]
+
+dat <- data.table::data.table(
+  times = c(
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30
+  ),
+  prob_scores = c(
+    0.0304742439423084, 0.315896359599296, 0.517189148546229,
+    0.629516052045979, 0.698422953960539, 0.710013185986267, 0.780179716033179,
+    0.809432176529158, 0.811111307120055, 0.81271707242609, 0.835248976864155,
+    0.882805128592015, 0.879238829671948, 0.85299284571392, 0.88677290639147,
+    0.907706156332606, 0.903959547086539, 0.907085364827868, 0.90876284042415,
+    0.915558170456778, 0.880298371259317, 0.895552229785397, 0.913188222556421,
+    0.91182803257856, 0.913253313547549, 0.915294009000581, 0.917794834098309,
+    0.914397248571808, 0.911674508092618, 0.910892229283402, 0.912524944263206
+  )
+)
 
 pid <- unique(dat[is_case & onset > hours(24) & onset < hours(26), ]$stay_id)
 
 vitals <- lapply(
-  c("resp", "o2sat", "hr"),
+  c("urine", "map", "hr"),
   function(feat, ...) {
+    res <- load_dat(feat, ...)
+    fea <- switch(feat, urine = "urine", map = "mean arterial bp",
+                  hr = "heart rate")
+    res <- res[, feat := fea]
+    res
 
-    res <- load_dat(feat, src, patient_ids = pid)
-
-    res <- ggplot(res) +
-      geom_point(aes(stay_time, min), alpha = 0.2) +
-      geom_step(aes(stay_time, hrs), color = "red") +
-      theme_bw() +
-      xlim(-1, 31) +
-      ylab(feat)
-
-    if (identical(feat, "hr")) {
-      res +
-        xlab("Stay time relative to ICU admission [hours]") +
-        ylab("Heart rate")
-    } else {
-      res <- rm_x_axis(res)
-      if (identical(feat, "resp")) {
-        res + ylab("Resp. rate")
-      } else {
-        res + ylab(expression(O[2]~Sat.))
-      }
-    }
-  }
+  },
+  src, patient_ids = pid, verbose = FALSE
 )
+
+vitals <- rbind_lst(vitals)
+
+vits <- ggplot(vitals) +
+  geom_step(aes(stay_time, meas, color = feat)) +
+  theme_bw() +
+  xlim(-1, 31) +
+  ylab("Vital signs (Z-scored)") +
+  xlab("Stay time relative to ICU admission [hours]") +
+  guides(color = guide_legend(title = "Vital sign")) +
+  theme(legend.position = "bottom")
 
 labs <- lapply(
   c("crea", "bili", "lact"),
   function(feat, ...) {
-    res <- load_dat(feat, src, patient_ids = pid)
-    res <- res[, feat := feat]
+    res <- load_dat(feat, ...)
+    fea <- switch(feat, crea = "creatinine", bili = "bilirubin",
+                  lact = "lactate")
+    res <- res[, feat := fea]
     res
-  }
+  },
+  src, patient_ids = pid, verbose = FALSE
 )
 
 labs <- rbind_lst(labs)
 
 labp <- ggplot(labs) +
-  geom_point(aes(stay_time, min, color = feat)) +
-  geom_step(aes(stay_time, hrs, color = feat)) +
+  geom_step(aes(stay_time, meas, color = feat)) +
   theme_bw() +
   xlim(-1, 31) +
-  ylab("Lab tests") +
-  guides(color = guide_legend(title = "Lab test"))
+  ylab("Lab tests (Z-scored)") +
+  guides(color = guide_legend(title = "Lab test")) +
+  theme(legend.position = "bottom")
 
-pred <- ggplot(as_hours(filter_time(dat[stay_id == pid, ]))) +
-  geom_step(aes(stay_time, prediction)) +
+pred <- ggplot(dat) +
+  geom_step(aes(times, prob_scores)) +
   geom_vline(xintercept = 25, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = 0.6381, linetype = "dashed") +
   theme_bw() +
   xlim(-1, 31) +
-  ylab("Prediction score")
+  ylab("Predicted probability")
 
 sabx <- load_concepts(c("samp", "abx"), src, patient_ids = pid, merge = FALSE,
-                      interval = mins(1L))
+                      interval = mins(1L), verbose = FALSE)
 
 sabx <- lapply(sabx,
   function(x) {
@@ -117,7 +140,8 @@ sabx <- lapply(sabx,
 sabx <- rbind_lst(sabx)
 sabx <- rename_cols(sabx, "stay_time", index_var(sabx))
 
-susi <- load_concepts("susp_inf", src, patient_ids = pid, interval = mins(60L))
+susi <- load_concepts("susp_inf", src, patient_ids = pid, interval = mins(60L),
+                      verbose = FALSE)
 susi <- change_interval(susi, mins(1L))
 
 susi <- susi[, c("feat", data_vars(susi), "upr", "lwr") := list(
@@ -142,7 +166,8 @@ swin <- ggplot(as_hours(filter_time(swin)), aes(stay_time, feat)) +
                    labels = c("SI window", "Sampling", "ABx")) +
   theme(axis.title.y = element_blank())
 
-soda <- load_concepts("sofa", src, patient_ids = pid)
+soda <- load_concepts("sofa", src, patient_ids = pid, verbose = FALSE,
+                      keep_components = TRUE)
 soda <- rename_cols(soda, "stay_time", index_var(soda))
 soda <- soda[, delta_sofa := delta_cummin(sofa)]
 
@@ -155,18 +180,17 @@ sofa <- ggplot(as_hours(filter_time(soda))) +
 
 cowplot::plot_grid(
   cowplot::plot_grid(
-    plotlist = c(
-      list(rm_x_axis(sofa), rm_x_axis(swin), rm_x_axis(pred),
-           rm_x_axis(labp) + theme(legend.position = "none")),
-      vitals
-    ),
+    plotlist = list(rm_x_axis(sofa), rm_x_axis(swin), rm_x_axis(pred),
+                    rm_x_axis(labp) + theme(legend.position = "none"),
+                    vits + theme(legend.position = "none")),
     ncol = 1L,
-    rel_heights = c(1, 0.5, 1.5, 1, 1, 1, 1.25),
+    rel_heights = c(1, 0.5, 1, 1, 1.2),
     align = "v"
   ),
   cowplot::get_legend(labp + theme(legend.position = "bottom")),
+  cowplot::get_legend(vits + theme(legend.position = "bottom")),
   ncol = 1L,
-  rel_heights = c(2, 0.1)
+  rel_heights = c(3, 0.1, 0.1)
 )
 
 ggsave("prediction.pdf", width = 7, height = 10.5)
