@@ -69,6 +69,7 @@ def main():
         n_subsamples = 1 # to mimic subsampling
 
     summary = []
+    bt_auc = pd.DataFrame() # gathering all bootstraps in the inner loop
 
     sns.set(font='Helvetica')
 
@@ -86,8 +87,9 @@ def main():
             
             aucs = []
             mean_fpr = np.linspace(0, 1, 200)
-            metrics = pd.DataFrame()
-           
+            metrics = pd.DataFrame() # gathering metrics over repetition splits
+            
+ 
             # loop over (potential) subsamples and repetition folds:
             for rep in reps:
                 tprs = []
@@ -105,8 +107,22 @@ def main():
                     fn = interpolate.interp1d(fpr, tpr) #interpolation fn
                     interp_tpr = fn(mean_fpr)
                     tprs.append(interp_tpr)
-                    #interp_tpr = np.interp(mean_fpr, fpr, tpr.values)
-                    #interp_tpr[0] = 0.0
+
+                    # Inside the loop, gather all auc / ROC results as bootstraps:
+                    curr_auc = auc(mean_fpr, interp_tpr) 
+                    curr_boot_df = pd.DataFrame(
+                        {   'AUC': [curr_auc], 
+                            'rep': [rep], 
+                            'subsample': [subsample],
+                            'model': [model],
+                            'train_dataset': [train_dataset],
+                            'eval_dataset': [eval_dataset]
+                        }
+                    )
+                    # bootstraps df with raw ROC entries:
+                    bt_auc = bt_auc.append(curr_boot_df)
+
+                # Means over subsampling, for each repetition split
                 mean_tpr = np.mean(tprs, axis=0)
                 roc_auc = auc(mean_fpr, mean_tpr) #on raw values
                 aucs.append(roc_auc)
@@ -155,11 +171,19 @@ def main():
         outfile = os.path.join(output_path, outfile + '.png') 
         plt.savefig(outfile, dpi=300)
 
+    # Summary aggregated over subsamples, variation in repetition splits:
     summary = pd.concat(summary)
     summary_file = os.path.join(output_path, 'roc_summary') 
     if 'subsampled' in os.path.split(input_path)[-1]:
         summary_file += '_subsampled'
     summary.to_csv(summary_file + '.csv')
+    
+    # Bootstrap results (inner loop) also showing subsampling variation:
+    bt_file = os.path.join(output_path, 'roc_bootstrap') 
+    if 'subsampled' in os.path.split(input_path)[-1]:
+        bt_file += '_subsampled'
+    bt_auc.to_csv(bt_file + '.csv')
+    embed()
          
 if __name__ == '__main__':
     main()
