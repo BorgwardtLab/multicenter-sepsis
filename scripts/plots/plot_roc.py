@@ -23,6 +23,11 @@ def model_map(name):
     # harmonize str length; adjust as we see fit
     return name.ljust(6, ' ')
 
+def emory_map(name):
+    if name == 'physionet2019':
+        name = 'emory'
+    return name 
+
 def raw_to_csv(metrics, csv_path, auc_mean, auc_std):
     """ write raw roc values to csv"""
     cols = [col for col in metrics.columns if not 'rep' in col]
@@ -49,11 +54,14 @@ def main():
     )
     args = parser.parse_args()
     input_path = args.input_path
-    models = ['AttentionModel', 'GRUModel', 'lgbm', 'lr', 'sofa', 'qsofa', 'sirs', 'mews', 'news'] #, 'news',
-    datasets = ['physionet2019', 'aumc', 'hirid', 'eicu', 'mimic']
+    #models = ['AttentionModel', 'GRUModel', 'lgbm', 'lr', 'sofa', 'qsofa', 'sirs', 'mews', 'news'] #, 'news',
+    #datasets = ['physionet2019', 'aumc', 'hirid', 'eicu', 'mimic']
 
     #infile ='results/evaluation/plots/result_data.csv'
     df = pd.read_csv(input_path)
+    for col in ['dataset_train','dataset_eval']:
+        df[col] = df[col].apply(emory_map)
+
     use_subsamples = True if 'subsample' in df.columns else False
     if use_subsamples:
         n_subsamples = df['subsample'].unique().shape[0]
@@ -71,16 +79,7 @@ def main():
 
         plt.figure()
         for (model), data in df_.groupby(['model']): #same ordering as scatter plot
-            #for train_dataset in datasets:
-            #    for eval_dataset in datasets:
-            #        plt.figure()
-            #        for model in models:
-            #            filter_dict = {
-            #                'model': model,
-            #                'dataset_train': train_dataset,
-            #                'dataset_eval':  eval_dataset
-            #            }
-            #            data = df_filter(df, filter_dict) 
+            
             if len(data) < 1:
                 continue 
             reps = data['rep'].unique()
