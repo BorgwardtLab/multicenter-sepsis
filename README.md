@@ -144,6 +144,7 @@ For creating ROC plots, run:
 
 For creating precision/earliness plots, run:
 ```>python -m scripts.plots.plot_scatterplots results/evaluation/plots/result_data.csv --r 0.80 --point-alpha 0.35 --line-alpha 1.0 --output results/evaluation/plots/```  
+For the scatter data, in order to return 50 measures (5 repetition splits, 10 subsamplings), set ```--aggregation micro```
 
 ## Pooled predictions  
 
@@ -158,5 +159,7 @@ Then, we evaluate them:
 To create plots with the pooled predictions, run:  
 ```>python -m scripts.plots.gather_data --input_path results/evaluation_test/prediction_pooled_subsampled/max/evaluation_output --output_path results/evaluation_test/prediction_pooled_subsampled/max/plots/```  
 ```>python scripts/plots/plot_roc.py --input_path results/evaluation_test/prediction_pooled_subsampled/max/plots/result_data_subsampled.csv```  
+For computing precision/earliness, run:  
+```python -m scripts.plots.plot_scatterplots results/evaluation_test/prediction_pooled_subsampled/max/plots/result_data_subsampled.csv --r 0.80 --point-alpha 0.35 --line-alpha 1.0 --output results/evaluation_test/prediction_pooled_subsampled/max/plots/``` 
 And heatmap incl. pooled preds:  
 ```>python -m scripts.make_heatmap results/evaluation_test/plots/roc_summary_subsampled.csv --pooled_path results/evaluation_test/prediction_pooled_subsampled/max/plots/roc_summary_subsampled.csv```  
