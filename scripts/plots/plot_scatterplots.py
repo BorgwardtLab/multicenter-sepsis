@@ -21,7 +21,7 @@ import seaborn as sns
 
 import pandas as pd
 from scripts.plots.plot_patient_eval import prev_dict
-from scripts.plots.plot_roc import model_map
+from scripts.plots.plot_roc import model_map, emory_map
 
 def interpolate_at(df, x):
     """Interpolate a data frame at certain positions.
@@ -290,10 +290,24 @@ if __name__ == '__main__':
         help='If set, indicates that the resulting plots should be shown, '
              'not only saved to a file.'
     )
-
+    parser.add_argument(
+        '--aggregation',
+        default='macro',
+        type=str,
+        choices=['macro', 'micro'],
+        help="""How to aggregate over results. macro: subsamples are 
+            averaged out, micro: bootstraps of the inner loop including 
+            subsamples"""
+    )
+    
     args = parser.parse_args()
 
+    aggregation =  args.aggregation
+
     df = pd.read_csv(args.FILE)
+    for col in ['dataset_train','dataset_eval']:
+        df[col] = df[col].apply(emory_map)
+     
     plot_df_list = []
     agg_df_list = []
     for (source, target), df_ in df.groupby(['dataset_train', 'dataset_eval']):
@@ -330,6 +344,7 @@ if __name__ == '__main__':
             line_alpha=args.line_alpha,
             prev=prev,
             data_names = [source, target],
+            aggregation = aggregation
         )
         plot_df_list.append(plot_df_curr)
         agg_df_list.append(agg_df_curr) 
@@ -364,11 +379,12 @@ if __name__ == '__main__':
     summary = agg_df.query("train_dataset == eval_dataset & train_dataset != 'physionet2019'").mean()
     print(f'Pat eval summary:', summary) 
     for df,name in zip([plot_df, agg_df], 
-        ['scatter_raw_data.csv', 'scatter_agg_data.csv']):
-        
+        ['scatter_raw_data', 'scatter_agg_data']):
+        if aggregation != 'macro': #default
+            name += f'_{aggregation}' 
         df.to_csv(
             os.path.join(args.output_directory,
-                name
+                name + '.csv'
             ),
             index=False 
         )
