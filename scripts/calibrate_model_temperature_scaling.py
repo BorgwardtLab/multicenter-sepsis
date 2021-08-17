@@ -30,6 +30,23 @@ def get_labels_and_logits(eval_data):
     labels = np.concatenate([np.array(patient_labels) for patient_labels in eval_data["targets"]], -1)
     return labels, logits
 
+def get_patient_labels_and_logits(eval_data):
+    logits = np.array( 
+            [to_patient_level(patient_scores, is_score=True) for patient_scores in eval_data["scores"]]
+    )
+    labels = np.array( 
+            [to_patient_level(patient_labels, is_score=False) for patient_labels in eval_data["targets"]]
+    )
+    return labels, logits
+
+def to_patient_level(x, is_score=True): 
+    # just as sanity check: check that no nans in here, otherwise this messes patient-level labelling up
+    assert not np.any(np.isnan(x))
+    if is_score:
+        return np.max(x)
+    else:
+        return np.any(x).astype(float) 
+
 
 def optim_step(optimizer, logits, labels, temperature):
     optimizer.zero_grad()
@@ -40,7 +57,7 @@ def optim_step(optimizer, logits, labels, temperature):
 def run_temperature_scaling(logits, labels):
     logits, labels = torch.tensor(logits), torch.tensor(labels)
     temp = torch.nn.Parameter(torch.full((1,), 1.5))
-    optimizer = torch.optim.LBFGS([temp], lr=0.5, max_iter=50)
+    optimizer = torch.optim.LBFGS([temp], lr=0.5, max_iter=50) 
     step = functools.partial(optim_step, optimizer, logits, labels, temp)
     print('BCE loss prior to temperature scaling:', F.binary_cross_entropy_with_logits(logits, labels).item())
     optimizer.step(step)
@@ -48,7 +65,7 @@ def run_temperature_scaling(logits, labels):
     return temp.item()
 
 
-def main(mapping_file_validation, mapping_file_test, models, eval_files_output, mapping_file_output):
+def main(mapping_file_validation, mapping_file_test, models, eval_files_output, mapping_file_output, level):
     os.makedirs(eval_files_output, exist_ok=True)
     output_mapping = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     with open(mapping_file_validation, 'r') as f:
@@ -61,16 +78,32 @@ def main(mapping_file_validation, mapping_file_test, models, eval_files_output, 
             for repetition in ["rep_0", "rep_1", "rep_2", "rep_3", "rep_4"]:
                 print(model, dataset, repetition)
                 eval_data = get_eval_data(mapping=mapping_validation, model=model, dataset=dataset, repetition=repetition)
-                labels, logits = get_labels_and_logits(eval_data)
+                if level == 'patient':
+                    labels, logits = get_patient_labels_and_logits(eval_data)
+                elif level == 'timepoint':
+                    labels, logits = get_labels_and_logits(eval_data)
+                else:
+                    raise ValueError(f' {level} is not among the valid levels.')
+
                 temperature = run_temperature_scaling(logits, labels)
                 print("Temperature:", temperature)
 
                 # Rescale predictions
                 eval_data = get_eval_data(mapping=mapping_test, model=model, dataset=dataset, repetition=repetition)
-                eval_data["scores"] = [
+                if level == 'timepoint':
+                    eval_data["scores"] = [
                     (np.array(patient_scores)/temperature).tolist()
                     for patient_scores in eval_data["scores"]
-                ]
+                    ]
+                elif level == 'patient':
+                    test_labels, test_logits = get_patient_labels_and_logits(eval_data)
+                    eval_data["scores"] = (test_logits/temperature).tolist()
+                    eval_data["targets"] = test_label.tolist()
+                else:
+                    raise ValueError(f'{level} not among valid levels.')
+                eval_data["calibration_method"] = "temperature_scaling"
+                eval_data["calibration_level"] = level
+
                 output_file = os.path.join(eval_files_output, f"{model}_{dataset}_{repetition}.json")
                 with open(output_file, "w") as f:
                     json.dump(eval_data, f)
@@ -88,6 +121,8 @@ if __name__ == "__main__":
     parser.add_argument("--models", type=str, nargs="+", default=["AttentionModel", "GRUModel"])
     parser.add_argument("--output_folder", type=str, required=True)
     parser.add_argument("--output_mapping", type=str, required=True)
+    parser.add_argument("--level", type=str, choices=["patient", "timepoint"], default="timepoint")
+
     args = parser.parse_args()
 
-    main(args.mapping_val, args.mapping_test, args.models, args.output_folder, args.output_mapping)
+    main(args.mapping_val, args.mapping_test, args.models, args.output_folder, args.output_mapping, args.level)

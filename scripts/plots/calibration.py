@@ -24,23 +24,28 @@ def get_eval_data(mapping_file, model, dataset, repetition="rep_0"):
         eval_data = json.load(f)
     return eval_data
 
-
 def sigmoid(x):
     return 1/(1 + np.exp(-x))
 
 
-def get_labels_and_probabilites(eval_data, use_sigmoid=True):
+def get_labels_and_probabilites(eval_data, use_sigmoid=True, level='timepoint'):
     # This is only valid for the neural network models as other models might
     # require the computation of probabilities though alternative means.
-    probabilities = np.concatenate([np.array(patient_scores) for patient_scores in eval_data["scores"]], -1)
+    if level == 'timepoint':
+        probabilities = np.concatenate([np.array(patient_scores) for patient_scores in eval_data["scores"]], -1)
+        labels = np.concatenate([np.array(patient_labels) for patient_labels in eval_data["targets"]], -1)
+    elif level == 'patient':
+        labels = np.array(eval_data["targets"]) # we assume that in the first calibration script, the targets are overwritten
+        # with patient labels 
+        probabilities = np.array(eval_data["scores"])
+    else:
+        raise ValueError(f'{level} not among valid levels.')
     if use_sigmoid:
         probabilities = sigmoid(probabilities)
-    labels = np.concatenate([np.array(patient_labels) for patient_labels in eval_data["targets"]], -1)
-
     return labels, probabilities
 
 
-def main(mapping_file, model, output, use_sigmoid=True):
+def main(mapping_file, model, output, use_sigmoid=True, level='timepoint', nbins=20): #nbins=100
     plt.figure(figsize=(10, 10))
     ax1 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax2 = plt.subplot2grid((3, 1), (2, 0))
@@ -51,12 +56,12 @@ def main(mapping_file, model, output, use_sigmoid=True):
         prob_histograms = []
         for repetition in ["rep_0", "rep_1", "rep_2", "rep_3", "rep_4"]:
             eval_data = get_eval_data(mapping_file, model=model, dataset=dataset, repetition=repetition)
-            labels, probabilities = get_labels_and_probabilites(eval_data, use_sigmoid=use_sigmoid)
-            prob_true, prob_pred = calibration.calibration_curve(labels, probabilities, n_bins=100)
-            x = np.linspace(0., 1., 100)
+            labels, probabilities = get_labels_and_probabilites(eval_data, use_sigmoid=use_sigmoid, level=level)
+            prob_true, prob_pred = calibration.calibration_curve(labels, probabilities, n_bins=nbins)
+            x = np.linspace(0., 1., nbins)
             prob_trues.append(np.interp(x, prob_pred, prob_true))
             prob_preds.append(x)
-            hist, edges = np.histogram(probabilities, bins=100, range=(0., 1.))
+            hist, edges = np.histogram(probabilities, bins=nbins, range=(0., 1.))
             prob_histograms.append(hist)
 
         prob_preds = np.stack(prob_preds, -1)
@@ -70,14 +75,14 @@ def main(mapping_file, model, output, use_sigmoid=True):
 
         p = ax1.plot(prob_preds_mean, prob_trues_mean, "-", label=dataset)[0]
         color = p.get_color()
-        ax1.fill_between(prob_preds_mean, prob_trues_mean-prob_trues_std, prob_trues_mean+prob_trues_std, color=color, alpha=0.5)
+        ax1.fill_between(prob_preds_mean, prob_trues_mean-prob_trues_std, prob_trues_mean+prob_trues_std, color=color, alpha=0.3)
 
         # In order to allow shaded areas we need to build our own histogram.
         histogram_x = np.repeat(edges, 2)[1:-1]
         histogram_y_mean = np.repeat(prob_histograms_mean, 2)
         histogram_y_std = np.repeat(prob_histograms_std, 2)
         ax2.plot(histogram_x, histogram_y_mean, color=color)
-        ax2.fill_between(histogram_x, histogram_y_mean-histogram_y_std, histogram_y_mean+histogram_y_std, color=color, alpha=0.5)
+        ax2.fill_between(histogram_x, histogram_y_mean-histogram_y_std, histogram_y_mean+histogram_y_std, color=color, alpha=0.3)
 
     ax1.set_ylabel("Fraction of positives")
     ax1.set_ylim([-0.05, 1.05])
@@ -99,6 +104,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, required=True)
     parser.add_argument('--output', type=str, required=True)
     parser.add_argument('--no_sigmoid', action='store_true', default=False)
+    parser.add_argument("--level", type=str, choices=["patient", "timepoint"], default="timepoint")
 
     args = parser.parse_args()
-    main(args.mapping_file, args.model, args.output, use_sigmoid=not args.no_sigmoid)
+    main(args.mapping_file, args.model, args.output, use_sigmoid=not args.no_sigmoid, level=args.level)
