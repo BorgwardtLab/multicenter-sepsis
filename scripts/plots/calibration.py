@@ -8,6 +8,7 @@ import sklearn.calibration as calibration
 
 # MAPPING_FILE = "/links/groups/borgwardt/Projects/sepsis/multicenter-sepsis/results/evaluation_test/prediction_mapping.json"
 datasets = ['eicu', 'aumc', 'physionet2019', 'mimic', 'hirid']
+datasets = ['eicu', 'aumc', 'mimic', 'hirid']
 
 
 def get_eval_data(mapping_file, model, dataset, repetition="rep_0"):
@@ -28,16 +29,18 @@ def sigmoid(x):
     return 1/(1 + np.exp(-x))
 
 
-def get_labels_and_probabilites(eval_data):
+def get_labels_and_probabilites(eval_data, use_sigmoid=True):
     # This is only valid for the neural network models as other models might
     # require the computation of probabilities though alternative means.
-    probabilities = sigmoid(np.concatenate([np.array(patient_scores) for patient_scores in eval_data["scores"]], -1))
+    probabilities = np.concatenate([np.array(patient_scores) for patient_scores in eval_data["scores"]], -1)
+    if use_sigmoid:
+        probabilities = sigmoid(probabilities)
     labels = np.concatenate([np.array(patient_labels) for patient_labels in eval_data["targets"]], -1)
 
     return labels, probabilities
 
 
-def main(mapping_file, model, output):
+def main(mapping_file, model, output, use_sigmoid=True):
     plt.figure(figsize=(10, 10))
     ax1 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax2 = plt.subplot2grid((3, 1), (2, 0))
@@ -46,9 +49,9 @@ def main(mapping_file, model, output):
         prob_preds = []
         prob_trues = []
         prob_histograms = []
-        for repetition in ["rep_0", "rep_1", "rep_3", "rep_4"]:
+        for repetition in ["rep_0", "rep_1", "rep_2", "rep_3", "rep_4"]:
             eval_data = get_eval_data(mapping_file, model=model, dataset=dataset, repetition=repetition)
-            labels, probabilities = get_labels_and_probabilites(eval_data)
+            labels, probabilities = get_labels_and_probabilites(eval_data, use_sigmoid=use_sigmoid)
             prob_true, prob_pred = calibration.calibration_curve(labels, probabilities, n_bins=100)
             x = np.linspace(0., 1., 100)
             prob_trues.append(np.interp(x, prob_pred, prob_true))
@@ -95,6 +98,7 @@ if __name__ == "__main__":
     parser.add_argument('--mapping_file', type=str, required=True)
     parser.add_argument('--model', type=str, required=True)
     parser.add_argument('--output', type=str, required=True)
+    parser.add_argument('--no_sigmoid', action='store_true', default=False)
 
     args = parser.parse_args()
-    main(args.mapping_file, args.model, args.output)
+    main(args.mapping_file, args.model, args.output, use_sigmoid=not args.no_sigmoid)
