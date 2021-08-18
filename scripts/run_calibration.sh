@@ -9,7 +9,7 @@ pipenv run python scripts/calibrate_model_temperature_scaling.py --mapping_val r
 mkdir -p results/calibration/plots
 pipenv run python scripts/plots/calibration.py --mapping_file results/evaluation_test/prediction_mapping.json --model AttentionModel --output results/calibration/plots/AttentionModel.pdf
 pipenv run python scripts/plots/calibration.py --mapping_file results/evaluation_test/prediction_mapping.json --model GRUModel --output results/calibration/plots/GRUModel.pdf
-pipenv run python scripts/plots/calibration.py --mapping_file results/calibration/platt_mapping.json --model AttentionModel --output results/calibration/plots/AttentionModel_platt.pdf --no_sigmoid
+pipenv run python scripts/plots/calibration.py --mapping_file results/calibration/platt_mapping.json --model AttentionModel --output results/calibration/plots/AttentionModel_platt.pdf 
 pipenv run python scripts/plots/calibration.py --mapping_file results/calibration/platt_mapping.json --model GRUModel --output results/calibration/plots/GRUModel_platt.pdf --no_sigmoid
 pipenv run python scripts/plots/calibration.py --mapping_file results/calibration/isotonic_mapping.json --model AttentionModel --output results/calibration/plots/AttentionModel_isotonic.pdf --no_sigmoid
 pipenv run python scripts/plots/calibration.py --mapping_file results/calibration/isotonic_mapping.json --model GRUModel --output results/calibration/plots/GRUModel_isotonic.pdf --no_sigmoid

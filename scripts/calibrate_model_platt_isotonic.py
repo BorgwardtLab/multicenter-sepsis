@@ -24,6 +24,8 @@ def get_eval_data(mapping, model="AttentionModel", dataset="hirid", repetition="
         eval_data = json.load(f)
     return eval_data
 
+def sigmoid(x):
+    return 1/(1 + np.exp(-x))
 
 def get_labels_and_logits(eval_data):
     # This is only valid for the neural network models as other models might
@@ -51,7 +53,7 @@ def to_patient_level(x, is_score=True):
 
 def run_isotonic_regression(logits, labels):
     iso_reg = IsotonicRegression(out_of_bounds='clip', y_min=0., y_max=1.)
-    iso_reg.fit(logits, labels)
+    iso_reg.fit(sigmoid(logits), labels)
     return iso_reg
 
 
@@ -60,6 +62,15 @@ def run_platt_scaling(logits, labels):
     sigmoid_calibration.fit(logits, labels)
     return sigmoid_calibration
 
+class SigmoidHandler:   
+    def __init__(self, method):
+        self.method = method
+
+    def maybe_sigmoid(self, x):
+        if self.method == 'isotonic_regression':
+            return sigmoid(x)
+        else:
+            return x
 
 def main(mapping_file_validation, mapping_file_test, models, eval_files_output, mapping_file_output, calibration_method, level):
     os.makedirs(eval_files_output, exist_ok=True)
@@ -68,6 +79,13 @@ def main(mapping_file_validation, mapping_file_test, models, eval_files_output, 
         mapping_validation = json.load(f)
     with open(mapping_file_test, 'r') as f:
         mapping_test = json.load(f)
+
+    # Sanity check
+    if level == 'timepoint':
+        assert calibration_method != 'raw'
+    
+    # for isotonic regr. we apply sigmoid fn to logits:
+    sh = SigmoidHandler(calibration_method) 
 
     for model in models:
         for dataset in datasets:
@@ -89,6 +107,8 @@ def main(mapping_file_validation, mapping_file_test, models, eval_files_output, 
                     calibration = run_isotonic_regression(logits, labels)
                 elif calibration_method == 'platt_scaling':
                     calibration = run_platt_scaling(logits, labels)
+                elif calibration_method == 'raw':
+                    pass #we don't calibrate, but write pat-level score to json
                 else:
                     raise RuntimeError()
 
@@ -96,13 +116,19 @@ def main(mapping_file_validation, mapping_file_test, models, eval_files_output, 
                 eval_data = get_eval_data(mapping=mapping_test, model=model, dataset=dataset, repetition=repetition)
                 if level == 'timepoint':
                     eval_data["scores"] = [
-                        calibration.predict(np.array(patient_scores)).tolist()
-                        for patient_scores in eval_data["scores"]
+                        calibration.predict(
+                            sh.maybe_sigmoid(
+                                np.array(patient_scores)
+                            ) 
+                        ).tolist() for patient_scores in eval_data["scores"]
                     ]
                 elif level == 'patient':
                     test_labels, test_logits = get_patient_labels_and_logits(eval_data)
-                    test_logits = calibration.predict(test_logits).tolist()
-                    eval_data["scores"]  = test_logits 
+                    if calibration_method != 'raw':
+                        test_logits = calibration.predict(
+                            sh.maybe_sigmoid(test_logits)
+                        )
+                    eval_data["scores"]  = test_logits.tolist() 
                     eval_data["targets"] = test_labels.tolist()
                 
                     pooled_labels.append(test_labels)
@@ -153,7 +179,7 @@ if __name__ == "__main__":
     parser.add_argument("--models", type=str, nargs="+", default=["AttentionModel"])
     parser.add_argument("--output_folder", type=str, required=True)
     parser.add_argument("--output_mapping", type=str, required=True)
-    parser.add_argument("--calibration_method", type=str, choices=["isotonic_regression", "platt_scaling"])
+    parser.add_argument("--calibration_method", type=str, choices=["isotonic_regression", "platt_scaling", "raw"])
     parser.add_argument("--level", type=str, choices=["patient", "timepoint"], default="timepoint")
 
     args = parser.parse_args()

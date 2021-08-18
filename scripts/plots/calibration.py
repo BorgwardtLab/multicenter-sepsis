@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import sklearn.calibration as calibration
 
 # MAPPING_FILE = "/links/groups/borgwardt/Projects/sepsis/multicenter-sepsis/results/evaluation_test/prediction_mapping.json"
-datasets = ['eicu', 'aumc', 'physionet2019', 'mimic', 'hirid']
+#datasets = ['eicu', 'aumc', 'physionet2019', 'mimic', 'hirid']
 datasets = ['eicu', 'aumc', 'mimic', 'hirid']
 
 
@@ -44,8 +44,17 @@ def get_labels_and_probabilites(eval_data, use_sigmoid=True, level='timepoint'):
         probabilities = sigmoid(probabilities)
     return labels, probabilities
 
+def dataset_naming(name):
+    d = {'mimic': 'MIMIC-III',
+         'eicu': 'eICU',
+         'hirid': 'HiRID',
+         'aumc':  'AUMC',
+         'physionet2019': 'Emory',
+         'pooled': r'pooled $(n-1)$',
+    }
+    return d[name] 
 
-def main(mapping_file, model, output, use_sigmoid=True, level='timepoint', nbins=20): #nbins=100
+def main(mapping_file, model, output, use_sigmoid=True, level='timepoint', nbins=10): #nbins=100
     plt.figure(figsize=(10, 10))
     ax1 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax2 = plt.subplot2grid((3, 1), (2, 0))
@@ -73,10 +82,11 @@ def main(mapping_file, model, output, use_sigmoid=True, level='timepoint', nbins
         prob_histograms_mean = np.mean(prob_histograms, -1)
         prob_histograms_std = np.std(prob_histograms, -1)
 
-        p = ax1.plot(prob_preds_mean, prob_trues_mean, "-", label=dataset)[0]
+        p = ax1.plot(prob_preds_mean, prob_trues_mean, "-", label=dataset_naming(dataset))[0]
         color = p.get_color()
         ax1.fill_between(prob_preds_mean, prob_trues_mean-prob_trues_std, prob_trues_mean+prob_trues_std, color=color, alpha=0.3)
-
+        
+        
         # In order to allow shaded areas we need to build our own histogram.
         histogram_x = np.repeat(edges, 2)[1:-1]
         histogram_y_mean = np.repeat(prob_histograms_mean, 2)
@@ -84,13 +94,14 @@ def main(mapping_file, model, output, use_sigmoid=True, level='timepoint', nbins
         ax2.plot(histogram_x, histogram_y_mean, color=color)
         ax2.fill_between(histogram_x, histogram_y_mean-histogram_y_std, histogram_y_mean+histogram_y_std, color=color, alpha=0.3)
 
+    ax1.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
     ax1.set_ylabel("Fraction of positives")
     ax1.set_ylim([-0.05, 1.05])
     ax1.set_xlim([0., 1.])
     ax1.legend(loc="upper left")
-    ax1.set_title('Calibration plots  (reliability curve)')
+    ax1.set_title('Reliability diagram')
 
-    ax2.set_xlabel("Mean predicted value")
+    ax2.set_xlabel("Mean predicted risk")
     ax2.set_ylabel("Count")
     ax2.set_xlim([0., 1.])
 

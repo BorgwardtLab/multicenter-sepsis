@@ -43,7 +43,7 @@ def to_patient_level(x, is_score=True):
     # just as sanity check: check that no nans in here, otherwise this messes patient-level labelling up
     assert not np.any(np.isnan(x))
     if is_score:
-        return np.max(x)
+        return np.mean(x)
     else:
         return np.any(x).astype(float) 
 
@@ -57,7 +57,7 @@ def optim_step(optimizer, logits, labels, temperature):
 def run_temperature_scaling(logits, labels):
     logits, labels = torch.tensor(logits), torch.tensor(labels)
     temp = torch.nn.Parameter(torch.full((1,), 1.5))
-    optimizer = torch.optim.LBFGS([temp], lr=0.5, max_iter=50) 
+    optimizer = torch.optim.LBFGS([temp], lr=0.01, max_iter=300) #lr=0.5 
     step = functools.partial(optim_step, optimizer, logits, labels, temp)
     print('BCE loss prior to temperature scaling:', F.binary_cross_entropy_with_logits(logits, labels).item())
     optimizer.step(step)
@@ -98,7 +98,7 @@ def main(mapping_file_validation, mapping_file_test, models, eval_files_output, 
                 elif level == 'patient':
                     test_labels, test_logits = get_patient_labels_and_logits(eval_data)
                     eval_data["scores"] = (test_logits/temperature).tolist()
-                    eval_data["targets"] = test_label.tolist()
+                    eval_data["targets"] = test_labels.tolist()
                 else:
                     raise ValueError(f'{level} not among valid levels.')
                 eval_data["calibration_method"] = "temperature_scaling"
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mapping_val", type=str, required=True)
     parser.add_argument("--mapping_test", type=str, required=True)
-    parser.add_argument("--models", type=str, nargs="+", default=["AttentionModel", "GRUModel"])
+    parser.add_argument("--models", type=str, nargs="+", default=["AttentionModel"])
     parser.add_argument("--output_folder", type=str, required=True)
     parser.add_argument("--output_mapping", type=str, required=True)
     parser.add_argument("--level", type=str, choices=["patient", "timepoint"], default="timepoint")
