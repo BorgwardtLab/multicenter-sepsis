@@ -5,6 +5,7 @@ import os
 import shap
 
 import numpy as np
+import pandas as pd
 
 from src.torch.shap_utils import feature_to_name
 from src.torch.shap_utils import get_pooled_shapley_values
@@ -75,6 +76,20 @@ def make_plots(
 
     filename_prefix = os.path.join(
         out_dir, 'shapley_' + prefix + dataset_name
+    )
+
+    df1 = pd.DataFrame(shap_values)
+    df2 = pd.DataFrame(feature_values)
+    df = pd.concat((df1, df2), axis=1)
+
+    column_names = ['shap_' + name for name in feature_names]
+    column_names += ['feat_' + name for name in feature_names]
+
+    df.columns = column_names
+    df.to_csv(
+        f'{filename_prefix}_raw.csv',
+        na_rep='0.0',
+        index=False,
     )
 
     plt.title(dataset_name)
