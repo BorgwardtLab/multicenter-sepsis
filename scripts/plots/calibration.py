@@ -1,4 +1,5 @@
 import argparse
+import os
 import pandas as pd
 import numpy as np
 import json
@@ -55,24 +56,39 @@ def dataset_naming(name):
     return d[name] 
 
 def main(mapping_file, model, output, use_sigmoid=True, level='timepoint', nbins=10): #nbins=100
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(6, 6)) #10,10
     ax1 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax2 = plt.subplot2grid((3, 1), (2, 0))
 
+    #handle output dir (keep old output.pdf argument for backwards compatibility)
+    assert output.endswith('.pdf')
+    out_dir = output.rstrip('.pdf')
+    os.makedirs(out_dir, exist_ok=True)
+ 
     for dataset in datasets:
         prob_preds = []
         prob_trues = []
         prob_histograms = []
+        df = pd.DataFrame() # for writing output to csv
+        df_hist = pd.DataFrame()
+
         for repetition in ["rep_0", "rep_1", "rep_2", "rep_3", "rep_4"]:
             eval_data = get_eval_data(mapping_file, model=model, dataset=dataset, repetition=repetition)
-            labels, probabilities = get_labels_and_probabilites(eval_data, use_sigmoid=use_sigmoid, level=level)
+            try:
+                labels, probabilities = get_labels_and_probabilites(eval_data, use_sigmoid=use_sigmoid, level=level)
+            except:
+                from IPython import embed; embed()
             prob_true, prob_pred = calibration.calibration_curve(labels, probabilities, n_bins=nbins)
             x = np.linspace(0., 1., nbins)
-            prob_trues.append(np.interp(x, prob_pred, prob_true))
+            prob_true_ip = np.interp(x, prob_pred, prob_true)
+            prob_trues.append(prob_true_ip)
             prob_preds.append(x)
             hist, edges = np.histogram(probabilities, bins=nbins, range=(0., 1.))
             prob_histograms.append(hist)
 
+            df[f'prob_true_{repetition}'] = prob_true_ip
+            df[f'hist_y_{repetition}'] = hist
+ 
         prob_preds = np.stack(prob_preds, -1)
         prob_preds_mean = np.mean(prob_preds, -1) # These should all be the same
         prob_trues = np.stack(prob_trues, -1)
@@ -82,10 +98,16 @@ def main(mapping_file, model, output, use_sigmoid=True, level='timepoint', nbins
         prob_histograms_mean = np.mean(prob_histograms, -1)
         prob_histograms_std = np.std(prob_histograms, -1)
 
+        df['prob_pred'] = x
+        df['prob_true_mean'] = prob_trues_mean  
+        df['prob_true_std'] = prob_trues_std 
+        df['hist_x'] = edges[1:]
+        df['hist_y_mean'] = prob_histograms_mean
+        df['hist_y_std'] = prob_histograms_std 
+
         p = ax1.plot(prob_preds_mean, prob_trues_mean, "-", label=dataset_naming(dataset))[0]
         color = p.get_color()
         ax1.fill_between(prob_preds_mean, prob_trues_mean-prob_trues_std, prob_trues_mean+prob_trues_std, color=color, alpha=0.3)
-        
         
         # In order to allow shaded areas we need to build our own histogram.
         histogram_x = np.repeat(edges, 2)[1:-1]
@@ -93,7 +115,12 @@ def main(mapping_file, model, output, use_sigmoid=True, level='timepoint', nbins
         histogram_y_std = np.repeat(prob_histograms_std, 2)
         ax2.plot(histogram_x, histogram_y_mean, color=color)
         ax2.fill_between(histogram_x, histogram_y_mean-histogram_y_std, histogram_y_mean+histogram_y_std, color=color, alpha=0.3)
-
+        
+        # write df to csv:
+        outfile = f'calibration_plot_data_{model}_{dataset}.csv'
+        outfile = os.path.join(out_dir, outfile)
+        df.to_csv(outfile) 
+         
     ax1.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
     ax1.set_ylabel("Fraction of positives")
     ax1.set_ylim([-0.05, 1.05])
@@ -115,7 +142,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, required=True)
     parser.add_argument('--output', type=str, required=True)
     parser.add_argument('--no_sigmoid', action='store_true', default=False)
-    parser.add_argument("--level", type=str, choices=["patient", "timepoint"], default="timepoint")
+    parser.add_argument("--level", type=str, choices=["patient", "timepoint"], default="patient") #timepoint
 
     args = parser.parse_args()
     main(args.mapping_file, args.model, args.output, use_sigmoid=not args.no_sigmoid, level=args.level)
