@@ -184,7 +184,7 @@ def make_scatterplot(
     ax.legend(loc='lower right', fontsize=7,  ncol=3)  #
     #g.legend(loc='upper right', fontsize=7)
  
-    g.set_ylabel(f'Precision @ {int(100*recall_threshold)}% Recall')
+    g.set_ylabel(f'Positive predictive value at {int(100*recall_threshold)}% Sensitivity')
     g.set_ylim((0.0, 0.75))
     g.set_xlabel('Median earliness (hours before onset)')
 
@@ -333,7 +333,7 @@ if __name__ == '__main__':
             prev = prev_dict[target][split]['case_prevalence']
             use_subsamples = False 
         
-        plt.title(f'Train: {source}, Eval: {target}')
+        plt.title(f'Trained on {source}, tested on {target}')
 
         plot_df_curr, agg_df_curr = make_scatterplot(
             df_,
