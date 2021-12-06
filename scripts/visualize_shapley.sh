@@ -6,18 +6,20 @@
 
 HOURS=16
 
-for FEATURES in '' '-i'; do
-  echo 'Calculating bar plot and rankings...'
+for LABEL in '0' '1'; do
+  for FEATURES in '' '-i'; do
+    echo 'Calculating bar plot and rankings...'
 
-  python -m scripts.visualize_shapley_bar results/shapley/j76ft4wm_*.pkl \
-                                          results/shapley/vx8vbt08_*.pkl \
-                                          results/shapley/gjtf48im_*.pkl \
-                                          results/shapley/pr9pa8oa_*.pkl \
-                                          ${FEATURES} -H ${HOURS}
+    python -m scripts.visualize_shapley_bar results/shapley/j76ft4wm_*.pkl \
+                                            results/shapley/vx8vbt08_*.pkl \
+                                            results/shapley/gjtf48im_*.pkl \
+                                            results/shapley/pr9pa8oa_*.pkl \
+                                            ${FEATURES} -H ${HOURS}
 
-  echo 'Calculating swarm plots...'
+    echo 'Calculating swarm plots...'
 
-  for RUN in 'j76ft4wm' 'vx8vbt08' 'gjtf48im' 'pr9pa8oa'; do
-    python -m scripts.visualize_shapley_swarm results/shapley/${RUN}_*.pkl ${FEATURES} -H ${HOURS}
+    for RUN in 'j76ft4wm' 'vx8vbt08' 'gjtf48im' 'pr9pa8oa'; do
+      python -m scripts.visualize_shapley_swarm results/shapley/${RUN}_*.pkl ${FEATURES} -H ${HOURS} --label ${LABEL}
+    done
   done
 done

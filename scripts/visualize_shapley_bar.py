@@ -49,6 +49,12 @@ def make_plot(df, max_values=20, prefix=''):
 
     print(df)
 
+    df.to_csv(
+        f'/tmp/shapley_{prefix}bar.csv',
+        na_rep='0.0',
+        index=True
+    )
+
     error = [np.zeros_like(df['sdev'].values), df['sdev']]
 
     ax.barh(
