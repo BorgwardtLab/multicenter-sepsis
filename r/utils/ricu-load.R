@@ -201,19 +201,18 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
 
   coh <- dat$coh
   nav <- vapply(dat$dat, nrow, integer(1L)) == 0
+  pid <- coh[["initial"]]
 
   msg("--> successfully loaded {length(dat$dat)} features, {sum(nav)}",
-      " of which are fully missing")
+      " of which are fully missing, for a cohort of size {length(pid)}")
 
   tmp <- rm_cols(dat$sep, data_vars(dat$sep))
   tmp <- rename_cols(tmp, "sep_time", index_var(dat$sep), by_ref = TRUE)
 
   win <- merge(dat$win, tmp, all.x = TRUE)
-  tmp <- nrow(win)
-
   win <- win[is.na(sep_time) | (sep_time >= intime & sep_time <= outtime), ]
 
-  msg("--> removing {tmp - nrow(win)} patients due to onsets",
+  msg("--> removing {length(setdiff(pid, id_col(win)))} patients due to onsets",
       " outside of icu stay.\n")
 
   tmp <- nrow(win)
@@ -290,11 +289,10 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
   cnt <- cnt[ts_count >= min_n_meas, ]
   cnt <- cnt[, ts_count := NULL]
 
-  tmp <- id_col(dat)
   dat <- merge(dat, cnt, all.y = TRUE)
 
-  msg("--> removing {length(setdiff(tmp, id_col(dat)))} patients due to fewer",
-      " than {min_n_meas} in-icu measurements.")
+  msg("--> removing {length(setdiff(id_col(win), id_col(dat)))} patients due",
+      " to fewer than {min_n_meas} in-icu measurements.")
 
   mis <- dat[stay_time > 0, list(
     keep = miss_runs(ts_avail, interval(dat), max_miss_win)
@@ -318,9 +316,9 @@ load_data <- function(source, var_cfg = cfg_path("variables.json"), ...,
 
   dat <- rename_cols(dat, paste0(tsn$name, "_raw"), tsn$name, by_ref = TRUE)
 
-  msg("--> loading complete")
-
   coh$final <- unique(id_col(dat))
+
+  msg("--> loading complete yielding a cohort of size {length(coh$final)}")
 
   list(dat = dat, coh = coh)
 }

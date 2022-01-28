@@ -1,12 +1,12 @@
 #!/bin/bash
 
 run_id=$1
-base_dir=results
+base_dir=results/pooled #feature_ablation #results 
 split=test #validation
 eval_dir=${base_dir}/evaluation_${split}
 
-eval_datasets=(Physionet2019) #(AUMC MIMIC Hirid EICU) #(Physionet2019) #
-eval_datasets2=(physionet2019) #(aumc mimic hirid eicu) #sklearn formatting  (physionet2019) #
+eval_datasets=(AUMC) #(AUMC MIMIC Hirid EICU Physionet2019) #MIMIC_LOCF
+eval_datasets2=(aumc) #(aumc mimic hirid eicu physionet2019) #sklearn formatting  (physionet2019) #
 
 cost=5 #lambda cost
 earliness=median

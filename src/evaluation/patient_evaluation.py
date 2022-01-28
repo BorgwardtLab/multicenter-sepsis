@@ -31,10 +31,13 @@ def format_dataset(name):
         'EICU': 'eicu',
         'AUMC': 'aumc',
         'Physionet2019': 'physionet2019',
-        'pooled': 'pooled'
+        'pooled': 'pooled',
+        'MIMIC_LOCF': 'mimic',
     }
     if name in data_mapping.keys():
         return data_mapping[name]
+    elif ',' in name:
+        return name.replace(',','+') 
     elif name in data_mapping.values():
         return name
 

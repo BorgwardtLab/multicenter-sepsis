@@ -10,8 +10,12 @@ invisible(
 # \usepackage{makecell}
 
 
-ynm <- function(x) {
-  ifelse(is_true(x), "\\ding{51}",ifelse(is_false(x), "\\ding{55}", "-"))
+ynm <- function(x, tex = TRUE) {
+  if (tex) {
+    ifelse(is_true(x), "\\ding{51}",ifelse(is_false(x), "\\ding{55}", "-"))
+  } else {
+    is_true(x)
+  }
 }
 
 get_elems <- function(x) {
@@ -24,6 +28,7 @@ get_elems <- function(x) {
 }
 
 srcs <- c("mimic", "eicu", "hirid", "aumc")
+tex  <- FALSE
 
 dict <- load_dictionary(srcs)
 vars <- read_var_json()
@@ -42,19 +47,35 @@ res <- merge(explain_dictionary(dict, cols = c("name", "description")), res,
 
 esrc <- c(srcs, "emory")
 
-res[, esrc] <- lapply(res[, esrc], ynm)
+res[, esrc] <- lapply(res[, esrc], ynm, tex = tex)
 res <- res[, c("name", "description", esrc)]
-res$name <- sub("_", "\\_", res$name, fixed = TRUE)
-res$description <- kableExtra::linebreak(
-  vapply(strwrap(res$description, 35, simplify = FALSE), paste, character(1L),
-         collapse = "\n"),
-  align = "l"
-)
-colnames(res) <- c("Name", "Description", "MI-III", "eICU", "HiRID",
-                   "AUMC", "Emory")
 
-kableExtra::kbl(res, "latex", booktabs = TRUE, longtable = TRUE, escape = FALSE,
-  caption = "Variables used for sepsis prediction.", label = "variables")
+if (tex) {
+
+  res$name <- sub("_", "\\_", res$name, fixed = TRUE)
+  res$description <- kableExtra::linebreak(
+    vapply(strwrap(res$description, 35, simplify = FALSE), paste, character(1L),
+           collapse = "\n"),
+    align = "l"
+  )
+
+  colnames(res) <- c("Name", "Description", "MI-III", "eICU", "HiRID",
+                     "AUMC", "Emory")
+
+  tbl <- kableExtra::kbl(res, "latex", booktabs = TRUE, longtable = TRUE,
+    escape = FALSE, caption = "Variables used for sepsis prediction.",
+    label = "variables"
+  )
+  tbl <- kableExtra::kable_styling(tbl, latex_options = "repeat_header")
+  tbl
+
+} else {
+
+  colnames(res) <- c("Name", "Description", "MIMIC-III", "eICU", "HiRID",
+                     "AUMC", "Emory")
+
+  write.csv(res, "var-tbl.csv")
+}
 
 vars <- read_var_json()
 vars <- vars[is_true(vars$category == "baseline"), ]
@@ -78,30 +99,44 @@ res$rec_name <- sub("^sofa_", "s", res$rec_name)
 res$name <- sub("^sofa_", "s", res$name)
 res$rec_description[grepl("^SOFA ", res$rec_description)] <- "SOFA components"
 
-res[, srcs] <- lapply(res[, srcs], ynm)
+res[, srcs] <- lapply(res[, srcs], ynm, tex = tex)
 res <- res[, c("rec_description", "rec_name", "name", "description", srcs)]
 res$rec_description <- paste(
   toupper(substring(res$rec_description, 1,1)),
   substring(res$rec_description, 2),
   sep = ""
 )
-res$rec_name <- sub("_", "\\_", res$rec_name, fixed = TRUE)
-res$name <- sub("_", "\\_", res$name, fixed = TRUE)
-res$description <- kableExtra::linebreak(
-  vapply(strwrap(res$description, 25, simplify = FALSE), paste, character(1L),
-         collapse = "\n"),
-  align = "l"
-)
+
+if (tex) {
+  res$rec_name <- sub("_", "\\_", res$rec_name, fixed = TRUE)
+  res$name <- sub("_", "\\_", res$name, fixed = TRUE)
+  res$description <- kableExtra::linebreak(
+    vapply(strwrap(res$description, 25, simplify = FALSE), paste, character(1L),
+           collapse = "\n"),
+    align = "l"
+  )
+}
+
 res <- res[order(res$rec_description), ]
-colnames(res) <- c("", "", "Name", "Description", "MI-III", "eICU", "HiRID",
-                   "AUMC")
 rownames(res) <- NULL
 
-kableExtra::collapse_rows(
-  kableExtra::kbl(
+if (tex) {
+
+  colnames(res) <- c("", "", "Name", "Description", "MI-III", "eICU", "HiRID",
+                     "AUMC")
+
+  tbl <- kableExtra::kbl(
     res, "latex", booktabs = TRUE, longtable = TRUE, escape = FALSE,
     caption = "Variables used for baseline scores", label = "baselines"
-  ),
-  1:2,
-  row_group_label_position = "stack"
-)
+  )
+  tbl <- kableExtra::collapse_rows(tbl, 1:2, row_group_label_position = "stack")
+  tbl <- kableExtra::kable_styling(tbl, latex_options = "repeat_header")
+  tbl
+} else {
+
+  colnames(res) <- c("Baseline score", "Baseline name", "Concept name",
+                     "Concept description", "MIMIC-III", "eICU", "HiRID",
+                     "AUMC")
+
+  write.csv(res, "base-tbl.csv")
+}

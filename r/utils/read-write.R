@@ -180,7 +180,7 @@ read_parquet <- function(source, dir = data_path(), cols = NULL, pids = NULL) {
 
   file <- list.files(
     dir,
-    paste0(source, "-[0-9]-[0-9]-[0-9]\\.parquet"),
+    paste0(source, "_[0-9]\\.[0-9]\\.[0-9]\\.parquet"),
     full.names = TRUE
   )
 

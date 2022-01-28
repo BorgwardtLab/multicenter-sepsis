@@ -12,7 +12,7 @@ from src.variables.mapping import VariableMapping
 from src.sklearn.data.utils import load_pickle #save_pickle, index_check
 from src.evaluation.physionet2019_score import compute_prediction_utility 
 from src.evaluation.sklearn_utils import make_consecutive
-from src.sklearn.loading import SplitInfo, ParquetLoader
+from src.sklearn.loading_utils import SplitInfo, ParquetLoader
 from src.preprocessing.transforms import DaskIDTransformer
 
 VM_CONFIG_PATH = str(

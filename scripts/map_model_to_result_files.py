@@ -38,9 +38,15 @@ def main(args):
         fmap = nested_dict() #file mapping dict
           
         results = Parallel(n_jobs=50, batch_size=50)(delayed(process_file)(f) for f in files)
- 
-        for d in results: 
-            fmap[d['model']][d['dataset_train']][d['dataset_eval']]['rep_'+str(d['rep'])]['subsample_'+str(d['subsample'])] = d['filename']
+        subsampled = False
+        if 'subsample' in args.INPUT:
+            subsampled = True  
+        for d in results:
+            if subsampled:
+                fmap[d['model']][d['dataset_train']][d['dataset_eval']]['rep_'+str(d['rep'])]['subsample_'+str(d['subsample'])] = d['filename']
+            else:
+                fmap[d['model']][d['dataset_train']][d['dataset_eval']]['rep_'+str(d['rep'])] = d['filename']
+
         with open(output_path, 'w') as F:
             json.dump(fmap, F, indent=4)
     else:

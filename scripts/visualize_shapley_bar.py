@@ -7,7 +7,72 @@ import copy
 import numpy as np
 import pandas as pd
 
+from shap.plots.colors import blue_rgb
+
+from src.torch.shap_utils import feature_to_name
 from src.torch.shap_utils import get_pooled_shapley_values
+
+import matplotlib
+
+matplotlib.use('pgf')
+matplotlib.rcParams.update({
+    'pgf.texsystem': 'pdflatex',
+    'font.family': 'sans-serif',
+    'font.size': 16,
+    'text.usetex': True,
+    'pgf.rcfonts': True,
+})
+
+import matplotlib.pyplot as plt
+
+
+def make_plot(df, max_values=20, prefix=''):
+    """Create a bar plot from a set of Shapley values."""
+    fig, ax = plt.subplots()
+
+    df = df.fillna(0)
+    df = df.sort_values(by='mean', ascending=False)
+    df = df.iloc[:max_values]
+
+    ytick = range(max_values)
+
+    # Following the look and feel of the 'original' Shap bar plot by
+    # imitating its decorations.
+
+    ax.set_yticks(ytick)
+    ax.set_yticklabels(df.index)
+    ax.invert_yaxis()
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('none')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    print(df)
+
+    df.to_csv(
+        f'/tmp/shapley_{prefix}bar.csv',
+        na_rep='0.0',
+        index=True
+    )
+
+    error = [np.zeros_like(df['sdev'].values), df['sdev']]
+
+    ax.barh(
+        ytick,
+        df['mean'],
+        xerr=error,
+        align='center',
+        color=blue_rgb,
+        edgecolor=(1, 1, 1, 0.8),
+    )
+
+    plt.xlabel('Mean absolute Shapley value')
+    plt.tight_layout()
+
+    plt.gcf().set_size_inches(6.0, 9.0)
+
+    plt.savefig(f'/tmp/shapley_{prefix}bar.pgf', dpi=300)
+    plt.savefig(f'/tmp/shapley_{prefix}bar.png', dpi=300)
 
 
 def calculate_mean_with_sdev(
@@ -43,7 +108,7 @@ def calculate_mean_with_sdev(
     df = pd.concat(data_frames, axis='columns')
 
     # If desired, collate mean absolute Shapley value over *variables*
-    # instead of features. 
+    # instead of features.
     if collate:
         def feature_to_var(column):
             """Rename feature name to variable name."""
@@ -122,6 +187,10 @@ if __name__ == '__main__':
     if args.hours_before is not None:
         prefix += f'{args.hours_before}h_'
 
+    # Ditto for dropped indicators and count variables.
+    if args.ignore_indicators_and_counts:
+        prefix += 'raw_'
+
     # Will store all Shapley values corresponding to a single data set.
     # The idea behind this is to collect Shapley values from different
     # repetitions on the same data.
@@ -135,6 +204,12 @@ if __name__ == '__main__':
                 args.hours_before
             )
 
+        # These are the 'pretty' variants of the feature names, which we
+        # only use for representing individual scenarios.
+        feature_names_pretty = list(
+            map(feature_to_name, feature_names)
+        )
+
         dataset_to_shapley[dataset_name].append(
             (shap_values, feature_values)
         )
@@ -146,7 +221,7 @@ if __name__ == '__main__':
         values = dataset_to_shapley[dataset_name]
 
         data_frames = [
-            pd.DataFrame(s, columns=feature_names) for s, _ in values
+            pd.DataFrame(s, columns=feature_names_pretty) for s, _ in values
         ]
 
         calculate_mean_with_sdev(data_frames, dataset_name, prefix)
@@ -182,10 +257,15 @@ if __name__ == '__main__':
         for s, _ in dataset_to_shapley.values()
     ]
 
-    calculate_mean_with_sdev(
+    df = calculate_mean_with_sdev(
         data_frames,
         'pooled',
         prefix,
         rank=False,     # Don't need the rank if we want to draw a bar plot
         collate=True,   # Collate over variables
     )
+
+    # Pretty-print the remaining *variables* (no features any more)
+    df.index = list(map(feature_to_name, df.index.values))
+
+    make_plot(df, prefix=prefix)

@@ -1,5 +1,6 @@
 """Utility functions for interacting with Shapley values."""
 
+import json
 import pickle
 import os
 import tempfile
@@ -16,6 +17,101 @@ from src.torch.torch_utils import ComposeTransformations
 import src.torch.models
 
 wandb_api = wandb.Api()
+
+
+def feature_to_name(feature, ignore_category=False):
+    """Map feature abbreviation to 'nicer' name."""
+    abbreviation_to_name = {
+        'age': 'patient age',
+        'alb': 'albumin',
+        'alp': 'alkaline phosphatase',
+        'alt': 'alanine aminotransferase',
+        'ast': 'aspartate aminotransferase',
+        'basos': 'basophils',
+        'be': 'base excess',
+        'bicar': 'bicarbonate',
+        'bili': 'total bilirubin',
+        'bili_dir': 'bilirubin direct',
+        'bnd': 'band form neutrophils',
+        'bun': 'blood urea nitrogen',
+        'ca': 'calcium',
+        'cai': 'calcium ionized',
+        'ck': 'creatine kinase',
+        'ckmb': 'creatine kinase MB',
+        'cl': 'chloride',
+        'crea': 'creatinine',
+        'crp': 'C-reactive protein',
+        'dbp': 'diastolic blood pressure',
+        'eos': 'eosinophils',
+        'esr': 'erythrocyte sedimentation rate',
+        'etco2': 'endtidal CO2',
+        'fgn': 'fibrinogen',
+        'fio2': 'fraction of inspired oxygen',
+        'glu': 'glucose',
+        'hbco': 'carboxyhemoglobin',
+        'hct': 'hematocrit',
+        'height': 'patient height',
+        'hgb': 'hemoglobin',
+        'hr': 'heart rate',
+        'inr_pt': 'prothrombin time/international normalized ratio',
+        'k': 'potassium',
+        'lact': 'lactate',
+        'lymph': 'lymphocytes',
+        'map': 'mean arterial pressure',
+        'mch': 'mean cell hemoglobin',
+        'mchc': 'mean corpuscular hemoglobin concentration',
+        'mcv': 'mean corpuscular volume',
+        'methb': 'methemoglobin',
+        'mg': 'magnesium',
+        'na': 'sodium',
+        'neut': 'neutrophils',
+        'o2sat': 'oxygen saturation',
+        'pco2': 'CO2 partial pressure',
+        'ph': 'pH of blood',
+        'phos': 'phosphate',
+        'plt': 'platelet count',
+        'po2': 'O2 partial pressure',
+        'po2/fio2': 'PaO2/FiO2',
+        'pt': 'prothrombine time',
+        'ptt': 'partial thromboplastin time',
+        'rbc': 'red blood cell count',
+        'rdw': 'erythrocyte distribution width',
+        'resp': 'respiratory rate',
+        'sbp': 'systolic blood pressure',
+        'sex': 'patient sex',
+        'tco2': 'totcal CO2',
+        'temp': 'temperature',
+        'tnt': 'troponin t',
+        'tri': 'troponin I',
+        'urine': 'urine output',
+        'wbc': 'white blood cell count',
+        'weight': 'patient weight',
+    }
+
+    tokens = feature.split('_', maxsplit=1)
+    base = tokens[0]
+    category = tokens[-1]
+
+    # Ensure that we are not splitting something that we should not be
+    # splitting in the first place.
+    if category not in ['count', 'derived', 'indicator', 'raw']:
+        base = feature
+        category = ''
+    else:
+        category = f'({category})'
+
+    name = abbreviation_to_name.get(base, base)
+    name = name[0].upper() + name[1:]
+
+    # Local adjustments that I do not want to perform manually all the
+    # time.
+    if name == 'SOFAdeterioration':
+        name = 'SOFA deterioration'
+
+    if ignore_category:
+        return name
+    else:
+        return name + ' ' + category
 
 
 def get_run_id(filename):
@@ -170,6 +266,8 @@ def get_pooled_shapley_values(
     filename,
     ignore_indicators_and_counts=False,
     hours_before=None,
+    return_normalised_features=True,
+    label=None,
 ):
     """Process file and return pooled Shapley values.
 
@@ -185,6 +283,15 @@ def get_pooled_shapley_values(
     hours_before : int or `None`, optional
         If not `None`, only uses (at most) the last `hours_before`
         observations when reporting the Shapley values.
+
+    return_normalised_features : bool, optional
+        If set, returns normalised features, corresponding to the
+        values the model saw. If set to `False`, will calculate
+        the original (i.e. measured) values.
+
+    label : int or `None`, optional
+        If set, only returns Shapley values corresponding to samples
+        with the specific label.
 
     Returns
     -------
@@ -208,10 +315,15 @@ def get_pooled_shapley_values(
 
     feature_names = data['feature_names']
     lengths = data['lengths'].numpy()
+    labels = data['labels'].numpy()
 
+    # TODO: we might want to rename this now since it ignores
+    # effectively everything *but* the raw features.
     if ignore_indicators_and_counts:
         keep_features = [
-            True if not col.endswith('indicator') and not col.endswith('count')
+            True if not col.endswith('indicator') and
+            not col.endswith('count') and
+            not col.endswith('derived')
             else False
             for col in feature_names
         ]
@@ -236,6 +348,38 @@ def get_pooled_shapley_values(
     shap_values = shap_values[:, :, important_indices]
     features = data['input'].numpy()
     features = features[:, :, important_indices]
+
+    # Restrict all outputs to a single label only. We achieve this by
+    # simply setting everything to NaN.
+    if label is not None:
+        mask = labels != label
+
+        shap_values[mask] = np.nan
+        features[mask] = np.nan
+
+    if not return_normalised_features:
+        name = dataset_name.lower()
+        rep = out['rep']
+        filename = f'./config/normalizer/normalizer_{name}_rep_{rep}.json'
+
+        if os.path.exists(filename):
+            with open(filename) as f:
+                normaliser = json.load(f)
+                means = normaliser['means']
+                sdevs = normaliser['stds']
+
+                means = np.asarray(
+                    [means.get(name, 0.0) for name in selected_features]
+                ).astype(float)
+                sdevs = np.asarray(
+                    [sdevs.get(name, 1.0) for name in selected_features]
+                ).astype(float)
+
+                means[np.isnan(means)] = 0.0
+                means[np.isnan(sdevs)] = 1.0
+
+                features = features * sdevs
+                features = features + means
 
     shap_values_pooled, features_pooled = pool(
         lengths,

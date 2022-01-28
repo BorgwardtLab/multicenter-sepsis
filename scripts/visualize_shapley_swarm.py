@@ -5,10 +5,35 @@ import os
 import shap
 
 import numpy as np
+import pandas as pd
+
+from src.torch.shap_utils import feature_to_name
+from src.torch.shap_utils import get_pooled_shapley_values
+
+import matplotlib
+
+matplotlib.use('pgf')
+matplotlib.rcParams.update({
+    'pgf.texsystem': 'pdflatex',
+    'font.family': 'sans-serif',
+    'font.size': 16,
+    'text.usetex': True,
+    'pgf.rcfonts': True,
+})
 
 import matplotlib.pyplot as plt
 
-from src.torch.shap_utils import get_pooled_shapley_values
+
+def make_explanation(shapley_values, feature_values, feature_names):
+    """Wrap Shapley values in an `Explanation` object."""
+    return shap.Explanation(
+        # TODO: does this base value make sense? We could always get the
+        # model outputs by updating the analysis.
+        base_values=0.0,
+        values=shapley_values,
+        data=feature_values,
+        feature_names=feature_names,
+    )
 
 
 def make_plots(
@@ -53,6 +78,20 @@ def make_plots(
         out_dir, 'shapley_' + prefix + dataset_name
     )
 
+    df1 = pd.DataFrame(shap_values)
+    df2 = pd.DataFrame(feature_values)
+    df = pd.concat((df1, df2), axis=1)
+
+    column_names = ['shap_' + name for name in feature_names]
+    column_names += ['feat_' + name for name in feature_names]
+
+    df.columns = column_names
+    df.to_csv(
+        f'{filename_prefix}_raw.csv',
+        na_rep='0.0',
+        index=False,
+    )
+
     plt.title(dataset_name)
 
     for plot in ['bar', 'dot']:
@@ -64,7 +103,35 @@ def make_plots(
             show=False,
         )
         plt.tight_layout()
+        plt.savefig(filename_prefix + f'_{plot}.pgf', dpi=300)
         plt.savefig(filename_prefix + f'_{plot}.png', dpi=300)
+        plt.clf()
+
+    variables = [('Heart rate (raw)', 'hr'),
+                 ('Mean arterial pressure (raw)', 'map'),
+                 ('Temperature (raw)', 'temp')]
+
+    if args.ignore_indicators_and_counts:
+        variables = [('Heart rate', 'hr'),
+                     ('Mean arterial pressure', 'map'),
+                     ('Temperature', 'temp')]
+
+    for variable, abbr in variables:
+        index = feature_names.index(variable)
+
+        shapleys = make_explanation(
+            shap_values[:, index],
+            feature_values[:, index],
+            feature_names[index]
+        )
+
+        shap.plots.scatter(shapleys, hist=False)
+
+        plt.gcf().set_size_inches(4, 2)
+
+        plt.tight_layout()
+        plt.savefig(filename_prefix + f'_scatter_{abbr}.pgf', dpi=300)
+        plt.savefig(filename_prefix + f'_scatter_{abbr}.png', dpi=300)
         plt.clf()
 
 
@@ -99,6 +166,15 @@ if __name__ == '__main__':
              'setting of `-H 1`.'
     )
 
+    parser.add_argument(
+        '--label',
+        default=None,
+        type=int,
+        choices=[0, 1],
+        help='If set, restrict analysis to a specific label, permitting '
+             'individual plots for cases and controls, respectively.'
+    )
+
     args = parser.parse_args()
 
     all_shap_values = []
@@ -114,7 +190,21 @@ if __name__ == '__main__':
                 filename,
                 args.ignore_indicators_and_counts,
                 args.hours_before,
+                # Since we want to use scatter plots, we should use the
+                # 'raw' or 'original' feature scales. Else, the scales
+                # of the plots will look weird.
+                return_normalised_features=False,
+                label=args.label,
             )
+
+        # If we ignore *all* categories anyway, there's no need to spell
+        # them out when mapping features to their names.
+        ignore_category = args.ignore_indicators_and_counts
+
+        feature_names = list(map(
+            lambda x: feature_to_name(x, ignore_category=ignore_category),
+            feature_names)
+        )
 
         all_shap_values.append(shap_values)
         all_feature_values.append(feature_values)
@@ -138,6 +228,17 @@ if __name__ == '__main__':
     # our predictions.
     if args.hours_before is not None:
         prefix += f'{args.hours_before}h_'
+
+    # Ditto for dropped indicators and count variables.
+    if args.ignore_indicators_and_counts:
+        prefix += 'raw_'
+
+    # Ditto for label selection
+    if args.label is not None:
+        if args.label == 1:
+            prefix += 'cases_'
+        else:
+            prefix += 'controls_'
 
     make_plots(
         all_shap_values,
