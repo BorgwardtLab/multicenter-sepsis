@@ -16,6 +16,8 @@ def main(args):
             run_ids.append(run.id)
    
     print(run_ids)
+    for r in run_ids:
+        print(f'- "{r}"')
  
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
