@@ -271,22 +271,34 @@ def evaluate_threshold(data, labels, shifted_labels, times, thres, thres_percent
     return results
 
 
-def main(args):
+def main(
+        input_file=None,
+        output_file=None, 
+        num_steps=100,
+        lambda_path='config/lambdas',
+        n_jobs=10,
+        cost=5,
+        from_dict=None,
+        used_measures=['tp_recall','tp_precision','pat_eval'] 
+    ):
     """Run evaluation based on user parameters."""
-    with open(args.input_file, 'r') as f:
-        d = json.load(f)
+    if from_dict:
+        # we are directly passed a dictionary
+        d = input_file
+    else:
+        with open(input_file, 'r') as f:
+            d = json.load(f)
 
     # Determine lambda path:
-    if args.cost > 0:
+    if cost > 0:
         lam_file = 'lambda_{}_rep_{}_cost_{}.json'
     else:
         lam_file = 'lambda_{}_rep_{}.json'
 
-    lambda_path = os.path.join(args.lambda_path, lam_file)
+    lambda_path = os.path.join(lambda_path, lam_file)
 
     lambdas = []
     eval_dataset = d['dataset_eval']
-    cost = args.cost
 
     #if isinstance(eval_dataset, list):  # the R jsons had lists of str
     #    eval_dataset = eval_dataset[0]
@@ -325,6 +337,7 @@ def main(args):
     score_max = np.percentile(score_list, 99.5)  # max(score_list)
     score_min = np.percentile(score_list, 0.5)   # min(score_list)
 
+    # all measures
     measures = {
         'tp_recall': flatten_wrapper(
             functools.partial(recall_score, zero_division=0)
@@ -335,8 +348,13 @@ def main(args):
         #'pat_physionet2019_score': utility_score_wrapper(lam=lam),
         'pat_eval': first_alarm_eval
     }
+    measures_ = {}
+    for measure in used_measures:
+        measures_[measure] = measures[measure]
+    measures = measures_
+    print('Evaluating the following measures: {measures.keys()}')
 
-    n_steps = args.num_steps
+    n_steps = num_steps
     thresholds = np.linspace(score_min, score_max, n_steps)
     print(f'Using {n_steps} thresholds between {score_min} and {score_max}.')
     results = collections.defaultdict(list)
@@ -366,7 +384,7 @@ def main(args):
     ]
 
     # evaluate thresholds in parallel:
-    result_list = Parallel(n_jobs=args.n_jobs, verbose=1)(
+    result_list = Parallel(n_jobs=n_jobs, verbose=1)(
         delayed(evaluate_threshold)(
             d,
             labels,
@@ -386,12 +404,14 @@ def main(args):
             if not isinstance(v, np.ndarray):
                 results[k].append(v)
 
-    # Ensures that the directory hierarchy exists for us to write
-    # something to the disk.
-    pathlib.Path(args.output_file).parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output_file, 'w') as f:
-        json.dump(results, f, indent=4)
-
+    if from_dict:
+        return results
+    else:
+        # Ensures that the directory hierarchy exists for us to write
+        # something to the disk.
+        pathlib.Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'w') as f:
+            json.dump(results, f, indent=4)
 
 if __name__ in "__main__":
     parser = argparse.ArgumentParser(
@@ -432,15 +452,27 @@ if __name__ in "__main__":
     )
     parser.add_argument(
         '--cost',
-        default=0,
+        default=5,
         type=int,
         help='lambda cost to use (default 0, inactive)'
     )
-
+    parser.add_argument(
+        '--from-dict',
+        action='store_true',
+        help='flag to read and return dict without reading and writing files'
+    )
     args = parser.parse_args()
 
     if pathlib.Path(args.output_file).exists() and not args.force:
         raise RuntimeError(f'Refusing to overwrite {args.output_file} unless '
                            f'`--force` is set.')
 
-    main(args)
+    main(
+        args.input_file,
+        args.output_file, 
+        args.num_steps,
+        args.lambda_path,
+        args.n_jobs,
+        args.cost,
+        args.from_dict,
+    )
