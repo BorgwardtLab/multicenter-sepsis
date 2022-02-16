@@ -196,10 +196,23 @@ class SplittedDataset(ParquetLoadedDataset):
     UTILITY_COLUMN = VM_DEFAULT('utility')
 
     def __init__(self, path, split_file, split, feature_set,
-                 only_physionet_features=False, fold=0, pd_transform=None, transform=None, cohort=None):
+                 only_physionet_features=False, fold=0, pd_transform=None, transform=None, cohort=None, finetuning=False):
         """
         Load split of dataset
         """
+        # For performing fine-tuning, we overwrite the train split to become the validation split
+        # as we train on the small validation split of a new dataset
+        if finetuning:
+            if split == 'train':
+                split = 'validation'
+                path = path.replace('train','validation')
+                print(f'Overwriting split to {split} for finetuning!')
+            self.train_size= 0.7
+            print(f'Using online split of train_size {self.train_size}')
+        else:
+            print(f'Finetuning flag has no effect on split = {split}')
+            self.train_size = 0.9 
+
         with open(split_file, 'r') as f:
             d = json.load(f)
             if split in ['train', 'validation']:
@@ -229,10 +242,11 @@ class SplittedDataset(ParquetLoadedDataset):
         self.transform = transform
 
     def get_stratified_split(self, random_state=None):
+        print(f'Creating a stratified split..')
         per_instance_labels = [self.id_to_label[id] for id in self.ids]
         train_indices, test_indices = train_test_split(
             range(len(per_instance_labels)),
-            train_size=0.9,
+            train_size=self.train_size,
             stratify=per_instance_labels,
             random_state=random_state
         )
@@ -284,7 +298,7 @@ class Physionet2019(SplittedDataset):
     """Physionet 2019 dataset."""
 
     def __init__(self, split, feature_set='small', only_physionet_features=True, 
-        fold=0, cost=5, transform=None):
+        fold=0, cost=5, transform=None, **kwargs):
 
         super().__init__(
             f'datasets/physionet2019/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
@@ -293,7 +307,8 @@ class Physionet2019(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            transform=transform
+            transform=transform,
+            **kwargs
         )
                 
         self.lam = LoadLambda(
@@ -303,7 +318,7 @@ class Physionet2019(SplittedDataset):
 class MIMICDemo(SplittedDataset):
     """MIMIC demo dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, **kwargs):
         super().__init__(
             f'datasets/mimic_demo/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             'config/splits/splits_mimic_demo.json',
@@ -311,7 +326,8 @@ class MIMICDemo(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            transform=transform
+            transform=transform,
+            **kwargs
         )
         #normalize = Normalize(
         #    'config/normalizer/normalizer_mimic_demo_rep_{}.json'.format(fold),
@@ -329,7 +345,7 @@ class MIMICDemo(SplittedDataset):
 class MIMIC(SplittedDataset):
     """MIMIC dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None, **kwargs):
         print(f'Using data fold {fold}...')
         super().__init__(
             f'datasets/mimic/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
@@ -339,7 +355,8 @@ class MIMIC(SplittedDataset):
             only_physionet_features=only_physionet_features,
             fold=fold,
             transform=transform,
-            cohort=cohort
+            cohort=cohort,
+            **kwargs
         )
         #normalize = Normalize(
         #    'config/normalizer/normalizer_mimic_rep_{}.json'.format(fold),
@@ -352,7 +369,7 @@ class MIMIC(SplittedDataset):
 class Hirid(SplittedDataset):
     """Hirid dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, **kwargs):
         super().__init__(
             f'datasets/hirid/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/hirid/data/parquet/features_small',
@@ -361,7 +378,8 @@ class Hirid(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            transform=transform
+            transform=transform,
+            **kwargs
         )
         #normalize = Normalize(
         #    'config/normalizer/normalizer_hirid_rep_{}.json'.format(fold),
@@ -381,7 +399,7 @@ class Hirid(SplittedDataset):
 class EICU(SplittedDataset):
     """EICU dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, **kwargs):
         super().__init__(
             f'datasets/eicu/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/eicu/data/parquet/features_small',
@@ -390,7 +408,8 @@ class EICU(SplittedDataset):
             feature_set,
             only_physionet_features=only_physionet_features,
             fold=fold,
-            transform=transform
+            transform=transform,
+            **kwargs
         )
         #normalize = Normalize(
         #    'config/normalizer/normalizer_eicu_rep_{}.json'.format(fold),
@@ -410,7 +429,7 @@ class EICU(SplittedDataset):
 class AUMC(SplittedDataset):
     """AUMC dataset."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None, **kwargs):
         super().__init__(
             f'datasets/aumc/data/parquet/features_small_cache/{split}_{fold}_cost_{cost}.parquet',
             #'datasets/aumc/data/parquet/features_small',
@@ -420,7 +439,8 @@ class AUMC(SplittedDataset):
             only_physionet_features=only_physionet_features,
             fold=fold,
             transform=transform,
-            cohort=cohort
+            cohort=cohort,
+            **kwargs
         )
         #normalize = Normalize(
         #    'config/normalizer/normalizer_aumc_rep_{}.json'.format(fold),
@@ -505,7 +525,7 @@ class MIMICDemoSubset(SplittedDataset):
 class MIMIC_LOCF(SplittedDataset):
     """MIMIC dataset for sanity checking feature groups."""
 
-    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None):
+    def __init__(self, split, feature_set='small', only_physionet_features=False, fold=0, cost=5, transform=None, cohort=None, **kwargs):
         print(f'Using data fold {fold}...')
         super().__init__(
             f'datasets/mimic/data/parquet/features_locf_cache/{split}_{fold}_cost_{cost}.parquet',
@@ -515,7 +535,8 @@ class MIMIC_LOCF(SplittedDataset):
             only_physionet_features=only_physionet_features,
             fold=fold,
             transform=transform,
-            cohort=cohort
+            cohort=cohort,
+            **kwargs
         )
         self.lam = LoadLambda(
             lambda_path =  f'config/lambdas/lambda_mimic_rep_{fold}_cost_{cost}.json').lam 
