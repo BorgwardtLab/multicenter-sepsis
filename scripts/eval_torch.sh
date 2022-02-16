@@ -1,7 +1,7 @@
 #!/bin/bash
 
 run_id=$1
-base_dir=results/pooled #feature_ablation #results 
+base_dir=results/finetuning #results/pooled #feature_ablation #results 
 split=test #validation
 eval_dir=${base_dir}/evaluation_${split}
 
@@ -57,12 +57,12 @@ for index in ${!eval_datasets[*]}; do
         --force \
         --cost $cost
 
-    ## Plot patient-based eval metrics:
-    #python -m scripts.plots.plot_patient_eval \
-    #    --input_path $eval_file  \
-    #    --output_path $plot_path \
-    #    --earliness-stat $earliness \
-    #    --predictions_path $pred_file \
-    #    --level $level \
-    #    --recall_thres $thres
+    # Plot patient-based eval metrics:
+    python -m scripts.plots.plot_patient_eval \
+        --input_path $eval_file  \
+        --output_path $plot_path \
+        --earliness-stat $earliness \
+        --predictions_path $pred_file \
+        --level $level \
+        --recall_thres $thres
 done
