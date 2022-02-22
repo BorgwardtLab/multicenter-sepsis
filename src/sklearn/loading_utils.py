@@ -6,8 +6,7 @@ import numpy as np
 import json
 import os
 import pathlib
-from time import time 
-from src.preprocessing.transforms import Normalizer
+from time import time
 
 from src.variables.mapping import VariableMapping
 
