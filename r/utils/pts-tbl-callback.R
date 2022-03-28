@@ -1,5 +1,6 @@
-DM_callback <- function(x, ...) {
 
+DM_callback <- function(x, ...) {
+  #browser()
   sub_var <- setdiff(names(x), meta_vars(x))
   if (sub_var == "icd9code") {
 
@@ -124,7 +125,8 @@ Cancer_callback <- function(x, ...) {
 }
 
 is_vent_callback <- function(vent_ind, interval, ...) {
-
+  
+  vent_ind <- expand(vent_ind)
   vent_ind[, c(index_var(vent_ind)) := NULL]
   vent_ind <- unique(vent_ind)
 

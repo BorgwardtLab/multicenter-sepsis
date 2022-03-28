@@ -24,7 +24,7 @@
     "class": "rec_cncpt"
   },
   "sep3_mc": {
-    "concepts": [""],
+    "concepts": ["abx"],
     "description": "MC-Sepsis Sepsis-3",
     "category": "Misc.",
     "callback": "is_abx_callback",
@@ -53,7 +53,6 @@
     "callback": "is_si_callback",
     "class": "rec_cncpt"
   },
-
   "DM": {
     "description": "No. comorbidities",
     "category": "Misc.",
@@ -62,7 +61,6 @@
       "mimic_demo": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "DM_callback"
         }
@@ -70,7 +68,6 @@
       "mimic": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "DM_callback"
         }
@@ -78,7 +75,6 @@
       "eicu_demo": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "DM_callback"
         }
@@ -86,7 +82,6 @@
       "eicu": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "DM_callback"
         }
@@ -101,7 +96,6 @@
       "mimic_demo": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "CPD_callback"
         }
@@ -109,7 +103,6 @@
       "mimic": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "CPD_callback"
         }
@@ -117,7 +110,6 @@
       "eicu_demo": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "CPD_callback"
         }
@@ -125,7 +117,6 @@
       "eicu": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "CPD_callback"
         }
@@ -140,15 +131,6 @@
       "mimic_demo": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
-          "class": "col_itm",
-          "callback": "LD_callback"
-        }
-      ],
-      "mimic": [
-        {
-          "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "LD_callback"
         }
@@ -156,7 +138,13 @@
       "eicu_demo": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
+          "class": "col_itm",
+          "callback": "LD_callback"
+        }
+      ],
+      "mimic": [
+        {
+          "table": "diagnoses_icd",
           "class": "col_itm",
           "callback": "LD_callback"
         }
@@ -164,7 +152,6 @@
       "eicu": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "LD_callback"
         }
@@ -179,7 +166,6 @@
       "mimic_demo": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "CRF_callback"
         }
@@ -187,7 +173,6 @@
       "mimic": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "CRF_callback"
         }
@@ -195,7 +180,6 @@
       "eicu_demo": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "CRF_callback"
         }
@@ -203,7 +187,6 @@
       "eicu": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "CRF_callback"
         }
@@ -218,7 +201,6 @@
       "mimic_demo": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "Cancer_callback"
         }
@@ -226,7 +208,6 @@
       "mimic": [
         {
           "table": "diagnoses_icd",
-          "sub_var": "icd9_code",
           "class": "col_itm",
           "callback": "Cancer_callback"
         }
@@ -234,7 +215,6 @@
       "eicu_demo": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "Cancer_callback"
         }
@@ -242,7 +222,6 @@
       "eicu": [
         {
           "table": "diagnosis",
-          "sub_var": "icd9code",
           "class": "col_itm",
           "callback": "Cancer_callback"
         }

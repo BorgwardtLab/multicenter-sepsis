@@ -138,3 +138,14 @@ concept_translator <- list(
   CRF = "hspace3mm Chronic Renal Failure",
   Cancer = "hspace3mm Cancer"
 )
+
+pts_split <- function(src, split = "total") {
+  assert_that(split %in% c("dev", "test", "total"),
+              msg = "Unknown split requested.")
+  if (src == "eicu_demo") return(eicu_demo$patient$patientunitstayid)
+  fl <- read_json(file.path(root, "config", "splits",
+                            paste0("splits_", src, ".json")), 
+                  simplifyVector = T)
+  if (split == "total") return(fl[[split]][["ids"]])
+  fl[[split]][["total"]]
+}
