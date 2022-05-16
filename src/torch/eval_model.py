@@ -11,7 +11,7 @@ from sklearn.metrics import (
     average_precision_score, roc_auc_score, balanced_accuracy_score)
 from tqdm import tqdm
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from src.evaluation import physionet2019_utility
 from src.torch.torch_utils import (
@@ -85,9 +85,23 @@ def concat(fn):
         return fn(np.concatenate(labels, 0), np.concatenate(scores, 0))
     return wrapped
 
+def get_maybe_wrap(online_split=False):
+    """ Util function to wrap Subset() around dataset_cls
+        if we use an online split for evaluation    
+    """
+    def wrapped(dataset):
+        if online_split: 
+            # here we only use val split of online splitting 
+            train_indices, val_indices = dataset.get_stratified_split(87346583) # consistent with src/torch/models/base_model.py
+            return Subset(dataset, val_indices)
+        else:
+            return dataset
+    return wrapped
 
-def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device=device, **kwargs):
-    """Run online evaluation with future masking."""
+def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device=device, online_split=False, **kwargs): #online_split=False, 
+    """ Run online evaluation with future masking.
+        - online_split: whether an online eval split needs to be applied to the dataloader (e.g. for finetuning) 
+    """
     model = model.to(device)
     transforms = model.transforms
     # TODO: Make this more generic, if first transform is not label propagation
@@ -102,9 +116,17 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
         transform_each=transform_each,
         transform_once=transform_once
     )
-
+    
+    # this wraps the dataset_cls in case we need only a subset (online split)
+    print(f'Passing dataset kwargs = {kwargs}')
+    maybe_subset_wrap = get_maybe_wrap(
+        online_split
+    )    
+      
     dataloader = DataLoader(
-        dataset_cls(split=split, transform=transform_fn, **kwargs),
+        maybe_subset_wrap(
+            dataset_cls(split=split, transform=transform_fn, **kwargs)
+        ),
         # This passes one instance at a time to the collate function. It could
         # be that the expanded instance requires to much memory to be
         # processed in a single pass.
@@ -116,10 +138,12 @@ def online_eval(model, dataset_cls, split, check_matching_unmasked=False, device
 
     if check_matching_unmasked:
         dataloader_um = DataLoader(
-            dataset_cls(
-                split=split,
-                transform=ComposeTransformations(model.transforms),
-                **kwargs
+            maybe_subset_wrap(
+                dataset_cls(
+                    split=split,
+                    transform=ComposeTransformations(model.transforms),
+                    **kwargs
+                )
             ),
             batch_size=1,
             shuffle=False,
