@@ -136,6 +136,8 @@ def main():
             aucs = np.array(aucs)
             auc_mean = aucs.mean()
             auc_std = aucs.std()
+            
+            metrics.reset_index(drop=True, inplace=True) # sns doesn't like duplicate indices
             sns.lineplot(
                 data=metrics,
                 x="1 - Specificity",

@@ -44,6 +44,23 @@ def process_run(eval_file, pred_file):
     #interesting keys from pred file:
     keys = ['model', 'dataset_train', 'dataset_eval', 'split', 'task', 'label_propagation', 'rep']
     pred_dict = {key: d_p[key] for key in keys if key in d_p.keys() }
+
+    # in case this is a finetuning run, use wandb_run to identify the source dataset
+    if 'wandb_run' in  d_p['model_params'].keys():
+        # this is only the case in finetuned models, we then need to load
+        # the wandb data and set the proper training dataset
+        import wandb
+        wandb_api = wandb.Api()
+        #TODO: make this generic for user provided run_path
+        run_path = os.path.join('sepsis/mc-sepsis', #replace with custom WANDB path! 
+            d_p['model_params']['wandb_run']) 
+        run = wandb_api.run(run_path)
+        run_info = run.config
+        # wandb informed overrides as the pred file only has knowledge
+        # of the last finetuning step (on the target dataset)
+        pred_dict['dataset_train'] = run_info['dataset']
+        pred_dict['rep'] = run_info['dataset_kwargs/fold']
+
     maybe_keys = ['subsample', 'subsampled_prevalence']
     for key in maybe_keys:
         if key in d_p.keys():
@@ -92,8 +109,8 @@ if __name__ == "__main__":
         if any([x in eval_f for x in keys]):
             used_eval_files.append(eval_f)
             used_pred_files.append(pred_f)
-    df_list = Parallel(n_jobs=80, batch_size=50)(delayed(process_run)(eval_f, pred_f) for eval_f, pred_f in zip(used_eval_files, used_pred_files))
-    for i, eval_f in enumerate(used_eval_files):
+    df_list = Parallel(n_jobs=1, batch_size=50)(delayed(process_run)(eval_f, pred_f) for eval_f, pred_f in zip(used_eval_files, used_pred_files))
+    for i, eval_f in enumerate(used_eval_files): #n_jobs=80
         df_list[i]['fname'] = eval_f 
         df_list[i]['job_id'] = i
     #curr_df = process_run(eval_f, pred_f)
