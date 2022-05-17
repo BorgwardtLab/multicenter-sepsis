@@ -2,15 +2,16 @@
 
 # Testing EICU models finetuned on datasets MIMIC, AUMC, EICU 
 id_array=("licfx74s xa0zjlg1 95dvg2fn mm86lcxh vjnfxnfg"
-    "6di88zkf 4ky293gb nvlc09i5 3v9pbmva qn2tethe"
+    "6di88zkf k68r5cn0 nvlc09i5 3v9pbmva qn2tethe"
     "pl1iqije 9wvljri2 l4vl4lyq 47xdrrra k8mnrfsq"
 )
-# mimic: [‘licfx74s’, ‘xa0zjlg1’, ‘95dvg2fn’, ‘mm86lcxh’, ‘vjnfxnfg’]
-# hirid: [‘6di88zkf’, ‘4ky293gb’, ‘nvlc09i5’, ‘3v9pbmva’, ‘qn2tethe’]
-# aumc: [‘pl1iqije’, ‘9wvljri2’, ‘l4vl4lyq’, ‘47xdrrra’, ‘k8mnrfsq’]
+ id_array=(
+    "k68r5cn0"
+)
  
-
-datasets=(MIMIC Hirid AUMC) 
+datasets=(MIMIC Hirid AUMC)
+datasets=(Hirid)
+ 
 for index in ${!datasets[*]}; do
     run_ids="${id_array[$index]}"
     dataset=${datasets[$index]}

@@ -2,17 +2,23 @@
 
 # Evaluating EICU models on datasets MIMIC, AUMC, EICU 
 id_array=("licfx74s xa0zjlg1 95dvg2fn mm86lcxh vjnfxnfg"
-    "6di88zkf 4ky293gb nvlc09i5 3v9pbmva qn2tethe"
+    "6di88zkf k68r5cn0 nvlc09i5 3v9pbmva qn2tethe"
     "pl1iqije 9wvljri2 l4vl4lyq 47xdrrra k8mnrfsq"
 )
-
+ id_array=(
+    "k68r5cn0"
+)
 
 base_dir=results/finetuning #results/pooled #feature_ablation #results 
 split=test #validation
 eval_dir=${base_dir}/evaluation_${split}
 
 eval_datasets=(MIMIC Hirid AUMC) #(AUMC MIMIC Hirid EICU Physionet2019) #MIMIC_LOCF
+eval_datasets=(Hirid)
+
 eval_datasets2=(mimic hirid aumc) #(aumc mimic hirid eicu physionet2019) #sklearn formatting  (physionet2019) #
+eval_datasets2=(hirid) 
+
 
 cost=5 #lambda cost
 earliness=median
