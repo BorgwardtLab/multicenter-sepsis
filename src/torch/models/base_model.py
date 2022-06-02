@@ -289,7 +289,7 @@ class BaseModel(pl.LightningModule):
         return DataLoader(
             Subset(
                 self.dataset_cls(
-                    split='train',
+                    split='train', #to keep this part simple, we modify the split in the dataset classes (eg for finetuning)
                     transform=ComposeTransformations(self.transforms),
                     **self.dataset_kwargs
                 ),
