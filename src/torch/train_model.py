@@ -67,16 +67,6 @@ def main(hparams, model_cls):
         save_dir=save_dir,
         settings=wandb.Settings(start_method="fork")
     )
-    #logger = TbWithBestValueLogger(
-    #    hparams.log_path,
-    #    model.metrics_initial,
-    #    add_best=True,
-    #    name=hparams.exp_name,
-    #    version=hparams.version,
-    #    default_hp_metric=False
-    #)
-    #checkpoint_dir = os.path.join(
-    #    logger.log_dir, 'checkpoints')
 
     monitor_score = hparams.monitor
     monitor_mode = hparams.monitor_mode
