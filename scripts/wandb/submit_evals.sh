@@ -4,8 +4,8 @@ wandb_path=sepsis/mc-sepsis
 wandb_run=${wandb_path}/$run_id
 #parallel_tasks=5
 
-base_dir=results #results/pooled #results/feature_ablation #results
-split=train #test
+base_dir=results/finetuning #results/pooled #results/feature_ablation #results
+split=test #validation #test
 pred_path=${base_dir}/evaluation_${split}/prediction_output
 mkdir -p $pred_path
 

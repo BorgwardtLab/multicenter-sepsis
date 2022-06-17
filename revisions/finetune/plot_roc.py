@@ -9,6 +9,11 @@ import os
 from IPython import embed
 import sys
 
+def get_id(name):
+    last = name.split('/')[-1]
+    first = last.split('_')[0]
+    return first
+
 def df_filter(df, filter_dict):
     for key, val in filter_dict.items():
         df = df[df[key] == val]
@@ -30,11 +35,13 @@ def emory_map(name):
 
 def raw_to_csv(metrics, csv_path, auc_mean, auc_std):
     """ write raw roc values to csv"""
-    cols = [col for col in metrics.columns if not 'rep' in col]
+    cols = [col for col in metrics.columns if not 'run_id' in col]
     out = {}
     for col in cols:
-        curr_df = metrics[[col, 'rep']]
-        piv = curr_df.pivot(columns='rep')
+        curr_df = metrics[[col, 'run_id']]
+        curr_df['ind'] = list(np.arange(200))*5 #index useful in pivot
+        curr_df = curr_df.set_index('ind')
+        piv = curr_df.pivot(columns='run_id')
         mu = piv.mean(axis=1)
         sig = piv.std(axis=1)
         out[col + '_mean'] = mu
@@ -83,23 +90,23 @@ def main():
             
             if len(data) < 1:
                 continue 
-            reps = data['rep'].unique()
-            if len(reps) < 5:
-                raise ValueError('not all 5 reps available!')
-            
+            #reps = data['rep'].unique()
+            data['run_id'] = data['fname'].apply(get_id)
+            run_ids = data['run_id'].unique()
+ 
             aucs = []
             mean_fpr = np.linspace(0, 1, 200)
             metrics = pd.DataFrame() # gathering metrics over repetition splits
             
  
             # loop over (potential) subsamples and repetition folds:
-            for rep in reps:
+            for run_id in run_ids:
                 tprs = []
                 for subsample in np.arange(n_subsamples):
                     if use_subsamples:
-                        rep_filter = {'rep': rep, 'subsample': subsample}
+                        rep_filter = {'run_id': run_id, 'subsample': subsample}
                     else:
-                        rep_filter = {'rep': rep}
+                        rep_filter = {'run_id': run_id}
                     rep_data = df_filter(data, rep_filter)
 
                     tpr = rep_data['pat_recall'].values
@@ -114,7 +121,7 @@ def main():
                     curr_auc = auc(mean_fpr, interp_tpr) 
                     curr_boot_df = pd.DataFrame(
                         {   'AUC': [curr_auc], 
-                            'rep': [rep], 
+                            'run_id': [run_id], 
                             'subsample': [subsample],
                             'model': [model],
                             'train_dataset': [train_dataset],
@@ -132,7 +139,7 @@ def main():
                     { '1 - Specificity': mean_fpr,
                       'Sensitivity': mean_tpr}
                 )
-                curr_df['rep'] = rep
+                curr_df['run_id'] = run_id
                 metrics = metrics.append(curr_df)
 
             aucs = np.array(aucs)
