@@ -10,13 +10,16 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 import torch
 import wandb
+import tempfile
+import pandas as pd
+from sklearn.metrics import auc 
 
 sys.path.append(os.getcwd()) # hack for executing module as script (for wandb)
 
 import src.torch.models
 import src.torch.datasets
 from src.torch.datasets import CombinedDataset
-from src.torch.torch_utils import JsonEncoder, TbWithBestValueLogger
+from src.torch.eval_model import online_eval
 
 
 def namespace_without_none(namespace):
@@ -99,28 +102,20 @@ def main(hparams, model_cls):
     results = trainer.test(loaded_model)
     # results is a single-element list of a dict:
     results = results[0]
-    #trainer.test(loaded_model)
-    #trainer.logger.save()
-    #all_metrics = {**trainer.logger.last, **trainer.logger.best}
-    #all_metrics = {n: v for n, v in all_metrics.items() if '/' in n}
-    #prefixes = {name.split('/')[0] for name in all_metrics.keys()}
-    #results = defaultdict(dict)
-    #for name, value in all_metrics.items():
-    #    for prefix in prefixes:
-    #        if name.startswith(prefix):
-    #            results[prefix][name.split('/')[1]] = value
+    ##
 
     val_dataset_cls = partial(
         CombinedDataset,
         datasets=(getattr(src.torch.datasets, d) for d in hparams.dataset)
     )
-    from src.torch.eval_model import online_eval
     
     masked_result = online_eval(
         loaded_model,
         val_dataset_cls,
         'validation',
         device='cuda' if torch.cuda.is_available() else 'cpu',
+        online_split=True, # we evaluate on a online split of the 
+        # validation data that is used for the finetuning experiment
         **hparams.dataset_kwargs
     )
     masked_result = { 'masked_validation_'+key: value for key, value in masked_result.items()
@@ -128,40 +123,18 @@ def main(hparams, model_cls):
     }
     for key, value in masked_result.items():
         wandb_logger.experiment.log({key: value})
-    #masked_result = { key: value for key, value in masked_result.items()
-    #    if key not in ['labels', 'predictions', 'ids', 'times', 'scores', 'targets']
-    #}
-
+        
     results.update(masked_result)
 
-    #with open(os.path.join(logger.log_dir, 'result.json'), 'w') as f:
-    #    json.dump(results, f, cls=JsonEncoder)
     for name, value in results.items():
         if name in ['labels', 'predictions']:
             continue
         wandb_logger.experiment.summary[name] = value
-    #wandb_logger.experiment.summary.update(masked_result)
-
-    ##print('MASKED TEST RESULTS')
-    ##print({
-    ##    key: value for key, value in results['validation_masked'].items()
-    ##    if key not in ['labels', 'predictions']
-    ##})
-
-    ## Filter out parts of hparams which belong to Hyperargparse
-    #config = {
-    #    key: value
-    #    for key, value in vars(hparams).items()
-    #    if not callable(value)
-    #}
-    #with open(os.path.join(logger.log_dir, 'config.json'), 'w') as f:
-    #    json.dump(config, f, cls=JsonEncoder)
-
 
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
     parser.add_argument('--log_path', default='logs')
-    parser.add_argument('--exp_name', default='train_torch_model')
+    parser.add_argument('--exp_name', default='finetune_torch_model')
     parser.add_argument('--version', default=None, type=str)
     parser.add_argument('--model', choices=src.torch.models.__all__, type=str,
                         default='AttentionModel')
@@ -181,12 +154,17 @@ if __name__ == '__main__':
     parser.add_argument('--rep', type=int, default=0,
                         help='Repetition fold of splits [0,..,4]')
     parser.add_argument('--dummy_repetition', type=int, default=1,
-                        help='inactive argument, used for debugging (enabling grid repetitions)')
+                        help='inactive argument, used for enabling grid repetitions')
     parser.add_argument('--only_physionet_features', type=bool, default=False,
                         help='boolean indicator if physionet variable set should be used')
     parser.add_argument('--feature_set', default=None,
                         help='which feature set should be used: [middle, small,..]')
+    parser.add_argument('--finetuning', type=bool,
+                        default=True, help='flag to indicate that the small finetuning split is used')
+    parser.add_argument('--finetuning_size', type=float,
+                        default=1., help='ratio of fine-tuning split to use')
 
+    
     # figure out which model to use
     temp_args = parser.parse_known_args()[0]
 
@@ -209,7 +187,9 @@ if __name__ == '__main__':
     hparams.dataset_kwargs = {
         'cost': hparams.cost,
         'fold': hparams.rep, #`rep` naming to conform with shallow models                                        
-        'only_physionet_features': hparams.only_physionet_features
+        'only_physionet_features': hparams.only_physionet_features,
+        'finetuning': hparams.finetuning,
+        'finetuning_size': hparams.finetuning_size
     }
     if hparams.feature_set is not None:
         hparams.dataset_kwargs['feature_set'] = hparams.feature_set

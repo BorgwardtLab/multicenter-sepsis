@@ -39,6 +39,8 @@ def raw_to_csv(metrics, csv_path, auc_mean, auc_std):
     out = {}
     for col in cols:
         curr_df = metrics[[col, 'run_id']]
+        curr_df['ind'] = list(np.arange(200))*5 #index useful in pivot
+        curr_df = curr_df.set_index('ind')
         piv = curr_df.pivot(columns='run_id')
         mu = piv.mean(axis=1)
         sig = piv.std(axis=1)
