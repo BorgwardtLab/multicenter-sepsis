@@ -13,7 +13,7 @@ def load_json(f):
 
 def extract_keys(d):
     keys = [
-        'model', 'split', 'rep', 'subsample'    
+        'model', 'split', 'rep', 'subsample', 'run_id'    
     ]
     data_keys = ['dataset_train', 'dataset_eval']
 
@@ -37,15 +37,19 @@ def main(args):
         nested_dict = lambda: defaultdict(nested_dict)
         fmap = nested_dict() #file mapping dict
           
-        results = Parallel(n_jobs=50, batch_size=50)(delayed(process_file)(f) for f in files)
+        results = Parallel(n_jobs=50, batch_size=50)(delayed(process_file)(f) for f in files) #n_jobs=50
         subsampled = False
         if 'subsample' in args.INPUT:
             subsampled = True  
         for d in results:
+            if 'run_id' in d.keys():
+                rep_or_run = 'run_'+str(d['run_id']) 
+            else: 
+                rep_or_run = 'rep_'+str(d['rep'])
             if subsampled:
-                fmap[d['model']][d['dataset_train']][d['dataset_eval']]['rep_'+str(d['rep'])]['subsample_'+str(d['subsample'])] = d['filename']
+                fmap[d['model']][d['dataset_train']][d['dataset_eval']][rep_or_run]['subsample_'+str(d['subsample'])] = d['filename']
             else:
-                fmap[d['model']][d['dataset_train']][d['dataset_eval']]['rep_'+str(d['rep'])] = d['filename']
+                fmap[d['model']][d['dataset_train']][d['dataset_eval']][rep_or_run] = d['filename']
 
         with open(output_path, 'w') as F:
             json.dump(fmap, F, indent=4)
