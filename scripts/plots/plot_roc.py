@@ -139,9 +139,9 @@ def main():
             auc_mean = aucs.mean()
             auc_std = aucs.std()
             
-            metrics.reset_index(drop=True, inplace=True) # sns doesn't like duplicate indices
+            metrics_sns = metrics.reset_index(drop=True) # sns doesn't like duplicate indices
             sns.lineplot(
-                data=metrics,
+                data=metrics_sns,
                 x="1 - Specificity",
                 y="Sensitivity", 
                 label= '{:<8}'.format(model_map(model)) + rf'AUC = {auc_mean:.3f} $\pm$ {auc_std:.3f}',
@@ -189,7 +189,6 @@ def main():
     if 'subsampled' in os.path.split(input_path)[-1]:
         bt_file += '_subsampled'
     bt_auc.to_csv(bt_file + '.csv')
-    embed()
          
 if __name__ == '__main__':
     main()
