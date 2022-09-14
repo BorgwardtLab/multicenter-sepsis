@@ -1,0 +1,46 @@
+\documentclass{standalone}
+
+\usepackage[utf8]{inputenc}
+
+% Load base definitions for P/R plots. Makes it easier to decide about
+% their look and feel.
+\input{pr_base}
+
+\begin{document}
+    \begin{tikzpicture}
+        \begin{groupplot}[
+          roc,
+          group style = {%
+            group size     = 2 by 1,
+            horizontal sep = 1.50cm,
+            xlabels at     = edge bottom,
+            ylabels at     = edge left,
+          },
+        ]
+          \nextgroupplot
+            \makeprplot{AttentionModel}{aumc}{aumc}{attn}
+            \makeprplot{GRUModel}      {aumc}{aumc}{gru}
+            \makeprplot{lgbm}          {aumc}{aumc}{lgbm}
+            \makeprplot{lr}            {aumc}{aumc}{lr}
+
+            \makeprplot{mews}          {aumc}{aumc}{mews}
+            \makeprplot{news}          {aumc}{aumc}{news}
+            \makeprplot{sofa}          {aumc}{aumc}{sofa}
+            \makeprplot{qsofa}         {aumc}{aumc}{qsofa}
+            \makeprplot{sirs}          {aumc}{aumc}{sirs}
+
+          \nextgroupplot
+            \makeprplot{AttentionModel}{pooled}{aumc}{attn}
+            \makeprplot{GRUModel}      {pooled}{aumc}{gru}
+            \makeprplot{lgbm}          {pooled}{aumc}{lgbm}
+            \makeprplot{lr}            {pooled}{aumc}{lr}
+
+            \makeprplot{mews}          {pooled}{aumc}{mews}
+            \makeprplot{news}          {pooled}{aumc}{news}
+            \makeprplot{sofa}          {pooled}{aumc}{sofa}
+            \makeprplot{qsofa}         {pooled}{aumc}{qsofa}
+            \makeprplot{sirs}          {pooled}{aumc}{sirs}
+
+        \end{groupplot}
+    \end{tikzpicture}
+\end{document}

@@ -1,0 +1,157 @@
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\usepackage{xstring}
+
+\usepgfplotslibrary{colorbrewer}
+\usepgfplotslibrary{groupplots}
+\usepgfplotslibrary{fillbetween}
+
+%% Use Helvetica as base font throughout the paper. This should be
+%% included in all plots.
+\usepackage[scaled]{helvet}
+\renewcommand\familydefault{\sfdefault}
+\usepackage[T1]{fontenc}
+
+% Set font:
+%\usepackage{fontspec}
+%\setmainfont{MinionPro}[
+%    Extension = .otf ,
+%    UprightFont = *-Regular ,
+%    BoldFont = *-Bold ,
+%    ItalicFont = *-It ,
+%    BoldItalicFont = *-BoldIt
+%    ]
+
+
+% Controls scaling
+\usepackage[scale=0.95]{sourcecodepro}
+
+\pgfplotsset{compat=1.17}
+
+% Generic plotting styles for the ROC plots. Can be adjusted to fit
+% other scenarios.
+\pgfplotsset{%
+  roc/.style = {%
+    axis x line*      = bottom,
+    axis y line*      = left,
+    enlargelimits     = false,
+    tick align        = outside,
+    legend cell align = left,
+    legend pos        = south west,
+    legend columns    = 1,
+    legend style      = {%
+      draw         = none,
+      font         = \fontsize{6}{3}\selectfont\tt, %6
+    },
+    legend image post style = {%
+      scale = 0.1, %0.20
+    },
+    %
+    grid              = major,
+    major grid style  = {%
+      lightgray,
+      thin
+    },
+    % Use main font instead of employing a maths font now;
+    % this is more consistent.
+    tick label style = {
+      /pgf/number format/assume math mode = true,
+      /pgf/number format/precision        = 2,
+    },
+    %
+    thick,
+    %
+    xlabel             = {Sensitivity},
+    ylabel             = {PPV},
+    try min ticks      = 5,
+    ymin               = 0,
+    ymax               = 1,
+    %
+    height             = 10cm, %6,7
+    width              = 10cm, %6,7
+    unit vector ratio* = 1 1 1,
+    %
+    cycle list/Dark2, %Set1
+    %
+    /tikz/font = {\small}, %scriptsize
+    % Controls the precision of floating point numbers for all other
+    % places of the plot.
+    /pgf/number format/.cd,
+      fixed,
+      zerofill,
+      precision = 3
+  }
+}
+
+\newcommand{\makeprplot}[4]{%
+    % 1: model name 
+    % 2: train dataset (s)
+    % 3: eval dataset 
+    % 4: model display name
+    \addplot+[
+        forget plot,
+        no marks,
+        thin,
+        fill opacity = 0.0,
+        draw opacity = 0.2,
+        name path    = upper
+    ]
+        table[
+            col sep = comma,
+            x       = Sensitivity_mean,
+            y expr  = \thisrow{PPV_mean} + \thisrow{PPV_std}
+        ]
+            {../../data/precision_recall/raw_precision_recall_data_#1_#2_#3.csv};
+    %
+    \addplot+[
+        forget plot,
+        no marks,
+        thin,
+        fill opacity = 0.0,
+        draw opacity = 0.2,
+        name path    = lower
+    ]
+        table[
+            col sep = comma,
+            x       = Sensitivity_mean,
+            y expr  = \thisrow{PPV_mean} - \thisrow{PPV_std}
+        ]
+            {../../data/precision_recall/raw_precision_recall_data_#1_#2_#3.csv};
+    %
+    \addplot+[
+        forget plot,
+        fill opacity = 0.1,
+        draw opacity = 0.0,
+    ]
+        fill between [of=upper and lower];
+
+    \addplot+[no marks, very thick]
+        table[col sep=comma, x=Sensitivity_mean, y=PPV_mean] 
+            {../../data/precision_recall/raw_precision_recall_data_#1_#2_#3.csv};
+    %
+    % Get AUC numbers:
+    \pgfplotstableread[%
+      col sep = comma, display columns/setting/.style=string type]{../../data/precision_recall/raw_precision_recall_data_#1_#2_#3.csv}\table 
+    %
+    \pgfplotstablegetelem{0}{auprc_mean}\of{\table}
+    % We can also change the units here, in case this is of interest.
+    %
+    %   \pgfmathparse{100 * \pgfplotsretval}
+    %
+    \pgfmathparse{\pgfplotsretval}
+    \edef\aucmean{\pgfmathresult}
+    \pgfplotstablegetelem{0}{auprc_std}\of{\table}
+    \pgfmathparse{\pgfplotsretval}
+    \edef\aucstd{\pgfmathresult}
+    %
+    \StrLen{#4,}[\tmplen]
+    \edef\temp{\noexpand\addlegendentry{%
+        % Get length of label string; we need this to pad the string to
+        % the right length.
+        #4, \noexpand\StrGobbleRight{\space\space\space\space\space\space}{\tmplen} AUPRC = \noexpand\pgfmathprintnumber[assume math mode = true]{\aucmean}%
+        $\pm$%
+        \noexpand\pgfmathprintnumber[assume math mode = true]{\aucstd}%
+      };%
+    }
+    \temp
+}
