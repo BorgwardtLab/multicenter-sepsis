@@ -42,7 +42,7 @@ def main(args):
         if 'subsample' in args.INPUT:
             subsampled = True  
         for d in results:
-            if 'run_id' in d.keys():
+            if args.finetuning and 'run_id' in d.keys():
                 rep_or_run = 'run_'+str(d['run_id']) 
             else: 
                 rep_or_run = 'rep_'+str(d['rep'])
@@ -59,7 +59,6 @@ def main(args):
 
     # harmonize dataset names in the dict:
      
-    embed()
 
 if __name__ == '__main__':
     
@@ -67,6 +66,8 @@ if __name__ == '__main__':
     parser.add_argument('INPUT', type=str, help='input folder to create mapping')
     parser.add_argument('--overwrite', action='store_true', help='compute anew')
     parser.add_argument('--output_path', default='results/evaluation_test/prediction_mapping.json')
+    parser.add_argument('--finetuning', action='store_true', help='use run_id instead of rep in mapping')
+
     args = parser.parse_args()
 
     main(args)

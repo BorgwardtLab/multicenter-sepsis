@@ -279,7 +279,8 @@ def main(
         n_jobs=10,
         cost=5,
         from_dict=None,
-        used_measures=['tp_recall','tp_precision','pat_eval'] 
+        drop_percentiles=False,
+        used_measures=['tp_recall','tp_precision','pat_eval']
     ):
     """Run evaluation based on user parameters."""
     if from_dict:
@@ -334,8 +335,13 @@ def main(
 
     # Determine min and max threshold
     score_list = [s for pat in d['scores'] for s in pat]
-    score_max = np.percentile(score_list, 99.5)  # max(score_list)
-    score_min = np.percentile(score_list, 0.5)   # min(score_list)
+    if drop_percentiles: # just use min to max for getting thresholds
+        # (backwards compatible as we used percentiles before)
+        score_max = max(score_list) 
+        score_min = min(score_list) 
+    else:
+        score_max = np.percentile(score_list, 99.5)  # max(score_list)
+        score_min = np.percentile(score_list, 0.5)   # min(score_list)
 
     # all measures
     measures = {
@@ -457,6 +463,11 @@ if __name__ in "__main__":
         help='lambda cost to use (default 0, inactive)'
     )
     parser.add_argument(
+        '--drop_percentiles',
+        action='store_true',
+        help='Flag to not use percentile-based, robust definition of thresholds, but use min to max'
+    )
+    parser.add_argument(
         '--from-dict',
         action='store_true',
         help='flag to read and return dict without reading and writing files'
@@ -475,4 +486,5 @@ if __name__ in "__main__":
         args.n_jobs,
         args.cost,
         args.from_dict,
+        args.drop_percentiles,
     )

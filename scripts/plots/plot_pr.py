@@ -29,7 +29,7 @@ def emory_map(name):
     return name 
 
 def raw_to_csv(metrics, csv_path, auc_mean, auc_std):
-    """ write raw roc values to csv"""
+    """ write raw p/r values to csv"""
     cols = [col for col in metrics.columns if not 'rep' in col]
     out = {}
     for col in cols:
@@ -40,8 +40,8 @@ def raw_to_csv(metrics, csv_path, auc_mean, auc_std):
         out[col + '_mean'] = mu
         out[col + '_std'] = sig
     df = pd.DataFrame(out)
-    df['auc_mean'] = auc_mean
-    df['auc_std'] = auc_std
+    df['auprc_mean'] = auc_mean
+    df['auprc_std'] = auc_std
     df.to_csv(csv_path, index=False)
     
 def main():
@@ -69,7 +69,7 @@ def main():
         n_subsamples = 1 # to mimic subsampling
 
     summary = []
-    bt_auc = pd.DataFrame() # gathering all bootstraps in the inner loop
+    bt_auprc = pd.DataFrame() # gathering all bootstraps in the inner loop
 
     #sns.set(font='Helvetica')
 
@@ -87,14 +87,13 @@ def main():
             if len(reps) < 5:
                 raise ValueError('not all 5 reps available!')
             
-            aucs = []
-            mean_fpr = np.linspace(0, 1, 200)
+            auprcs = []
+            mean_recall = np.linspace(0, 1, 200) # x-axis
             metrics = pd.DataFrame() # gathering metrics over repetition splits
             
- 
             # loop over (potential) subsamples and repetition folds:
             for rep in reps:
-                tprs = []
+                ppvs = []
                 for subsample in np.arange(n_subsamples):
                     if use_subsamples:
                         rep_filter = {'rep': rep, 'subsample': subsample}
@@ -103,17 +102,17 @@ def main():
                     rep_data = df_filter(data, rep_filter)
 
                     tpr = rep_data['pat_recall'].values
-                    fpr = 1 - rep_data['pat_specificity'].values
+                    ppv = rep_data['pat_precision'].values
                     tpr = np.append(np.append([1], tpr), [0])
-                    fpr = np.append(np.append([1], fpr), [0])
-                    fn = interpolate.interp1d(fpr, tpr) #interpolation fn
-                    interp_tpr = fn(mean_fpr)
-                    tprs.append(interp_tpr)
+                    ppv = np.append(np.append([0], ppv), [1])
+                    fn = interpolate.interp1d(tpr, ppv)  #interpolation fn
+                    interp_ppv = fn(mean_recall)
+                    ppvs.append(interp_ppv)
 
-                    # Inside the loop, gather all auc / ROC results as bootstraps:
-                    curr_auc = auc(mean_fpr, interp_tpr) 
+                    # Inside the loop, gather all auc results as bootstraps:
+                    curr_auprc = auc(mean_recall, interp_ppv) 
                     curr_boot_df = pd.DataFrame(
-                        {   'AUC': [curr_auc], 
+                        {   'AUPRC': [curr_auprc], 
                             'rep': [rep], 
                             'subsample': [subsample],
                             'model': [model],
@@ -122,56 +121,58 @@ def main():
                         }
                     )
                     # bootstraps df with raw ROC entries:
-                    bt_auc = bt_auc.append(curr_boot_df)
+                    bt_auprc = bt_auprc.append(curr_boot_df)
 
                 # Means over subsampling, for each repetition split
-                mean_tpr = np.mean(tprs, axis=0)
-                roc_auc = auc(mean_fpr, mean_tpr) #on raw values
-                aucs.append(roc_auc)
+                mean_ppv = np.mean(ppvs, axis=0)
+                auprc = auc(mean_recall, mean_ppv) #on raw values
+                auprcs.append(auprc)
                 curr_df = pd.DataFrame(
-                    { '1 - Specificity': mean_fpr,
-                      'Sensitivity': mean_tpr}
+                    { 
+                      'Sensitivity': mean_recall,
+                      'PPV': mean_ppv
+                    }
                 )
                 curr_df['rep'] = rep
                 metrics = metrics.append(curr_df)
 
-            aucs = np.array(aucs)
-            auc_mean = aucs.mean()
-            auc_std = aucs.std()
+            auprcs = np.array(auprcs)
+            auprc_mean = auprcs.mean()
+            auprc_std = auprcs.std()
             
-            metrics_sns = metrics.reset_index(drop=True) # sns doesn't like duplicate indices
+            metrics.reset_index(drop=True, inplace=True) # sns doesn't like duplicate indices
             sns.lineplot(
-                data=metrics_sns,
-                x="1 - Specificity",
-                y="Sensitivity", 
-                label= '{:<8}'.format(model_map(model)) + rf'AUC = {auc_mean:.3f} $\pm$ {auc_std:.3f}',
+                data=metrics,
+                x="Sensitivity",
+                y="PPV", 
+                label= '{:<8}'.format(model_map(model)) + rf'AUPRC = {auprc_mean:.3f} $\pm$ {auprc_std:.3f}',
             )
                 #label=model_map(model) +'\t' + rf'AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}',
 
                 # [model_map(model),'AUROC = ', f'{auc_mean:.3f}' + r' $\pm$ ' + f'{auc_std:.3f}'])
                 # model_map(model) + rf' AUROC = {auc_mean:.3f} $\pm$ {auc_std:.3f}')
             
-            # write raw roc data to csv:
-            csv_path = os.path.join(output_path, f'raw_roc_data_{model}_{train_dataset}_{eval_dataset}.csv')
-            raw_to_csv(metrics, csv_path, auc_mean, auc_std) 
+            # write raw p/r data to csv:
+            csv_path = os.path.join(output_path, f'raw_precision_recall_data_{model}_{train_dataset}_{eval_dataset}.csv')
+            raw_to_csv(metrics, csv_path, auprc_mean, auprc_std) 
 
             summary_df = pd.DataFrame(
                 {
                     'model': [model],
                     'train_dataset': [train_dataset],
                     'eval_dataset': [eval_dataset],
-                    'auc_mean': [auc_mean],
-                    'auc_std': [auc_std]
+                    'auprc_mean': [auprc_mean],
+                    'auprc_std': [auprc_std]
                 }
             )
             summary.append(summary_df)
         if train_dataset == eval_dataset: 
-            title=f'ROC Curve for internal validation on {train_dataset}'
+            title=f'Precision-recall curve for internal validation on {train_dataset}'
         else: 
-            title = f'ROC Curve for external validation: trained on {train_dataset}, tested on {eval_dataset}'
+            title = f'Precision-recall curve for external validation: trained on {train_dataset}, tested on {eval_dataset}'
         plt.title(title) 
         plt.legend(loc='lower right', prop={'family': 'monospace'}) #, ncol = 2)
-        outfile = f'roc_{train_dataset}_{eval_dataset}'
+        outfile = f'precision_recall_{train_dataset}_{eval_dataset}'
         if 'subsampled' in os.path.split(input_path)[-1]:
             outfile += '_subsampled'
         outfile = os.path.join(output_path, outfile + '.png') 
@@ -179,16 +180,16 @@ def main():
 
     # Summary aggregated over subsamples, variation in repetition splits:
     summary = pd.concat(summary)
-    summary_file = os.path.join(output_path, 'roc_summary') 
+    summary_file = os.path.join(output_path, 'precision_recall_summary') 
     if 'subsampled' in os.path.split(input_path)[-1]:
         summary_file += '_subsampled'
     summary.to_csv(summary_file + '.csv')
     
     # Bootstrap results (inner loop) also showing subsampling variation:
-    bt_file = os.path.join(output_path, 'roc_bootstrap') 
+    bt_file = os.path.join(output_path, 'precision_recall_bootstrap') 
     if 'subsampled' in os.path.split(input_path)[-1]:
         bt_file += '_subsampled'
-    bt_auc.to_csv(bt_file + '.csv')
+    bt_auprc.to_csv(bt_file + '.csv')
          
 if __name__ == '__main__':
     main()

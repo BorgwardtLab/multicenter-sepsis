@@ -166,3 +166,13 @@ And heatmap incl. pooled preds:
 
 ## Pooling of datasets (instead of models)  
 --> results/pooled 
+
+
+
+## Revisions:
+
+restarting eval pipeline w updatedd prevalence, and no percentile thresholds:  
+
+attn models:  
+```>python revisions/eval_drop_percentiles/get_repetition_evals.py rujvp83e ne6bdaqc pugcily3 rsv8mtda```  
+```>python -m scripts.plots.gather_data --input_path revisions/results/evaluation_test/evaluation_output_subsampled --output_path revisions/results/evaluation_test/plots```  
