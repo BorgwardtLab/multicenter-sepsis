@@ -204,16 +204,21 @@ class SplittedDataset(ParquetLoadedDataset):
         # as we train on the small validation split of a new dataset
         if finetuning:
             if split == 'train':  # for finetuning on new dataset we train only on small val split
-                split = 'validation'
-                path = path.replace('train','validation')
-                print(f'Overwriting split to {split} for finetuning!')
+                if finetuning_size <= 1:
+                    split = 'validation' #for larger ft sizes we use train loader 
+                    path = path.replace('train','validation')
+                    print(f'Overwriting split to {split} for finetuning!')
             self.train_size= 0.7
             print(f'Using online split of train_size {self.train_size}')
             # update split file if smaller fine_tune size used (than full val split)
             if finetuning_size < 1:
                 parts = split_file.split('/')
                 split_file = '/'.join([*parts[:2], 'finetuning', *parts[2:]])
-                print(f'Using split file with small finetuning splits: {split_file}') 
+                print(f'Using split file with small finetuning splits: {split_file}')
+            if finetuning_size > 1:
+                parts = split_file.split('/')
+                split_file = '/'.join([*parts[:2], 'finetuning_large', *parts[2:]])
+                print(f'Using split file with large finetuning splits: {split_file}') 
         else:
             print(f'Finetuning flag is off, no effect on split = {split}')
             self.train_size = 0.9 
@@ -227,11 +232,14 @@ class SplittedDataset(ParquetLoadedDataset):
                 ids = d[split]['total']
                 # when boosting test repetitions:
                 # ids = d[split]['split_{}'.format(fold)]
-            if finetuning and (finetuning_size < 1):
-                
-                assert finetuning_size in [0.2,0.5]
-                ids = d['dev'][f'split_{fold}'][f'finetuning_train_size_{finetuning_size}']
-                from IPython import embed; embed()
+            if finetuning:
+                if finetuning_size < 1:
+                    assert finetuning_size in [0.2,0.5]
+                    ids = d['dev'][f'split_{fold}'][f'finetuning_train_size_{finetuning_size}']
+                if finetuning_size > 1:
+                    print(finetuning_size)
+                    assert finetuning_size in [2, 3, 4, 5]
+                    ids = d['dev'][f'split_{fold}'][f'finetuning_train_size_{finetuning_size}'] 
             # Need this to construct stratified split
             self.id_to_label = dict(zip(d['total']['ids'], d['total']['labels']))
             if cohort:
