@@ -99,9 +99,9 @@ def main(hparams, model_cls):
     print(model_checkpoint_cb.best_model_path)
     loaded_model = model_cls.load_from_checkpoint(
         checkpoint_path=model_checkpoint_cb.best_model_path)
-    results = trainer.test(loaded_model)
-    # results is a single-element list of a dict:
-    results = results[0]
+    #!# results = trainer.test(loaded_model)
+    #!# # results is a single-element list of a dict:
+    #!# results = results[0]
     ##
 
     val_dataset_cls = partial(
@@ -109,27 +109,27 @@ def main(hparams, model_cls):
         datasets=(getattr(src.torch.datasets, d) for d in hparams.dataset)
     )
     
-    masked_result = online_eval(
-        loaded_model,
-        val_dataset_cls,
-        'validation',
-        device='cuda' if torch.cuda.is_available() else 'cpu',
-        online_split=True, # we evaluate on a online split of the 
-        # validation data that is used for the finetuning experiment
-        **hparams.dataset_kwargs
-    )
-    masked_result = { 'masked_validation_'+key: value for key, value in masked_result.items()
-        if key not in ['labels', 'predictions', 'ids', 'times', 'scores', 'targets']
-    }
-    for key, value in masked_result.items():
-        wandb_logger.experiment.log({key: value})
+    #!# masked_result = online_eval(
+    #!#     loaded_model,
+    #!#     val_dataset_cls,
+    #!#     'validation',
+    #!#     device='cuda' if torch.cuda.is_available() else 'cpu',
+    #!#     online_split=True, # we evaluate on a online split of the 
+    #!#     # validation data that is used for the finetuning experiment
+    #!#     **hparams.dataset_kwargs
+    #!# )
+    #!# masked_result = { 'masked_validation_'+key: value for key, value in masked_result.items()
+    #!#     if key not in ['labels', 'predictions', 'ids', 'times', 'scores', 'targets']
+    #!# }
+    #!# for key, value in masked_result.items():
+    #!#     wandb_logger.experiment.log({key: value})
         
-    results.update(masked_result)
+    #!# results.update(masked_result)
 
-    for name, value in results.items():
-        if name in ['labels', 'predictions']:
-            continue
-        wandb_logger.experiment.summary[name] = value
+    #!# for name, value in results.items():
+    #!#     if name in ['labels', 'predictions']:
+    #!#         continue
+    #!#     wandb_logger.experiment.summary[name] = value
 
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
