@@ -1,11 +1,11 @@
 
 base_path=revisions/results/pooled/evaluation_test
 
-#### Collecting results 
-#python -m scripts.plots.gather_data \
-#    --input_path ${base_path}/evaluation_output_subsampled \
-#    --output_path ${base_path}/plots
-#
+### Collecting results 
+python -m scripts.plots.gather_data \
+    --input_path ${base_path}/evaluation_output_subsampled \
+    --output_path ${base_path}/plots
+
 ## ROC plots
 python scripts/plots/plot_roc.py \
     --input_path ${base_path}/plots/result_data_subsampled.csv 
