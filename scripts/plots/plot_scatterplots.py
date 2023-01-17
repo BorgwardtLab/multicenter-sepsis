@@ -317,7 +317,7 @@ if __name__ == '__main__':
         
         # determine prevalence of eval dataset:
         if 'subsample' in df_.columns:
-            prev = 0.17 #target prevalence (precomputed)
+            prev = 0.188 #target prevalence (precomputed)
             use_subsamples = True
             prev_obs = df['subsampled_prevalence']
             prev_max = prev_obs.max()
