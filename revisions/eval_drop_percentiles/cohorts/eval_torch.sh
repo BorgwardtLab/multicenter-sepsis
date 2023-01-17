@@ -1,12 +1,19 @@
 #!/bin/bash
 
-run_id=$1
-base_dir=revisions/results/pooled #results/finetuning #results/pooled #feature_ablation #results 
-split=test #validation
-eval_dir=${base_dir}/evaluation_${split}
+# with subsampling if it works out of the box 
 
-eval_datasets=(AUMC MIMIC Hirid EICU) #MIMIC_LOCF
-eval_datasets2=(aumc mimic hirid eicu) #sklearn formatting  (physionet2019) #
+cohorts=(med surg)
+
+
+
+run_id=$1
+base_dir=revisions/results/ #results/finetuning #results/pooled #feature_ablation #results 
+split=test
+#eval_dir=${base_dir}/evaluation_${split}
+eval_dir=${base_dir}/evaluation_${split}/cohort_${cohort}
+
+eval_datasets=(AUMC MIMIC) #MIMIC_LOCF
+eval_datasets2=(aumc mimic) #sklearn formatting  (physionet2019) #
 
 cost=5 #lambda cost
 earliness=median
