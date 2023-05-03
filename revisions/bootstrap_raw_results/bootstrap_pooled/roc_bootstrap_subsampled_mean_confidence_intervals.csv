@@ -1,0 +1,2 @@
+AUC_lower,AUC_upper,model
+0.7421646419717511,0.7609344872856769,AttentionModel
