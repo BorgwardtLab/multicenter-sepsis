@@ -12,8 +12,8 @@ def load_json(fname):
         return json.load(f)
 
 def main(
-    pred_folder = 'pairwise_bootstraps', # input
-    eval_folder = 'evaluation_pairwise_bootstraps', # output
+    pred_folder = 'pooled_prediction_bootstraps', # input
+    eval_folder = 'evaluation_pooled_prediction_bootstraps', # output
     num_steps = 100, #default
     lambda_path='../../config/lambdas', # old args from here
     n_jobs=1,
@@ -32,7 +32,7 @@ def main(
 
     # generate all arguments
     arguments = [(dataset_train, dataset_eval, rep, subsample, pred_folder, n_bootstraps, eval_folder, kwargs) 
-                for dataset_train in datasets 
+                for dataset_train in ['pooled'] 
                 for dataset_eval in datasets 
                 for rep in range(n_reps) 
                 for subsample in range(n_subsamples)]

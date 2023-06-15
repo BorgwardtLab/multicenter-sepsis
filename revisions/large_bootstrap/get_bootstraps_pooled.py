@@ -7,6 +7,7 @@ import fire
 import json
 import random
 import numpy as np
+from joblib import Parallel, delayed
 
 def load_json(fname):
     with open(fname, 'r') as f:
@@ -44,8 +45,8 @@ def apply_subset(d, indices, bootstrap_counter=0):
 
 
 def main(dataset='aumc', n_bootstraps=40,
-    out_path = '/Volumes/Mephisto/PhD/multicenter-sepsis/multicenter-sepsis/revisions/large_bootstrap/pooled_prediction_bootstraps',
-    pred_folder = '/Volumes/Mephisto/PhD/multicenter-sepsis/multicenter-sepsis/revisions/results/evaluation_test/prediction_pooled_subsampled/max/prediction_output'
+    out_path = 'pooled_prediction_bootstraps',
+    pred_folder = '/lfs/trinity/0/mdmoor/mcsep/pooled_predictions/prediction_output'
     ):
     # we want to filter to for sepsis cases or controls.
     os.makedirs(out_path, exist_ok=True)
@@ -53,45 +54,75 @@ def main(dataset='aumc', n_bootstraps=40,
     
     datasets = ['aumc', 'hirid', 'mimic', 'eicu']
     n_reps = 5; n_subsamples = 10
-    total = len(datasets) * n_reps * n_subsamples
-    pbar = tqdm(total=total, desc="Progress")
+    #total = len(datasets) * n_reps * n_subsamples
+    #pbar = tqdm(total=total, desc="Progress")
 
-    for dataset_train in ['pooled']:
-        for dataset_eval in datasets:
-            for rep in range(n_reps):
-                for subsample in range(n_subsamples):
+    arguments = [(dataset_train, dataset_eval, rep, subsample, pred_folder, n_bootstraps, out_path) 
+                for dataset_train in ['pooled'] 
+                for dataset_eval in datasets 
+                for rep in range(n_reps) 
+                for subsample in range(n_subsamples)]
 
-                    #TODO: customize this for other than internal results: 
-                    pred_file = os.path.join(
-                            pred_folder,
-                            f'preds_max_pooled_AttentionModel_{dataset_eval}_rep_{rep}_subsample_{subsample}.json'
-                    )
-                    preds = load_json(
-                            os.path.join(pred_file)
-                    )
-                                        # get bootstrap indices (with repetition)
-                    bootstrap_indices = get_bootstraps(
-                        n = len(preds['ids']),
-                        n_bootstraps = n_bootstraps
-                    )
-                    bootstrap_preds = []
-                    # apply subset for each bootstrap:
-                    for i in range(n_bootstraps):
-                        bt_pred = apply_subset(preds, bootstrap_indices[i], bootstrap_counter=i)
-                        bootstrap_preds.append(bt_pred)
+    # run in parallel
+    n_jobs = 100  # set this to the number of cores you want to use, -1 means using all processors
+    _ = Parallel(n_jobs=n_jobs)(delayed(process_sample)(*args) for args in arguments)
+
+
+    #for dataset_train in ['pooled']:
+    #    for dataset_eval in datasets:
+    #        for rep in range(n_reps):
+    #            for subsample in range(n_subsamples):
+
+    #                #TODO: customize this for other than internal results: 
+    #                pred_file = os.path.join(
+    #                        pred_folder,
+    #                        f'preds_max_pooled_AttentionModel_{dataset_eval}_rep_{rep}_subsample_{subsample}.json'
+    #                )
+    #                preds = load_json(
+    #                        os.path.join(pred_file)
+    #                )
+    #                                    # get bootstrap indices (with repetition)
+    #                bootstrap_indices = get_bootstraps(
+    #                    n = len(preds['ids']),
+    #                    n_bootstraps = n_bootstraps
+    #                )
+    #                bootstrap_preds = []
+    #                # apply subset for each bootstrap:
+    #                for i in range(n_bootstraps):
+    #                    bt_pred = apply_subset(preds, bootstrap_indices[i], bootstrap_counter=i)
+    #                    bootstrap_preds.append(bt_pred)
  
-                    out_file = os.path.join(
-                            out_path,
-                            f'bootstrap_pred_{dataset_train}_{dataset_eval}_rep_{rep}_subsample_{subsample}.json'
-                    )
-                    with open(out_file, 'w') as f:
-                        json.dump(bootstrap_preds, f, indent=4)
+    #                out_file = os.path.join(
+    #                        out_path,
+    #                        f'bootstrap_pred_{dataset_train}_{dataset_eval}_rep_{rep}_subsample_{subsample}.json'
+    #                )
+    #                with open(out_file, 'w') as f:
+    #                    json.dump(bootstrap_preds, f, indent=4)
 
-                    pbar.update()
+    #                pbar.update()
 
-    pbar.close()
+    #pbar.close()
 
-        
+def process_sample(dataset_train, dataset_eval, rep, subsample, pred_folder, n_bootstraps, out_path):
+    pred_file = os.path.join(
+            pred_folder,
+            f'preds_max_pooled_AttentionModel_{dataset_eval}_rep_{rep}_subsample_{subsample}.json'
+    )
+    preds = load_json(
+            os.path.join(pred_file)
+    )
+
+    bootstrap_indices = get_bootstraps(n = len(preds['ids']), n_bootstraps = n_bootstraps)
+    bootstrap_preds = [apply_subset(preds, bootstrap_indices[i], bootstrap_counter=i) for i in range(n_bootstraps)]
+
+    out_file = os.path.join(
+            out_path,
+            f'bootstrap_pred_{dataset_train}_{dataset_eval}_rep_{rep}_subsample_{subsample}.json'
+    )
+    with open(out_file, 'w') as f:
+        json.dump(bootstrap_preds, f, indent=4)
+    return None  # we don't really need to return anything
+
 
 if __name__ == "__main__":
     fire.Fire(main)

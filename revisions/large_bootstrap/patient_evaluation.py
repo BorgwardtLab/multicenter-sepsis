@@ -367,9 +367,10 @@ def main(
         for patient_id, y_true, time in zip(d['ids'], labels, times)
     ]
 
-    # evaluate thresholds in parallel:
-    result_list = Parallel(n_jobs=n_jobs, verbose=1)(
-        delayed(evaluate_threshold)(
+    # eval in sequential:
+    result_list = []
+    for i, thres in enumerate(thresholds):
+        result = evaluate_threshold(
             d,
             labels,
             shifted_labels,
@@ -378,8 +379,21 @@ def main(
             i/n_steps,
             measures
         )
-        for i, thres in enumerate(thresholds)
-    )
+        result_list.append(result)
+
+    ## evaluate thresholds in parallel:
+    #result_list = Parallel(n_jobs=n_jobs, verbose=1)(
+    #    delayed(evaluate_threshold)(
+    #        d,
+    #        labels,
+    #        shifted_labels,
+    #        times,
+    #        thres,
+    #        i/n_steps,
+    #        measures
+    #    )
+    #    for i, thres in enumerate(thresholds)
+    #)
 
     for thres, current in zip(thresholds, result_list):
         results['thres'].append(thres)
