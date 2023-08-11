@@ -2,6 +2,9 @@
 
 In this repo, we gather pipelining code for a multicenter sepsis prediction effort.
 
+We plan to clean up the repo substantially. Meanwhile, here the raw stage of our code. 
+
+
 ## Data setup
 
 In order to set up the datasets, the R package `ricu` (available via CRAN) is required alongside access credentials for [PhysioNet](https://physionet.org) and a download token for [AmsterdamUMCdb](https://amsterdammedicaldatascience.nl/#amsterdamumcdb). This information can then be made available to `ricu` by setting the environment variables `RICU_PHYSIONET_USER`, `RICU_PHYSIONET_PASS` and `RICU_AUMC_TOKEN`.
