@@ -208,18 +208,6 @@ class AttentionModel(BaseModel):
         x = x[:, offset:, :]
         return x
 
-    # Somehow more recent versions of pytorch lightning don't work with the
-    # below code. Need to check this out some other time.
-    # def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, opt_closure):
-    #     n_warmup = 1000.
-    #     if self.trainer.global_step < n_warmup:
-    #         lr_scale = min(1., float(self.trainer.global_step + 1) / n_warmup)
-    #         for pg in optimizer.param_groups:
-    #             pg['lr'] = lr_scale * self.hparams.learning_rate
-
-    #     optimizer.step()
-    #     optimizer.zero_grad()
-
     @classmethod
     def add_model_specific_args(cls, parent_parser):
         parser = super().add_model_specific_args(parent_parser)

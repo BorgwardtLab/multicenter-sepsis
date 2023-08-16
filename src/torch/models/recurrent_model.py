@@ -103,28 +103,3 @@ class GRUModel(RecurrentModel):
         super().__init__(model_name, **kwargs)
         self.save_hyperparameters()
 
-
-class LSTMModel(RecurrentModel):
-    """
-    LSTM Model.
-    """
-
-    def __init__(self, **kwargs):
-        model_name = 'LSTM'
-        if 'model_name' in kwargs.keys():
-            del kwargs['model_name']
-        super().__init__(model_name, **kwargs)
-        self.save_hyperparameters()
-
-
-class RNNModel(RecurrentModel):
-    """
-    RNN Model.
-    """
-
-    def __init__(self, **kwargs):
-        model_name = 'RNN'
-        if 'model_name' in kwargs.keys():
-            del kwargs['model_name']
-        super().__init__(model_name, **kwargs)
-        self.save_hyperparameters()
