@@ -98,11 +98,8 @@ for (x in c("mimic_demo", "eicu_demo")) {
 ```
 
 ## Python pipeline (for the machine learning / modelling side):  
-To set up python libraries run:  
-```>pipenv install```  
-```>pipenv shell``` 
 
-Alternatively, for transparency we include the full list of requirements we used throughout this study in  
+For transparency, we include the full list of requirements we used throughout this study in  
 ```requirements_full.txt```
 However, some individual packages may not be supported anymore, hence to get started you may want to start with  
 ```requirements_minimal.txt```  
@@ -110,6 +107,10 @@ However, some individual packages may not be supported anymore, hence to get sta
 For example, by activating your virtual environment, and running:  
 ```pip install -r requirements_minimal.txt```  
 
+For setting up this project, we ran:    
+```>pipenv install```  
+```>pipenv shell``` 
+Hence, feel free to also check out the Pipfile / Pipfile.lock 
 
 
 
