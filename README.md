@@ -71,19 +71,6 @@ for (x in c("mimic", "eicu", "hirid", "aumc")) {
 }
 ```
 
-In order to preprocess the [PhysioNet 2019 challenge dataset](https://physionet.org/content/challenge-2019/1.0.0/), the downloaded data can be unpacked, followed by running `export_data()` as
-
-```r
-physio_dir <- data_path("physionet2019")
-download.file(
-    paste("https://archive.physionet.org/users/shared/challenge-2019",
-          "training_setB.zip", sep = "/"),
-    file.path(physio_dir, "training_setB.zip")
-)
-unzip(file.path(physio_dir, "training_setB.zip"), exdir = physio_dir)
-export_data("physionet2019", data_dir = physio_dir)
-```
-
 If `export_data()` is called with a default argument of `data_path("export")` for `dest_dir`, this will create one parquet file per data source under `data-export`. This procedure can also be run using the PhysioNet demo datasets for debugging and to make sure it runs through:
 
 ```r
