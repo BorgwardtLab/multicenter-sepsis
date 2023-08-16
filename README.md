@@ -69,7 +69,7 @@ for (x in c("mimic_demo", "eicu_demo")) {
 }
 ```
 
-## Python pipeline:  
+## Python pipeline (for the machine learning / modelling side):  
 To set up python libraries run:  
 ```>pipenv install```  
 ```>pipenv shell```  
