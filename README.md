@@ -1,8 +1,36 @@
-# multicenter-sepsis
+<img src="img/logo.jpg" width="300">
 
-In this repo, we gather pipelining code for a multicenter sepsis prediction effort.
+This is the repository for the paper: [Predicting sepsis using deep learning across international sites: a retrospective development and validation study](https://www.thelancet.com/journals/eclinm/article/PIIS2589-5370(23)00301-2/fulltext) 
 
-We plan to clean up this repo. Meanwhile, the raw stage of our code is available.
+### Reference: 
+
+```latex
+@article{moor2023predicting,
+  title={Predicting sepsis using deep learning across international sites: a retrospective development and validation study},
+  author={Moor, Michael and Bennett, Nicolas and Ple{\v{c}}ko, Drago and Horn, Max and Rieck, Bastian and Meinshausen, Nicolai and B{\"u}hlmann, Peter and Borgwardt, Karsten},
+  journal={eClinicalMedicine},
+  volume={62},
+  pages={102124},
+  year={2023},
+  publisher={Elsevier}
+}
+```
+
+### Code:  
+
+Over the next days, we plan to step-by-step clean-up the following components:  
+
+- R code for data loading / harmonization  
+- Python code for pre-prorcessing (feature extraction), normalization etc. (assumes a Dask pipeline that can be run on a large CPU server or cluster)  
+- Python code for model development (both deep learning models in PyTorch, and classic models using sklearn), finetuning, calibration   
+
+### Acknowledgements:  
+
+This project was a massive effort stretching over 4 years and over 1.5K commits. 
+
+Code contributors:  
+
+[Michael](https://github.com/mi92), [Nicolas](https://github.com/nbenn), [Max](https://github.com/ExpectationMax), [Bastian](https://github.com/Pseudomanifold), and [Drago](https://github.com/dplecko) 
 
 
 ## Data setup
@@ -72,7 +100,19 @@ for (x in c("mimic_demo", "eicu_demo")) {
 ## Python pipeline (for the machine learning / modelling side):  
 To set up python libraries run:  
 ```>pipenv install```  
-```>pipenv shell```  
+```>pipenv shell``` 
+
+Alternatively, for transparency we include the full list of requirements we used throughout this study in  
+```requirements_full.txt```
+However, some individual packages may not be supported anymore, hence to get started you may want to start with  
+```requirements_minimal.txt```  
+
+For example, by activating your virtual environment, and running:  
+```pip install -r requirements_minimal.txt```  
+
+
+
+
 
 ### Datasets   
 
