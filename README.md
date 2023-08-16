@@ -16,9 +16,9 @@ This is the repository for the paper: [Predicting sepsis using deep learning acr
 }
 ```
 
-### Code:  
+### Disclaimer:  
 
-Over the next days, we plan to step-by-step clean-up the following components:  
+We plan to clean up the following components:  
 
 - R code for data loading / harmonization  
 - Python code for pre-prorcessing (feature extraction), normalization etc. (assumes a Dask pipeline that can be run on a large CPU server or cluster)  
