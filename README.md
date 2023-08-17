@@ -120,6 +120,11 @@ All data will be downloaded to:
 ### Running the preprocessing
 ```source scripts/run_preprocessing.sh```  
 
+Note that the preprocessed data (as parquet files) contain two different label columns: 'sep3', 'utility', whereas sep3 is the sepsis label, and utility is a regression target (that is derived from the sepsis label),
+as inspired by the Physionet 2019 Challenge for sepsis prediction. The utility score is a bit more complex to use, as it can not be directly used with different datasets (due to prevalence differences). We have a solution for this (lambda parameters) but they are not part of this paper. Feel free to contact us, if interested.
+
+If you are not using our scripts (which automatically take care of this), **make sure to not use either of `sep3` or `utility` as feature for training!**
+
 ## Training  
 
 ### Model overview   
