@@ -142,7 +142,7 @@ def main(args):
     target_prev = args.target_prev
  
     if dataset == 'all':
-        datasets = ['mimic', 'hirid', 'eicu', 'aumc', 'physionet2019']
+        datasets = ['mimic', 'hirid', 'eicu', 'aumc']
     else:
         datasets = [dataset]
 
@@ -177,7 +177,7 @@ if __name__ == "__main__":
      help='Number of subsamplings to create.')
     parser.add_argument('--n_train_splits', type=int, default=5, 
      help='Number of stratified shuffle splits train/val to generate')
-    parser.add_argument('--target_prev', type=float, default=0.17, 
+    parser.add_argument('--target_prev', type=float, default=0.188, 
      help='Target prevalence of each subsampled cohort')
 
     args = parser.parse_args()

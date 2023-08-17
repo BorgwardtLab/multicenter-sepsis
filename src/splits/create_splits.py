@@ -132,7 +132,7 @@ if __name__ == "__main__":
     help='Number of stratified shuffle test splits to generate')
     parser.add_argument('--test_boost_size', type=float, default=0.8, 
      help='Ratio of patients in test boosting splits')
-    parser.add_argument('--version', default='0.3.0', 
+    parser.add_argument('--version', default='0-4-0', 
      help='data version')
 
 

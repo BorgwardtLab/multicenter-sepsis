@@ -375,7 +375,7 @@ if __name__ == "__main__":
         n_workers=20,
         memory_limit="10GB",
         threads_per_worker=2,
-        local_directory="/local0/tmp/dask2",
+        local_directory="tmp/dask",
         )
         #n_patients = len(df.index.unique())
         #n_partitions = min(5000, np.floor(n_patients/5))

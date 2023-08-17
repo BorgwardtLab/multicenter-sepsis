@@ -19,8 +19,6 @@ from src.preprocessing.transforms import (
     LookbackFeatures,
     MeasurementCounterandIndicators,
     Normalizer,
-    SignatureFeatures,
-    WaveletFeatures,
     DropColumns
 )
 from src.preprocessing.generate_metadata_from_dataset import write_metadata_to_dataset
@@ -84,7 +82,7 @@ def main(input_filename, split_filename, output_filename, n_workers, feature_set
         n_workers=n_workers,
         memory_limit="50GB",
         threads_per_worker=3,
-        local_directory="/local0/tmp/dask2",
+        local_directory="tmp/dask",
     )
     start = time.time()
     print("Computing patient partitions...")
@@ -152,34 +150,6 @@ def main(input_filename, split_filename, output_filename, n_workers, feature_set
                     LookbackFeatures(suffices=["_raw", "_derived"]),
                 ),
                 ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
-                (
-                    "calculate_target",
-                    CalculateUtilityScores(label=VM_DEFAULT("label")),
-                ),
-                (
-                    "filter_invalid_times",
-                    InvalidTimesFiltration(vm=VM_DEFAULT, suffix="_raw"),
-                ),
-            ]
-        )
-    elif feature_set == 'large':
-        data_pipeline = Pipeline(
-            [
-                ("bool_to_float", BoolToFloat()),
-                ("derived_features", DerivedFeatures(VM_DEFAULT, suffix="locf")),
-                (
-                    "lookback_features",
-                    LookbackFeatures(suffices=["_raw", "_derived"]),
-                ),
-                ("measurement_counts", MeasurementCounterandIndicators(suffix="_raw")),
-                ("normalized_feature_transforms", ApplyOnNormalized(
-                    Normalizer(norm_ids, suffix=[
-                               "_locf", "_derived"], assign_values=False),
-                    [
-                        WaveletFeatures(suffix="_locf"),
-                        SignatureFeatures(suffices=["_locf", "_derived"])
-                    ]
-                )),
                 (
                     "calculate_target",
                     CalculateUtilityScores(label=VM_DEFAULT("label")),
@@ -266,7 +236,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--feature_set",
         type=str,
-        help="which feature set to extract [small, middle, large]",
+        help="which feature set to extract [small, middle]",
     )
 
     args = parser.parse_args()

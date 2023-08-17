@@ -68,10 +68,10 @@ def main(
     if distributed:
         print('Using distributed dask setup.') 
         client = Client(
-            n_workers=50,
+            n_workers=20, #50
             memory_limit="20GB",
             threads_per_worker=4,
-            local_directory="/local0/tmp/dask2",
+            local_directory="tmp/dask",
         )
     else: #using local dask, with progress bar
         progress_bar = ddi.ProgressBar()

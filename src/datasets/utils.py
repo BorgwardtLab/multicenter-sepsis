@@ -5,8 +5,5 @@ def get_file_mapping(version):
                 'hirid': f'hirid-{version}.parquet',
                 'eicu': f'eicu-{version}.parquet',
                 'aumc': f'aumc-{version}.parquet',
-                'physionet2019': f'physionet2019-{version}.parquet',
-
-
     }
 
