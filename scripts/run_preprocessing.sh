@@ -2,13 +2,13 @@
 
 # first generate splits from raw data
 version="0-4-0"
-python -m src.splits.create_splits --version $version 
+python -m src.splits.create_splits --version $version --dataset mimic_demo # this step may require some memory from a large server
 
 # then run preprocessing pipeline per dataset
 
 export DASK_DISTRIBUTED__COMM__RETRY__COUNT=30                                                                                                                                                                  
 export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT="180s" #45s
-datasets=(mimic_demo mimic aumc hirid eicu physionet2019)  #mimic_demo mimic aumc physionet2019 hirid eicu) #mimic_demo mimic 
+datasets=(mimic_demo) # mimic aumc hirid eicu   
 cost=5
 feature_sets=(small middle)
 for dataset in ${datasets[@]}; do
@@ -16,15 +16,17 @@ for dataset in ${datasets[@]}; do
     echo ">>> Processing $dataset ..."
     split_file=config/splits/splits_${dataset}.json
     for feature_set in ${feature_sets[@]}; do
-        features=datasets/${dataset}/data/parquet/features_${feature_set}
+        feature_root=datasets/${dataset}/data/parquet
+        features=${feature_root}/features_${feature_set}
         rm -r $features 
+        mkdir -p $feature_root 
         #echo ">>> Extracting features ..." 
         python -m src.preprocessing.extract_features datasets/downloads/${dataset}-${version}.parquet \
             --split-file $split_file \
             --output $features \
-            --n-workers=20 \
+            --n-workers=2 \
             --feature_set=$feature_set 
-    done
+    done # #n-workers=20 when large CPU server
     for rep in {0..4}; do 
         normalizer_file=config/normalizer/normalizer_${dataset}_rep_${rep}.json
         
