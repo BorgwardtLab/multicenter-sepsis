@@ -104,8 +104,7 @@ Hence, feel free to also check out the Pipfile / Pipfile.lock
 
 ### Datasets   
 
-(internal usage: run ``` source scripts/download_from_euler.sh ``` )  
-All data will be downloaded to:   
+Make sure that all exported data is put here:   
 ```datasets/downloads/```  
 
 ### Source code
