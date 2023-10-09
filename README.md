@@ -22,7 +22,6 @@ We plan to clean up the following components:
 
 - R code for data loading / harmonization  
 - Python code for pre-prorcessing (feature extraction), normalization etc. (assumes a Dask pipeline that can be run on a large CPU server or cluster)  
-- Python code for model development (both deep learning models in PyTorch, and classic models using sklearn), finetuning, calibration   
 
 ### Acknowledgements:  
 
@@ -147,8 +146,76 @@ First, compile a sweep on wandb.ai, using the sweep-id, (only the id -- not the 
 In this submit_job script you can configure the variable `n_runs`, i.e. how many evaluations should be run (e.g. 25 during coarse or fine tuning search,
 or 5 for repetition runs)
 
-#### Training a single dataset and model
-Fitting an attention-model on Physionet: #TODO update this
+Example sweep for hyperparameter search of training an attention model on MIMIC:  
+```
+method: random
+metric:
+  goal: minimize
+  name: online_val/loss
+parameters:
+  batch_size:
+    values:
+      - 16
+      - 32
+      - 64
+      - 128
+  cost:
+    value: 5
+  d_model:
+    values:
+      - 32
+      - 64
+      - 128
+      - 256
+  dataset:
+    value: MIMIC
+  dropout:
+    values:
+      - 0.3
+      - 0.4
+      - 0.5
+      - 0.6
+      - 0.7
+  gpus:
+    value: -1
+  ignore_statics:
+    value: "True"
+  label_propagation:
+    value: 6
+  label_propagation_right:
+    value: 24
+  learning_rate:
+    distribution: log_uniform
+    max: -7
+    min: -9
+  max_epochs:
+    value: 100
+  model:
+    value: AttentionModel
+  n_layers:
+    value: 2
+  norm:
+    value: rezero
+  task:
+    value: classification
+  weight_decay:
+    values:
+      - 0.1
+      - 0.01
+      - 0.001
+      - 0.0001
+program: src/torch/train_model.py
+```
+
+This can be directly copied into Weights & Biases, for creating a new sweep.
+
+#### Training a single dataset and model  
+Example command for training an attention model on MIMIC:   
+
+```
+python src/torch/train_model.py --batch_size=16 --d_model=256 --dataset=MIMIC --dropout=0.5 --gpus=-1 --ignore_statics=True --label_propagation=6 --label_propagation_right=24 --learning_rate=0.0002 --max_epochs=100 --model=AttentionModel --n_layers=2 --norm=rezero --task=classification --weight_decay=0.001  
+```
+
 
 ## Evaluation pipeline  
 
